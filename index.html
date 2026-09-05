@@ -1988,6 +1988,7 @@ function tick(){
   updateAtmosphere(dt,t);
   updateResidents(dt,t);
   updateActors(dt,t);
+  onlineWorld?.update(dt,t);
   if(Math.floor(t*8)!==mapFrame){mapFrame=Math.floor(t*8);drawMap();}
   renderer.render(scene, camera);
 }
@@ -5288,9 +5289,9 @@ function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene
 function upsertRemotePlayer(peer){
  if(!peer||!peer.id||!peer.pose)return;
  let r=remotePlayers.get(peer.id);
- if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.name='联机玩家 '+peer.name;avatar.g.add(makeRemoteLabel(peer.name));scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
+ if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.name='联机玩家 '+peer.name;avatar.g.add(makeRemoteLabel(peer.name));avatar.g.visible=false;scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
  r.target.set(peer.pose.x,peer.pose.y,peer.pose.z);r.heading=peer.pose.heading;r.speed=peer.pose.speed;r.kind=peer.pose.kind;r.seen=true;
- if(!r.avatar.g.visible){r.avatar.g.position.copy(r.target);r.avatar.g.rotation.y=r.heading;}
+ if(!r.avatar.g.visible||r.avatar.g.position.distanceTo(r.target)>20){r.avatar.g.position.copy(r.target);r.avatar.g.rotation.y=r.heading;}
  r.avatar.g.visible=true;
 }
 function animateRemotePlayers(dt,t){
@@ -5299,7 +5300,7 @@ function animateRemotePlayers(dt,t){
   r.avatar.g.position.lerp(r.target,Math.min(1,dt*10));
   r.avatar.g.rotation.y+=Math.atan2(Math.sin(r.heading-r.avatar.g.rotation.y),Math.cos(r.heading-r.avatar.g.rotation.y))*Math.min(1,dt*10);
   const gait=Math.min(1,Math.max(0,r.speed)/6);r.phase+=dt*Math.max(1,r.speed)*2;
-  const swing=Math.sin(r.phase)*(.16+.38*gait);
+  const swing=Math.sin(r.phase)*.54*gait;
   r.avatar.legs[0].pivot.rotation.x=swing;r.avatar.legs[1].pivot.rotation.x=-swing;
   r.avatar.arms[0].pivot.rotation.x=-swing*.72;r.avatar.arms[1].pivot.rotation.x=swing*.72;
   r.avatar.body.position.y=Math.sin(t*1.5)*.012+(gait?Math.abs(Math.sin(r.phase))*.04:0);

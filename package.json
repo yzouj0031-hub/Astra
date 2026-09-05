@@ -4,11 +4,16 @@
   "private": true,
   "description": "星屿 · 海岛游乐园，一个可离线游玩的 3D 群岛世界",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "test": "node tests/online.cjs && node tests/smoke.cjs",
     "test:online-browser": "node tests/online-browser.cjs",
     "test:online-live": "node tests/online-live.cjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "2.95.0"
   }
 }

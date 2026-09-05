@@ -14,7 +14,7 @@ const playwright=requireFrom(process.env.PLAYWRIGHT_MODULE||'playwright');
     const channel={
      on(type,filter,callback){listeners[type+':'+filter.event]=callback;return this;},
      subscribe(callback){setTimeout(()=>callback('SUBSCRIBED'),0);return this;},
-     async track(value){tracked=value;listeners['presence:sync']?.();},
+     async track(value){tracked=value;listeners['presence:sync']?.();return 'ok';},
      async untrack(){tracked=null;},
      presenceState(){return tracked?{self:[tracked]}:{};},
      async send(){return 'ok';},

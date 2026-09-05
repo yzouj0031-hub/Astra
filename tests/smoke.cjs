@@ -28,8 +28,9 @@ function test(width,height){
  const renderer={domElement:canvas,setSize:()=>{},setPixelRatio:()=>{},shadowMap:{},render:()=>renders++};
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
+ const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -363,6 +364,23 @@ function test(width,height){
  const crossing=a.resolveHarborWalk(hotel.x,doorZ+2,hotel.x,doorZ);
  assert(Math.hypot(crossing.x-hotel.x,crossing.z-doorZ)>1.1,'A person standing in the doorway remains solid');
  console.log('Collision regressions: rendered bumpers/wheels, reverse and diagonal contact, intermediate rotation, both cameras at walls, stationary/moving pedestrians and doorway bodies passed.');
+ // The actual game loop must publish current movement, not merely construct an online client.
+ a.strollHarbor();onlineSamples.length=0;a.keys.w=true;
+ for(let i=0;i<40;i++){a.updateWalk(.05,i*.05);a.tick();}a.clearInput();
+ assert.equal(onlineSamples.length,40,'Every game frame reaches the network update');
+ assert(Math.hypot(onlineSamples.at(-1).x-onlineSamples[0].x,onlineSamples.at(-1).z-onlineSamples[0].z)>1,'Network samples contain changing character positions');
+ assert.equal(onlineSamples.at(-1).x,a.walk.x);assert.equal(onlineSamples.at(-1).z,a.walk.z);
+ const remotePose={x:640,y:4.2,z:-100,heading:1,speed:0,kind:'walk',region:'harbor'};
+ a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:remotePose});
+ const remote=a.remotePlayers.get('smoke_peer');
+ assert.deepEqual(remote.avatar.g.position.toArray(),[640,4.2,-100],'A new avatar appears at its transmitted position');
+ a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:641}});a.animateRemotePlayers(.016,1);
+ assert(remote.avatar.g.position.x>640&&remote.avatar.g.position.x<641,'Normal movement is interpolated');
+ assert.equal(remote.avatar.legs[0].pivot.rotation.x,0,'A stationary remote player does not walk in place');
+ a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:800}});
+ assert.equal(remote.avatar.g.position.x,800,'Region teleports snap instead of sweeping through intervening buildings');
+ a.removeRemotePlayer('smoke_peer');assert.equal(a.remotePlayers.size,0);assert(!a.scene.children.includes(remote.avatar.g));
+ console.log('Online game integration: actual frame-loop position publishing, exact spawn, smooth movement, teleport and departure passed.');
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);
