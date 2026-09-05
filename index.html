@@ -244,6 +244,19 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 .online-note{margin-top:13px;font-size:10px;line-height:1.75;color:#83918d}
 @media(max-width:560px){.online-fields{grid-template-columns:1fr}.online-chat-send button{padding:0 14px}#online-dialog{padding:25px 22px}}
 
+#seek-hud{position:fixed;left:22px;top:23%;z-index:29;width:min(260px,calc(100vw - 44px));padding:16px 18px;background:#12222bf2;color:#f2e9d6;border-radius:16px;box-shadow:0 12px 36px #04161d55;font-size:12px}
+#seek-hud .seek-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+#seek-hud .seek-top b{font-size:15px;font-weight:600;letter-spacing:.04em}
+#seek-clock{font-variant-numeric:tabular-nums;font-size:15px;color:#ffd79c}
+.seek-bar{height:4px;border-radius:3px;background:#ffffff22;overflow:hidden}
+.seek-bar i{display:block;height:100%;width:100%;background:#7fd6c0;transition:width .25s linear}
+#seek-detail{margin-top:9px;line-height:1.7;color:#f2e9d6cc}
+#seek-list{margin:9px 0 0;padding:0;list-style:none;line-height:1.9;color:#f2e9d6aa}
+#seek-list b{color:#ffd79c;font-weight:500}
+#seek-quit{margin-top:11px;width:100%;padding:8px;border:1px solid #ffffff33;border-radius:9px;background:transparent;color:#f2e9d6;font-size:12px}
+body[data-seek=chase] #seek-hud{box-shadow:0 12px 40px #a33a2f88;background:#2a1a1cf2}
+body[data-seek=chase] .seek-bar i{background:#ef7a63}
+@media(max-width:560px){#seek-hud{top:auto;bottom:196px;left:16px;width:calc(100vw - 32px);padding:12px 14px}#seek-list{display:none}}
 #vehicle-interact{position:fixed;bottom:226px;left:50%;transform:translateX(-50%);z-index:28;padding:12px 21px;border:1px solid #ffe6b866;border-radius:30px;background:#2c3f4b;color:#f6ecd6;box-shadow:0 5px 24px #052e3455;font-size:14px;white-space:nowrap}
 #greet-person{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:28;padding:13px 22px;border:1px solid #fff0cd66;border-radius:30px;background:#f1e8d2;color:#285056;box-shadow:0 5px 24px #052e3440;font-size:14px;white-space:nowrap}
 #resident-speech{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:27;width:min(390px,calc(100vw - 40px));padding:20px 24px;background:#f1e8d2f5;color:#285056;border-radius:18px;box-shadow:0 12px 36px #092d3c30;pointer-events:none}
@@ -285,16 +298,17 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
-<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
+<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 躲猫猫</b><p>在「維多利亞港」面板点「躲猫猫」开始。<br>他们背过身数 20 秒，你去躲；躲满 3 分钟就赢。<br>他们靠<b>看见</b>和<b>听见</b>找你：墙和建筑真的挡视线，背对着也看不见你；<br>但走路几乎没声，<b>跑步和开车会被听见</b>，声音穿墙。<br>被看到后甩开视线，他们会去你最后出现的地方翻找，还会互相通报。</p></div><div class="guide-row"><b>07 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
 <dialog id="online-dialog"><button class="dialog-close" id="online-close" aria-label="关闭联机面板">×</button><span class="dialog-kicker">WANDER TOGETHER</span><h2>和朋友一起逛星屿。</h2><section id="online-setup"><div class="online-fields"><input id="online-name" maxlength="18" autocomplete="nickname" placeholder="你的名字"><input id="online-room-code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="房间码"></div><div class="online-actions"><button id="online-create">创建新房间</button><button id="online-join" class="secondary">加入房间</button></div><p id="online-status">联机是可选功能；没有网络时仍可正常单机游玩。</p></section><section id="online-room" hidden><div class="online-room-head"><div><span>当前房间</span><br><strong id="online-current-code">--------</strong></div><span id="online-count">1 人在线</span></div><div id="online-peer-list" aria-label="在线玩家"></div><div id="online-chat-log" aria-live="polite" aria-label="房间聊天"></div><div class="online-chat-send"><input id="online-chat-input" maxlength="160" placeholder="说点什么……"><button id="online-chat-send">发送</button></div><div class="online-actions" style="margin-top:12px"><button id="online-copy" class="secondary">复制邀请链接</button><button id="online-leave" class="secondary">离开房间</button></div><p class="online-note">房间通过随机代码临时建立，不保存聊天。请只把邀请链接发给认识的人；本版本同步位置、朝向和在线状态，不同步碰撞、车辆归属或游乐设施进度。</p></section></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
 <button id="vehicle-interact" hidden>上车 · F</button>
+<section id="seek-hud" hidden aria-live="polite"><div class="seek-top"><b id="seek-phase">数数中</b><span id="seek-clock">0:20</span></div><div class="seek-bar"><i id="seek-fill"></i></div><div id="seek-detail">找你的人还在数数，快跑。</div><ol id="seek-list"></ol><button id="seek-quit">结束这局</button></section>
 <aside id="resident-speech" hidden role="status" aria-live="polite"><b id="resident-name"></b><p id="resident-words"></p></aside>
 <nav id="world-regions" aria-label="群岛区域"><button id="region-island" aria-pressed="true">静屿</button><button id="region-park" aria-pressed="false">星辉乐园</button><button id="region-harbor" aria-pressed="false">维多利亚港</button><button id="region-all" aria-pressed="false">群岛全景</button></nav>
 <section id="park-panel" hidden aria-label="游乐园项目"><div class="park-heading">星辉游乐岛 <span>听海，也听欢笑</span></div><label for="attraction-select">选择项目</label><select id="attraction-select"></select><div class="park-actions"><button id="ride-action">乘坐这个项目</button><button id="park-enter">入园漫步</button><button id="park-sail">码头出海</button></div><p>两岛由跨海栈桥相连 · 夜场随星夜亮灯</p></section>
 <button id="travel-action" hidden class="pill">靠岸</button>
-<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">骑楼街巷、海滨摊档与能穿行的街市 · 大门可直接走进去。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button></div><div id="harbor-room">走到大门口就能直接进去，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>阅读展牌 · E</button>
+<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">骑楼街巷、海滨摊档与能穿行的街市 · 大门可直接走进去。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button><button id="harbor-seek">躲猫猫</button></div><div id="harbor-room">走到大门口就能直接进去，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>阅读展牌 · E</button>
 <div id="readout">
   <b id="ro-name">环岛俯瞰</b>
   <span id="ro-sub">拖动旋转 · 双指缩放</span>
@@ -5058,31 +5072,41 @@ function harborPeopleColliders(inside){
  for(const v of harborStaff){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
  return result;
 }
-function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
- if(Math.max(oldX,x)<320)return {x,z};
+// 通用行走求解：楼层由调用方传入并返回，不碰玩家的全局状态，NPC 才能自己上下楼。
+function resolveActorWalk(oldX,oldZ,x,z,opts){
+ const startFloor=opts&&opts.floor||0;
+ if(Math.max(oldX,x)<320)return {x,z,floor:startFloor};
  // 走到某座大建筑跟前时，用它自己的墙（门洞是真的缺口）换掉那块实心占地
  const inside=harborBuildingAt(oldX,oldZ)||harborBuildingAt(x,z);
  const open=harborLandmarks.filter(b=>harborNearLandmark(b,oldX,oldZ)||harborNearLandmark(b,x,z));
  const rects=[];
- for(const r of harborCollisionWorld) if(!r.landmark||!open.some(b=>b.id===r.landmark)) rects.push(r);
+ const world=opts&&opts.local?harborNearbySolids((oldX+x)/2,(oldZ+z)/2,Math.hypot(x-oldX,z-oldZ)/2+6):harborCollisionWorld;
+ for(const r of world) if(!r.landmark||!open.some(b=>b.id===r.landmark)) rects.push(r);
  for(const b of open){
-  const floor=b===inside?harborFloor:0;
+  const floor=b===inside?startFloor:0;
   for(const r of b.worldFloors[floor]) rects.push(r);
   // 二楼前廊不能一脚踩进楼梯井
   if(floor===1&&oldZ-b.z>10.3) rects.push({x:b.x+b.stairX,z:b.z+10.5,w:6,d:.3});
  }
- for(const tram of harborTrams) rects.push({x:tram.g.position.x,z:tram.g.position.z,w:11,d:3.8});
+ if(!opts||opts.trams!==false) for(const tram of harborTrams) rects.push({x:tram.g.position.x,z:tram.g.position.z,w:11,d:3.8});
  // Doorway routes yield to the entrance, while physical person collisions stay enabled.
- if(includePeople) for(const r of harborPeopleColliders(inside)) rects.push(r);
- const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
+ if(opts&&opts.people) for(const r of opts.people) rects.push(r);
+ const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects,null,opts&&opts.radius||HARBOR_BODY);
+ let floor=startFloor;
  if(inside){
   const lx=p.x-inside.x,lz=p.z-inside.z;
   if(Math.abs(lx-inside.stairX)<2.6){
-   if(lz<-14)harborFloor=1;
-   else if(lz>10.3&&oldZ-inside.z<=10.3)harborFloor=0;
+   if(lz<-14)floor=1;
+   else if(lz>10.3&&oldZ-inside.z<=10.3)floor=0;
   }
  }
- return p;
+ return {x:p.x,z:p.z,floor};
+}
+function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
+ const inside=harborBuildingAt(oldX,oldZ)||harborBuildingAt(x,z);
+ const p=resolveActorWalk(oldX,oldZ,x,z,{floor:harborFloor,people:includePeople?harborPeopleColliders(inside):null});
+ harborFloor=p.floor;
+ return {x:p.x,z:p.z};
 }
 
 // Stateful crowd movement: short collision-checked steps instead of time-based teleporting.
@@ -5516,6 +5540,7 @@ function toggleCameraView(){
 function updateActors(dt,t){
  animatePlayer(dt,t);
  animateRemotePlayers(dt,t);
+ updateHunt(dt,t);
  if(mode!==MODE.DRIVE){
   roadster.g.position.set(car.x,car.y,car.z);
   roadster.g.rotation.set(0,car.yaw,0);
@@ -5527,6 +5552,372 @@ function updateActors(dt,t){
  vehicleBtn.hidden=!show;
  if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':'上车 · 老爷车')+(innerWidth>700?' · F':'');
 }
+
+/* ============================================================
+   躲猫猫 · 会找人的 NPC
+   ============================================================ */
+// 一个点站得下人吗
+function spotClear(x,z,b,floor,radius){
+ if(b){ for(const r of b.worldFloors[floor]) if(harborRectContains({x,z},r,radius)) return false; return true; }
+ if(harborGroundH(x,z)<3.4)return false;
+ for(const r of harborNearbySolids(x,z,radius+1.5)) if(harborRectContains({x,z},r,radius)) return false;
+ return true;
+}
+// 两点之间能不能直着走过去（身体半径，用于连边）。
+// 候选矩形整段只取一次，再用线段包围盒筛掉绝大多数——建图从几秒降到几百毫秒。
+function pathClear(ax,az,bx,bz,b,floor,radius){
+ const dx=bx-ax,dz=bz-az,dist=Math.hypot(dx,dz),steps=Math.ceil(dist/1.0);
+ const loX=Math.min(ax,bx)-radius-.1,hiX=Math.max(ax,bx)+radius+.1;
+ const loZ=Math.min(az,bz)-radius-.1,hiZ=Math.max(az,bz)+radius+.1;
+ const pool=b?b.worldFloors[floor]:harborNearbySolids((ax+bx)/2,(az+bz)/2,dist/2+radius+2);
+ const rects=[];
+ for(const r of pool) if(r.x+r.w/2>loX&&r.x-r.w/2<hiX&&r.z+r.d/2>loZ&&r.z-r.d/2<hiZ) rects.push(r);
+ const p={x:0,z:0};
+ for(let i=0;i<=steps;i++){
+  const t=i/steps;p.x=ax+dx*t;p.z=az+dz*t;
+  if(!b&&harborGroundH(p.x,p.z)<3.4)return false;
+  for(const r of rects) if(harborRectContains(p,r,radius)) return false;
+ }
+ return true;
+}
+// 只有墙、柱子和大件家具挡视线；椅子长凳不挡
+function sightSolid(r){ return (r.w>1.35&&r.d>1.35)||r.w>5||r.d>5; }
+function sightBlocked(ax,az,bx,bz,b,floor){
+ const dx=bx-ax,dz=bz-az,dist=Math.hypot(dx,dz);
+ if(dist<0.4)return false;
+ const loX=Math.min(ax,bx),hiX=Math.max(ax,bx),loZ=Math.min(az,bz),hiZ=Math.max(az,bz);
+ const pool=b?b.worldFloors[floor]:harborNearbySolids((ax+bx)/2,(az+bz)/2,dist/2+3);
+ const rects=[];
+ for(const r of pool) if(sightSolid(r)&&r.x+r.w/2>loX-.1&&r.x-r.w/2<hiX+.1&&r.z+r.d/2>loZ-.1&&r.z-r.d/2<hiZ+.1) rects.push(r);
+ if(!rects.length)return false;
+ const steps=Math.ceil(dist/0.9),p={x:0,z:0};
+ for(let i=1;i<steps;i++){
+  const t=i/steps;p.x=ax+dx*t;p.z=az+dz*t;
+  for(const r of rects) if(harborRectContains(p,r,0.05)) return true;
+ }
+ return false;
+}
+
+/* ---------- 巡逻图：街面网格 + 每座建筑两层；边是「能直着走过去」，不是「看得见」 ---------- */
+const SEEK_BODY=0.85;
+let seekNodes=[],seekHideSpots=[],seekBuckets=new Map(),seekGraphReady=false;
+// 巡逻图只在真正开一局躲猫猫时才建，平时不占开场加载时间（约 1 秒）
+function buildSeekGraph(){
+ if(seekGraphReady)return;
+ function addNode(x,z,b,floor,kind){
+  const n={i:seekNodes.length,x,z,b,floor,kind,space:b?b.id+':'+floor:'street',links:[],checked:-999};
+  seekNodes.push(n);return n;
+ }
+ for(let x=344;x<=944;x+=24)for(let z=-506;z<=-98;z+=24) if(spotClear(x,z,null,0,1.0)) addNode(x,z,null,0,'street');
+ for(const b of harborLandmarks){
+  addNode(b.entry.x,b.entry.z,null,0,'entry').landmark=b;
+  addNode(b.x,b.z+b.d/2-4,b,0,'door');
+  addNode(b.x+b.stairX,b.z+8,b,0,'stairFoot');
+  addNode(b.x+b.stairX,b.z-16,b,1,'stairTop');
+  for(const floor of [0,1])
+   for(let lx=-b.w/2+5;lx<b.w/2-4;lx+=7)for(let lz=-b.d/2+5;lz<b.d/2-4;lz+=7)
+    if(spotClear(b.x+lx,b.z+lz,b,floor,0.95)) addNode(b.x+lx,b.z+lz,b,floor,'room');
+ }
+ seekBuckets=new Map();
+ for(const n of seekNodes){
+  const key=Math.floor(n.x/24)+','+Math.floor(n.z/24);
+  if(!seekBuckets.has(key))seekBuckets.set(key,[]);seekBuckets.get(key).push(n);
+ }
+ function seekNear(n,reach){
+  const out=[];
+  for(let gx=Math.floor((n.x-reach)/24);gx<=Math.floor((n.x+reach)/24);gx++)
+   for(let gz=Math.floor((n.z-reach)/24);gz<=Math.floor((n.z+reach)/24);gz++)
+    for(const m of seekBuckets.get(gx+','+gz)||[]) if(m!==n&&Math.hypot(m.x-n.x,m.z-n.z)<=reach) out.push(m);
+  return out;
+ }
+ function linkNodes(a,b){
+  const d=Math.hypot(a.x-b.x,a.z-b.z);
+  if(!a.links.some(l=>l.n===b)){a.links.push({n:b,cost:d});b.links.push({n:a,cost:d});}
+ }
+ for(const n of seekNodes){
+  const reach=n.b?10.5:28;
+  for(const m of seekNear(n,reach)){
+   if(m.i<n.i||m.space!==n.space)continue;
+   if(pathClear(n.x,n.z,m.x,m.z,n.b,n.floor,SEEK_BODY)) linkNodes(n,m);
+  }
+ }
+ // 门和楼梯是仅有的两处跨空间连接
+ for(const b of harborLandmarks){
+  const pick=(kind,floor)=>seekNodes.find(n=>n.kind===kind&&(kind==='entry'?n.landmark===b:n.b===b&&n.floor===floor));
+  const entry=pick('entry'),door=pick('door',0),foot=pick('stairFoot',0),top=pick('stairTop',1);
+  if(entry&&door)linkNodes(entry,door);
+  if(foot&&top)linkNodes(foot,top);
+ }
+ // 只保留和街面连通的部分，搜查员永远不会挑一个走不到的目标
+ {
+  const seed=seekNodes.find(n=>!n.b);
+  const seen=new Set([seed]),queue=[seed];
+  while(queue.length){const c=queue.pop();for(const l of c.links)if(!seen.has(l.n)){seen.add(l.n);queue.push(l.n);}}
+  seekNodes=seekNodes.filter(n=>seen.has(n));
+  seekNodes.forEach((n,i)=>n.i=i);
+ }
+ // 搜查目标 = 屋里的房间 + 街上视野最闭塞的角落，按 10 米间隔稀释成一批彼此不同的「地方」
+ seekHideSpots.length=0;
+ {
+  const street=seekNodes.filter(n=>!n.b&&n.kind==='street').sort((a,b)=>a.links.length-b.links.length);
+  const pool=[...seekNodes.filter(n=>n.b&&n.kind==='room'),...street.slice(0,Math.ceil(street.length*0.35))];
+  for(const n of pool) if(!seekHideSpots.some(m=>m.space===n.space&&Math.hypot(m.x-n.x,m.z-n.z)<10)) seekHideSpots.push(n);
+ }
+
+ seekGraphReady=true;
+}
+function seekPath(from,to){
+ if(!from||!to)return null;
+ if(from===to)return [to];
+ const g=new Map([[from,0]]),came=new Map(),open=[from];
+ const h=n=>Math.hypot(n.x-to.x,n.z-to.z);
+ const f=new Map([[from,h(from)]]);
+ while(open.length){
+  let bi=0;for(let i=1;i<open.length;i++) if(f.get(open[i])<f.get(open[bi])) bi=i;
+  const cur=open.splice(bi,1)[0];
+  if(cur===to){const path=[cur];let c=cur;while(came.has(c)){c=came.get(c);path.unshift(c);}return path;}
+  for(const l of cur.links){
+   const cost=g.get(cur)+l.cost;
+   if(cost<(g.has(l.n)?g.get(l.n):Infinity)){
+    came.set(l.n,cur);g.set(l.n,cost);f.set(l.n,cost+h(l.n));
+    if(!open.includes(l.n))open.push(l.n);
+   }
+  }
+ }
+ return null;
+}
+function nearestNode(x,z,b,floor){
+ let best=null,bd=Infinity;
+ const space=b?b.id+':'+floor:'street';
+ for(const n of seekNodes){
+  if(n.space!==space)continue;
+  const d=(n.x-x)**2+(n.z-z)**2;
+  if(d<bd){bd=d;best=n;}
+ }
+ return best;
+}
+/* ---------- 找人的 NPC ---------- */
+const SEEK_ROUND=180, SEEK_COUNT=20;
+const seekers=[];
+const hunt={on:false,phase:'idle',left:0,count:0,caught:false,alert:null,best:'—'};
+const seekLook=[{shirt:0x9c3f38,pants:0x2c2f35},{shirt:0x35566e,pants:0x2b3038},{shirt:0x6b5a34,pants:0x33302a}];
+for(let i=0;i<(isSmall?2:3);i++){
+ const rig=buildAvatar({skin:[0xe6b18b,0xc88f67,0x9e684b][i%3],shirt:seekLook[i].shirt,pants:seekLook[i].pants,hair:0x241d18});
+ rig.g.visible=false;rig.g.name='找人的人 '+(i+1);scene.add(rig.g);
+ // 红袖标，一眼能认出来是找你的人
+ add(rig.arms[0].pivot,G.cyl(.13,.13,.16,8),humanMat(0xd0483f),0,-.06,0,false);
+ seekers.push({rig,x:0,z:0,floor:0,yaw:0,gait:0,speed:7.0,fov:2.05,range:34,
+   state:'count',path:null,step:0,target:null,scan:0,stuck:0,phase:i*2.1,viewYaw:0,zone:[344,944],
+   lastSeen:null,heard:null,patience:0,name:'搜查员 '+(i+1)});
+}
+
+function seekerBuilding(s){ return harborBuildingAt(s.x,s.z); }
+function playerBuilding(){ return harborBuildingAt(walk.x,walk.z); }
+// 站在门口时，屋里屋外算互相看得见
+function doorwaySight(s,pb){
+ if(!pb||harborFloor!==0)return false;
+ return Math.hypot(s.x-pb.entry.x,s.z-pb.entry.z)<17&&Math.abs(walk.x-pb.x)<5&&walk.z-pb.z>pb.d/2-14;
+}
+function seekerSees(s){
+ const pb=playerBuilding(),sb=seekerBuilding(s);
+ const d=Math.hypot(walk.x-s.x,walk.z-s.z);
+ if(d>s.range)return false;
+ if(pb!==sb) return doorwaySight(s,pb)||doorwaySight(s,sb);
+ if(pb&&harborFloor!==s.floor)return false;
+ const ang=Math.atan2(walk.x-s.x,walk.z-s.z);
+ const off=Math.abs(Math.atan2(Math.sin(ang-s.viewYaw),Math.cos(ang-s.viewYaw)));
+ if(d>5.5&&off>s.fov/2)return false;      // 5.5 米内不用正对也能察觉
+ return !sightBlocked(s.x,s.z,walk.x,walk.z,pb,harborFloor);
+}
+// 跑步和开车会出声，声音穿墙；走路几乎没声
+function playerNoise(){
+ if(mode===MODE.DRIVE)return Math.abs(car.spd)>1?26+Math.abs(car.spd)*1.1:6;
+ if(walk.speed>WALK_SPD*1.15)return 25;
+ if(walk.speed>1.2)return 9;
+ return 0;
+}
+// 挑下一个要搜的地方：有线索就往线索附近收，没线索就各搜各的片区，
+// 并且避开同伴正在去的地方——不然三个人会挤成一团。
+function claimSpot(s,now){
+ let best=null,score=-Infinity;
+ const lead=s.lastSeen||hunt.alert;
+ for(const n of seekHideSpots){
+  if(seekers.some(o=>o!==s&&o.target===n))continue;
+  const dist=Math.hypot(n.x-s.x,n.z-s.z);
+  const stale=Math.min(90,now-n.checked);
+  let v=stale*1.1-dist*0.12+(n.b?4:0);
+  if(lead) v-=Math.hypot(n.x-lead.x,n.z-lead.z)*0.55;
+  else if(n.x>=s.zone[0]&&n.x<s.zone[1]) v+=45;
+  for(const o of seekers) if(o!==s&&o.target) v-=Math.max(0,40-Math.hypot(n.x-o.target.x,n.z-o.target.z))*0.7;
+  v+=Math.sin(n.i*12.9898+now*0.07)*5;
+  if(v>score){score=v;best=n;}
+ }
+ return best;
+}
+function routeTo(s,node){
+ s.target=node;
+ const from=nearestNode(s.x,s.z,seekerBuilding(s),s.floor);
+ s.path=seekPath(from,node);
+ s.step=s.path?1:0;
+ if(!s.path)s.target=null;
+}
+function stepSeeker(s,dt,now){
+ const pb=playerBuilding();
+ s.viewYaw=s.yaw+(s.state==='chase'?0:Math.sin(now*1.1+s.phase)*0.55);
+ const sees=hunt.phase==='hunt'&&seekerSees(s);
+ s.sees=sees;
+ if(sees){
+  s.lastSeen={x:walk.x,z:walk.z,floor:pb?harborFloor:0,b:pb,t:now};
+  hunt.alert={x:walk.x,z:walk.z,t:now};
+  if(s.state!=='chase'){s.state='chase';s.path=null;s.target=null;}
+  s.patience=6;
+ }else if(s.state==='chase'){
+  s.patience-=dt;
+  if(s.patience<=0){s.state='hunt';s.path=null;s.target=null;s.patience=14;}
+ }
+
+ // 听到动静就过去看看（离得越远，判断的位置越不准）
+ if(s.heard&&s.state!=='chase'&&s.state!=='count'){
+  s.state='investigate';
+  if(!s.target||Math.hypot(s.target.x-s.heard.x,s.target.z-s.heard.z)>14){
+   const n=nearestNode(s.heard.x,s.heard.z,null,0)||nearestNode(s.heard.x,s.heard.z,pb,harborFloor);
+   if(n)routeTo(s,n);
+  }
+  s.heard=null;
+ }
+
+ let aim=null,run=s.speed;
+ if(s.state==='chase'){
+  aim={x:walk.x,z:walk.z};run=9.2;
+  if(!sees&&s.lastSeen)aim=s.lastSeen;
+ }else if(s.state==='hunt'&&s.lastSeen){
+  s.patience-=dt;
+  if(Math.hypot(s.x-s.lastSeen.x,s.z-s.lastSeen.z)<4||s.patience<=0){
+   s.lastSeen=null;s.state='patrol';s.path=null;s.target=null;
+  }else{
+   if(!s.path)routeTo(s,nearestNode(s.lastSeen.x,s.lastSeen.z,s.lastSeen.b,s.lastSeen.floor));
+   run=8.4;
+  }
+ }
+ if(!aim){
+  if(s.scan>0){                       // 到了一个点先原地环视一圈再走
+   s.scan-=dt;s.yaw+=dt*2.6;
+   if(s.target){s.target.checked=now;if(s.scan<=0){s.target=null;s.path=null;s.state='patrol';}}
+   return;
+  }
+  if(!s.path||!s.target){ const n=claimSpot(s,now); if(n)routeTo(s,n); }
+  if(s.path&&s.step<s.path.length){
+   const n=s.path[s.step];
+   aim={x:n.x,z:n.z};
+   if(Math.hypot(s.x-n.x,s.z-n.z)<2.4){
+    s.step++;
+    if(s.step>=s.path.length){s.scan=1.6;s.path=null;}
+   }
+  }
+ }
+ if(!aim)return;
+
+ const dx=aim.x-s.x,dz=aim.z-s.z,d=Math.hypot(dx,dz)||1;
+ const others=seekers.filter(o=>o!==s).map(o=>({x:o.x,z:o.z,w:1.1,d:1.1}));
+ const move=resolveActorWalk(s.x,s.z,s.x+dx/d*run*dt,s.z+dz/d*run*dt,{floor:s.floor,radius:0.8,people:others,local:true});
+ const moved=Math.hypot(move.x-s.x,move.z-s.z);
+ s.x=move.x;s.z=move.z;s.floor=move.floor;
+ s.gait+=moved*4.6;
+ if(moved>0.002){
+  const want=Math.atan2(dx,dz);
+  s.yaw+=Math.atan2(Math.sin(want-s.yaw),Math.cos(want-s.yaw))*Math.min(1,dt*7);
+ }
+ // 卡住了就换个目标，别在墙角磨
+ s.stuck=moved<run*dt*0.25?s.stuck+dt:0;
+ if(s.stuck>1.1){s.stuck=0;s.path=null;s.target=null;s.scan=0;}
+}
+
+function seekerLabel(s){
+ return s.state==='chase'?'发现你了':s.state==='hunt'?'在你刚才的位置附近搜'
+      :s.state==='investigate'?'听到动静，过去看'
+      :s.state==='count'?'数数中':(s.target&&s.target.b?s.target.b.name+' 里搜':'沿街搜');
+}
+const seekHud=$('seek-hud'),seekPhase=$('seek-phase'),seekClock=$('seek-clock'),
+      seekFill=$('seek-fill'),seekDetail=$('seek-detail'),seekList=$('seek-list');
+function seekSpawn(){
+ // 从钟楼那头出发，玩家在酒店门口，中间隔着整条大道
+ const start=[{x:900,z:-130},{x:880,z:-160},{x:912,z:-104}];
+ const x0=344,x1=944,band=(x1-x0)/seekers.length;
+ seekers.forEach((s,i)=>{
+  const p=start[i%start.length];
+  s.zone=[x0+band*i,x0+band*(i+1)];
+  s.x=p.x;s.z=p.z;s.floor=0;s.yaw=Math.PI/2;s.viewYaw=Math.PI/2;s.state='count';
+  s.path=null;s.target=null;s.lastSeen=null;s.heard=null;s.scan=0;s.stuck=0;s.patience=0;
+  s.rig.g.visible=true;
+ });
+ for(const n of seekNodes)n.checked=-999;
+}
+function startHunt(){
+ buildSeekGraph();
+ visitHarbor();
+ walk.x=618;walk.z=-150;walk.yaw=Math.PI;faceAway();walk.vx=walk.vz=0;
+ hunt.on=true;hunt.phase='count';hunt.left=SEEK_ROUND;hunt.count=SEEK_COUNT;hunt.caught=false;hunt.alert=null;
+ seekSpawn();
+ seekHud.hidden=false;
+ showHint('躲好 · '+SEEK_COUNT+' 秒后他们开始找 · Shift 跑得快但很响');
+}
+function stopHunt(msg){
+ hunt.on=false;hunt.phase='idle';
+ for(const s of seekers)s.rig.g.visible=false;
+ seekHud.hidden=true;delete document.body.dataset.seek;
+ if(msg)showHint(msg);
+}
+function updateHunt(dt,t){
+ if(!hunt.on)return;
+ if(region!=='harbor'||(mode!==MODE.WALK&&mode!==MODE.DRIVE)){stopHunt('离开港区，这局作罢');return;}
+ if(hunt.phase==='count'){
+  hunt.count-=dt;
+  for(const s of seekers)s.yaw=Math.PI/2;
+  if(hunt.count<=0){hunt.phase='hunt';for(const s of seekers)s.state='patrol';showHint('他们出发了');}
+ }else{
+  hunt.left-=dt;
+  const noise=playerNoise();
+  for(const s of seekers){
+   if(noise>0){
+    const d=Math.hypot(walk.x-s.x,walk.z-s.z);
+    if(d<noise){const j=3+d*0.14;s.heard={x:walk.x+(Math.sin(t*7.7+s.rig.g.id)*j),z:walk.z+(Math.cos(t*5.3+s.rig.g.id)*j)};}
+   }
+   stepSeeker(s,dt,t);
+  }
+  // 抓到：贴身，或者近距离看得见
+  for(const s of seekers){
+   const d=Math.hypot(walk.x-s.x,walk.z-s.z);
+   if(d<1.15||(d<2.1&&s.sees)){hunt.caught=true;break;}
+  }
+  if(hunt.caught){stopHunt('被抓住了 · 再来一局？');return;}
+  if(hunt.left<=0){stopHunt('躲过去了 · 他们放弃了');return;}
+ }
+ // 动画和界面
+ for(const s of seekers){
+  s.rig.g.position.set(s.x,worldWalkHeight(s.x,s.z),s.z);
+  s.rig.g.rotation.y=s.yaw;
+  const swing=Math.sin(s.gait)*0.55;
+  s.rig.legs[0].pivot.rotation.x=swing;s.rig.legs[1].pivot.rotation.x=-swing;
+  s.rig.arms[0].pivot.rotation.x=-swing*0.8;s.rig.arms[1].pivot.rotation.x=swing*0.8;
+  s.rig.legs[0].knee.rotation.x=Math.max(0,-Math.sin(s.gait-0.75))*0.9;
+  s.rig.legs[1].knee.rotation.x=Math.max(0,Math.sin(s.gait-0.75))*0.9;
+ }
+ const chasing=seekers.some(s=>s.state==='chase');
+ document.body.dataset.seek=chasing?'chase':'hide';
+ const counting=hunt.phase==='count';
+ const secs=Math.max(0,Math.ceil(counting?hunt.count:hunt.left));
+ seekPhase.textContent=counting?'数数中':chasing?'被发现了！':'躲藏中';
+ seekClock.textContent=Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+ seekFill.style.width=(counting?hunt.count/SEEK_COUNT:hunt.left/SEEK_ROUND)*100+'%';
+ let near=Infinity;for(const s of seekers)near=Math.min(near,Math.hypot(walk.x-s.x,walk.z-s.z));
+ hunt.best=Math.round(near)+' 米';
+ seekDetail.textContent=counting?'他们背过身在数数，快找地方躲。'
+  :chasing?'被看见了，甩开视线再藏。最近的人 '+hunt.best
+  :'最近的搜查员 '+hunt.best+' · 跑步和开车会被听见';
+ seekList.innerHTML=seekers.map(s=>'<li><b>'+s.name+'</b> · '+seekerLabel(s)+'</li>').join('');
+}
+$('harbor-seek').onclick=()=>{ hunt.on?stopHunt('这局结束了'):startHunt(); };
+$('seek-quit').onclick=()=>stopHunt('这局结束了');
 
 vehicleBtn.onclick=toggleVehicle;
 addEventListener('keydown',e=>{
@@ -5544,6 +5935,9 @@ resetFishing();
 updateCreel();
 strollHarbor();
 tick();
+
+// 开场之后闲下来时先把巡逻图建好，点「躲猫猫」时就不会卡一下
+setTimeout(()=>{ try{ buildSeekGraph(); }catch(e){} }, 4000);
 
 setTimeout(()=>{
   $("boot").classList.add("gone");
