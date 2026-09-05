@@ -28,7 +28,7 @@ function test(width,height){
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),car,roadster,player,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -256,9 +256,10 @@ function test(width,height){
  a.exitHarborBuilding();
 
  // The parked car is a solid obstacle on foot.
- a.walk.x=a.car.x;a.walk.z=a.car.z-8;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
+ a.walk.x=a.car.x;a.walk.z=a.car.z+8;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
  for(let i=0;i<40;i++)a.updateWalk(.05,i*.05);a.clearInput();
- assert(a.walk.z<a.car.z-2,`Walking into the parked car is blocked (${a.walk.z.toFixed(1)} vs ${a.car.z})`);
+ assert(a.walk.z>a.car.z+a.vehicleHalfExtents(a.car.yaw).z+.5,`Walking toward the parked car stops outside its body (${a.walk.z.toFixed(1)} vs ${a.car.z})`);
+ assert(a.walk.z<a.car.z+7,'The player actually approaches the parked car');
 
  // ---- Driving ----
  a.pickMode('drive');assert.equal(body.dataset.mode,'drive');assert.equal(body.dataset.region,'harbor');
@@ -295,7 +296,8 @@ function test(width,height){
  a.car.spd=0;a.exitCar();
  assert.equal(body.dataset.mode,'walk');
  assert(a.carGroundY(a.walk.x,a.walk.z)>3.2,'The exit spot is on the roadway');
- assert(Math.hypot(a.walk.x-a.car.x,a.walk.z-a.car.z)<4,'The player steps out next to the car');
+ assert(Math.hypot(a.walk.x-a.car.x,a.walk.z-a.car.z)<7,'The player steps out next to the car');
+ assert(!a.harborRectContains(a.walk,a.carRect(),.6),'The exit spot clears the complete rotated car body');
  const clearOfCar=a.resolveHarborWalk(a.walk.x,a.walk.z,a.walk.x,a.walk.z,false);
  assert(Math.hypot(clearOfCar.x-a.walk.x,clearOfCar.z-a.walk.z)<.35,'The exit spot is not inside a wall');
  a.updateActors(.05,1);
@@ -306,6 +308,60 @@ function test(width,height){
  a.exitCar();a.walk.x=a.car.x+40;a.walk.z=a.car.z;a.updateActors(.05,2);
  assert(!a.getVehicleNear()&&nodes.get('vehicle-interact').hidden,'The prompt disappears once you walk away');
  console.log(`Third person and driving: avatar rig, chase camera indoors and out, view toggle, ${(peak*3.6).toFixed(0)} km/h boulevard run, steering, walls, reverse, handbrake, get in and out passed.`);
+
+ // Regressions: test rendered car geometry, not only the solver's own collision proxy.
+ const customs=a.harborLandmarks.find(b=>b.id==='customs'),wallFace=customs.z-customs.d/2-.6;
+ a.pickMode('drive');
+ Object.assign(a.car,{x:customs.x,z:wallFace-12,y:4.15,yaw:0,spd:0,wheel:0,steer:0,hop:0});
+ a.keys.w=true;for(let i=0;i<180;i++)a.updateDrive(.05,i*.05);a.clearInput();
+ a.roadster.g.updateMatrixWorld(true);
+ assert(new THREE.Box3().setFromObject(a.roadster.g).max.z<wallFace,'The rendered front bumper stops before the wall');
+ // Reverse, diagonal body contact and visual suspension/steering remain inside the safety envelope.
+ for(const yaw of [0,Math.PI/4,Math.PI/2,Math.PI,Math.PI*1.25]){
+  const solved=a.resolveVehicle(customs.x,wallFace-14,customs.x,wallFace+20,yaw,yaw);
+  assert(solved.hit,'A long step detects the wall for every vehicle orientation');
+  a.roadster.g.position.set(solved.x,4.15,solved.z);a.roadster.g.rotation.set(.05,solved.yaw,.11);
+  for(const wheel of a.roadster.wheels)wheel.mount.rotation.y=wheel.steer?.6:0;
+  a.roadster.g.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(a.roadster.g),half=a.vehicleHalfExtents(solved.yaw);
+  assert(box.max.z<wallFace,`Actual body clears the wall at yaw ${yaw}`);
+  assert(box.min.x>=solved.x-half.x&&box.max.x<=solved.x+half.x&&box.min.z>=solved.z-half.z&&box.max.z<=solved.z+half.z,'Collision envelope covers wheels, bumpers and body lean');
+ }
+ const turned=a.resolveVehicle(customs.x,wallFace-2.7,customs.x,wallFace-2.7,0,Math.PI);
+ assert(turned.hit&&turned.yaw===0,'A turn whose endpoints fit but middle strikes the wall is rejected');
+ const envelope=a.vehicleRotationBounds(0,Math.PI);
+ for(let i=0;i<=600;i++){const half=a.vehicleHalfExtents(Math.PI*i/600);assert(half.x<=envelope.x&&half.z<=envelope.z,'The entire rotation stays within its swept envelope');}
+
+ // Free-look toward a nearby wall used to force the driving camera into it.
+ a.car.spd=0;a.car.camYaw=0;a.car.camPitch=0;a.car.camFree=10;a.updateDrive(0,10);
+ assert(!a.chaseBlocked(...a.camera.position.toArray()),'Driving camera stays clear of the wall after clamping');
+ a.strollHarbor();a.walk.x=customs.x;a.walk.z=wallFace-.9;a.walk.yaw=0;a.walk.pitch=0;a.walk.tps=true;
+ a.updateWalkCamera(a.worldWalkHeight(a.walk.x,a.walk.z),0);
+ assert(!a.chaseBlocked(...a.camera.position.toArray()),'Walking camera stays clear while backed closely against a wall');
+ assert(Math.hypot(a.camera.position.x-a.walk.x,a.camera.position.z-a.walk.z)<1.1,'Camera can retract below the former minimum distance');
+
+ // A stopped person in the open driving lane must stop the approaching car.
+ const victim=a.harborVisitors[0];a.pickMode('drive');
+ Object.assign(a.car,{x:650,z:-148,y:4.15,yaw:-Math.PI/2,spd:22,wheel:0,steer:0,hop:0});
+ victim.p.g.position.set(620,4.25,-148);a.keys.w=true;
+ for(let i=0;i<100;i++){
+  a.updateDrive(.05,i*.05);
+  assert(!a.harborRectContains(victim.p.g.position,a.carRect(),.49),'The car never overlaps a stationary pedestrian');
+ }
+ a.clearInput();assert(a.car.x>623&&a.car.x<624&&a.car.spd<1,'Contact with the person stops the car, rather than an unrelated obstacle');
+ // Exercise the app update order with a walking person, too.
+ Object.assign(a.car,{x:650,z:-120,y:4.15,yaw:-Math.PI/2,spd:22,wheel:0,steer:0,hop:0});
+ victim.p.g.position.set(620,4.25,-120.8);victim.forward=false;a.keys.w=true;
+ for(let i=0;i<100;i++){
+  a.stepHarborCrowd(.05);a.updateDrive(.05,i*.05);
+  assert(!a.harborRectContains(victim.p.g.position,a.carRect(),.45),'Crowd-first frame order preserves vehicle/person separation');
+ }
+ a.clearInput();
+ // Doorways retain human collisions; route avoidance must not grant permission to walk through bodies.
+ a.strollHarbor();const hotel=a.harborLandmarks.find(b=>b.id==='hotel'),doorZ=hotel.z+hotel.d/2+2;
+ victim.p.g.position.set(hotel.x,4.25,doorZ);
+ const crossing=a.resolveHarborWalk(hotel.x,doorZ+2,hotel.x,doorZ);
+ assert(Math.hypot(crossing.x-hotel.x,crossing.z-doorZ)>1.1,'A person standing in the doorway remains solid');
+ console.log('Collision regressions: rendered bumpers/wheels, reverse and diagonal contact, intermediate rotation, both cameras at walls, stationary/moving pedestrians and doorway bodies passed.');
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);

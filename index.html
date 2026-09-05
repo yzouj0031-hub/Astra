@@ -1130,9 +1130,10 @@ function faceAway(){ walk.heading = walk.yaw + Math.PI; }
 
 /* ---------- 驾车 ---------- */
 // 模型的车头指向 +Z，yaw 与角色朝向同一套约定：前进方向 = (sin yaw, cos yaw)
-const CAR_R = 1.7, CAR_TOP = 26, CAR_REV = 8, CAR_BASE = 2.9, CAR_LOCK = 0.62;
+const CAR_HALF_WIDTH=1.66, CAR_HALF_LENGTH=2.6;
+const CAR_R = Math.hypot(CAR_HALF_WIDTH,CAR_HALF_LENGTH), CAR_TOP = 26, CAR_REV = 8, CAR_BASE = 2.9, CAR_LOCK = 0.62;
 // 停在海滨大道上，车头朝西（-X）
-const car = {x:650, z:-120, yaw:-Math.PI/2, spd:0, steer:0, wheel:0, spin:0,
+const car = {x:650, z:-148, yaw:-Math.PI/2, spd:0, steer:0, wheel:0, spin:0,
              camYaw:0, camPitch:0.10, camDist:11.5, camFree:0, y:4.15, hop:0};
 
 /* ---------- 航行 ---------- */
@@ -1759,19 +1760,27 @@ function chaseBlocked(x,y,z){
   for(const o of obstacles){ const dx=x-o.x, dz=z-o.z; if(dx*dx+dz*dz < (o.r+0.3)*(o.r+0.3)) return true; }
   return false;
 }
+// Trace the actual final camera position, including floor clearance. No minimum distance overrides a hit.
+function safeChasePosition(anchor,dir,distance){
+ const at=d=>{const x=anchor.x+dir.x*d,z=anchor.z+dir.z*d;return {x,y:Math.max(anchor.y+dir.y*d,worldWalkHeight(x,z)+.5),z};};
+ const blocked=p=>chaseBlocked(p.x,p.y,p.z);
+ if(blocked(at(0)))return null;
+ const steps=Math.max(1,Math.ceil(distance/.12));let clear=0;
+ for(let i=1;i<=steps;i++){
+  const d=distance*i/steps;if(!blocked(at(d))){clear=d;continue;}
+  let lo=clear,hi=d;for(let j=0;j<12;j++){const mid=(lo+hi)/2;if(blocked(at(mid)))hi=mid;else lo=mid;}
+  return at(Math.max(0,lo-.03));
+ }
+ return at(distance);
+}
 function placeChaseCamera(ground, bob){
-  const y=walk.yaw, p=walk.pitch, cp=Math.cos(p), sp=Math.sin(p);
-  // 肩点略偏右，人物不会挡住正前方
-  const px=walk.x+Math.cos(y)*0.42, pz=walk.z-Math.sin(y)*0.42, py=ground+1.55+bob;
-  const dx=Math.sin(y)*cp, dy=-sp, dz=Math.cos(y)*cp;
-  const want=activeHarborBuilding?Math.min(walk.camDist,3.6):walk.camDist;
-  let d=want;
-  for(let s=0.6;s<=want;s+=0.4){
-    if(chaseBlocked(px+dx*s, py+dy*s, pz+dz*s)){ d=Math.max(0.9, s-0.45); break; }
-  }
-  const cx=px+dx*d, cz=pz+dz*d;
-  camera.position.set(cx, Math.max(py+dy*d, worldWalkHeight(cx,cz)+0.4), cz);
-  camera.rotation.set(p, y, 0);
+ const y=walk.yaw,p=walk.pitch,cp=Math.cos(p),sp=Math.sin(p);
+ const center={x:walk.x,y:ground+1.55+bob,z:walk.z};
+ const shoulder={x:center.x+Math.cos(y)*.42,y:center.y,z:center.z-Math.sin(y)*.42};
+ const dir={x:Math.sin(y)*cp,y:-sp,z:Math.cos(y)*cp};
+ const want=activeHarborBuilding?Math.min(walk.camDist,3.6):walk.camDist;
+ const point=safeChasePosition(shoulder,dir,want)||safeChasePosition(center,dir,want)||center;
+ camera.position.set(point.x,point.y,point.z);camera.rotation.set(p,y,0);
 }
 
 function updateSail(dt, t){
@@ -5045,9 +5054,8 @@ function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
   if(floor===1&&oldZ-b.z>10.3) rects.push({x:b.x+b.stairX,z:b.z+10.5,w:6,d:.3});
  }
  for(const tram of harborTrams) rects.push({x:tram.g.position.x,z:tram.g.position.z,w:11,d:3.8});
- // 门洞和门前那条通道很窄，被人堵住就会卡死；这一段不把行人当硬碰撞，靠他们自己让开
- const doorway=harborLandmarks.some(b=>Math.abs(x-b.x)<5&&z-b.z>b.d/2-4&&z-b.z<b.d/2+11);
- if(includePeople&&!doorway) for(const r of harborPeopleColliders(inside)) rects.push(r);
+ // Doorway routes yield to the entrance, while physical person collisions stay enabled.
+ if(includePeople) for(const r of harborPeopleColliders(inside)) rects.push(r);
  const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
  if(inside){
   const lx=p.x-inside.x,lz=p.z-inside.z;
@@ -5246,7 +5254,7 @@ const player=buildAvatar({skin:0xe6b18b,shirt:0x2f4b63,pants:0x2b3038,hair:0x2a2
 player.g.name='玩家角色';player.g.visible=false;scene.add(player.g);
 
 function animatePlayer(dt,t){
- const show = mode===MODE.WALK && walk.tps;
+ const show = mode===MODE.WALK && walk.tps && Math.hypot(camera.position.x-walk.x,camera.position.z-walk.z)>.75;
  player.g.visible=show;
  if(!show)return;
  player.g.position.set(walk.x, walk.groundY, walk.z);
@@ -5308,20 +5316,33 @@ roadster.g.position.set(car.x,car.y,car.z);
 roadster.g.rotation.y=car.yaw;
 scene.add(roadster.g);
 
-// 车比人宽，用更大的半径走同一套港区扫掠碰撞
-function resolveVehicle(oldX,oldZ,x,z){
- if(Math.max(oldX,x)<320) return {x,z,hit:false};
- const rects=[...harborNearbySolids(x,z,CAR_R+4),
-              ...harborTrams.map(c=>({x:c.g.position.x,z:c.g.position.z,w:11,d:3.8}))];
- const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects,null,CAR_R);
- return {x:p.x,z:p.z,hit:Math.hypot(p.x-x,p.z-z)>0.02};
+// Conservative oriented body bounds include bumpers, wheels and visual lean.
+function vehicleHalfExtents(yaw){
+ const sn=Math.abs(Math.sin(yaw)),cs=Math.abs(Math.cos(yaw));
+ return {x:CAR_HALF_LENGTH*sn+CAR_HALF_WIDTH*cs,z:CAR_HALF_LENGTH*cs+CAR_HALF_WIDTH*sn};
+}
+function vehicleRotationBounds(fromYaw,toYaw){
+ const steps=Math.max(1,Math.ceil(Math.abs(toYaw-fromYaw)/.02)),half={x:0,z:0};
+ for(let i=0;i<=steps;i++){const h=vehicleHalfExtents(fromYaw+(toYaw-fromYaw)*i/steps);half.x=Math.max(half.x,h.x);half.z=Math.max(half.z,h.z);}
+ const allowance=CAR_R*Math.abs(toYaw-fromYaw)/steps/2;
+ half.x+=allowance;half.z+=allowance;return half;
+}
+function resolveVehicle(oldX,oldZ,x,z,fromYaw=car.yaw,toYaw=car.yaw){
+ const start={x:oldX,z:oldZ};
+ const reach=Math.hypot(x-oldX,z-oldZ)/2+CAR_R+4,mx=(oldX+x)/2,mz=(oldZ+z)/2;
+ const rects=[...harborNearbySolids(mx,mz,reach),...harborTrams.map(c=>({x:c.g.position.x,z:c.g.position.z,w:11,d:3.8}))];
+ for(const p of harborPeopleColliders(null))if(Math.abs(p.x-mx)<reach&&Math.abs(p.z-mz)<reach)rects.push({...p,w:1,d:1});
+ const expand=h=>rects.map(r=>({...r,w:r.w+2*h.x,d:r.d+2*h.z}));
+ const initial=expand(vehicleHalfExtents(fromYaw));
+ // An externally introduced overlap stops the car; recovery must not teleport it through people.
+ if(initial.some(r=>harborRectContains(start,r,0)))return {...start,yaw:fromYaw,hit:true};
+ let yaw=toYaw,turnBlocked=false,expanded=expand(vehicleRotationBounds(fromYaw,toYaw));
+ if(expanded.some(r=>harborRectContains(start,r,0))){yaw=fromYaw;turnBlocked=true;expanded=initial;}
+ const p=sweepHarborMotion(start,{x,z},expanded,null,0);
+ return {...p,yaw,hit:turnBlocked||Math.hypot(p.x-x,p.z-z)>.001};
 }
 function carGroundY(x,z){ return harborSurface(x,z) ?? terrainH(x,z); }
-// 车是转过角度的，用一个随朝向伸缩的轴对齐方框近似车身
-function carRect(){
- const sn=Math.abs(Math.sin(car.yaw)), cs=Math.abs(Math.cos(car.yaw));
- return {x:car.x, z:car.z, w:4.6*sn+2.2*cs, d:4.6*cs+2.2*sn};
-}
+function carRect(){const h=vehicleHalfExtents(car.yaw);return {x:car.x,z:car.z,w:2*h.x,d:2*h.z};}
 
 function updateDrive(dt,t){
  let ix=0, iz=0;
@@ -5348,12 +5369,12 @@ function updateDrive(dt,t){
  car.wheel+=(steerIn-car.wheel)*Math.min(1,dt*9);
  const lock=CAR_LOCK/(1+Math.abs(car.spd)*0.28);
  car.steer=car.wheel*lock;
- car.yaw+=Math.tan(car.steer)*car.spd/CAR_BASE*dt;
+ const oldYaw=car.yaw,nextYaw=oldYaw+Math.tan(car.steer)*car.spd/CAR_BASE*dt;
 
- const fx=Math.sin(car.yaw), fz=Math.cos(car.yaw);
+ const fx=Math.sin(nextYaw), fz=Math.cos(nextYaw);
  const step=car.spd*dt;
  let nx=car.x+fx*step, nz=car.z+fz*step;
- const solved=resolveVehicle(car.x,car.z,nx,nz);
+ const solved=resolveVehicle(car.x,car.z,nx,nz,oldYaw,nextYaw);car.yaw=solved.yaw;
  if(solved.hit){ car.spd*=0.3; car.hop=Math.min(1,car.hop+0.5); }
  nx=solved.x; nz=solved.z;
  // 不许开进海里，也不许爬上二楼
@@ -5383,29 +5404,24 @@ function updateDrive(dt,t){
   car.camYaw+=drift*Math.min(1,dt*(car.spd>0?2.4:1.2));
  }
  const y=car.camYaw, p=car.camPitch, cp=Math.cos(p), sp=Math.sin(p);
- const px=car.x, pz=car.z, py=car.y+1.85;
- const dx=Math.sin(y)*cp, dy=-sp, dz=Math.cos(y)*cp;
- let d=car.camDist;
- for(let s=1.2;s<=car.camDist;s+=0.5){
-  if(chaseBlocked(px+dx*s, py+dy*s, pz+dz*s)){ d=Math.max(2.2,s-0.6); break; }
- }
- const cx=px+dx*d, cz=pz+dz*d;
- camera.rotation.order="YXZ";
- camera.position.set(cx, Math.max(py+dy*d, carGroundY(cx,cz)+0.6), cz);
- camera.rotation.set(p,y,0);
+ const anchor={x:car.x,y:car.y+2.15,z:car.z},dir={x:Math.sin(y)*cp,y:-sp,z:Math.cos(y)*cp};
+ const point=safeChasePosition(anchor,dir,car.camDist)||anchor;
+ camera.rotation.order="YXZ";camera.position.set(point.x,point.y,point.z);camera.rotation.set(p,y,0);
 }
 
 /* ---------- 上下车 ---------- */
 const vehicleBtn=$('vehicle-interact');
 let vehicleNear=false;
 function carExitSpot(){
- // 从驾驶侧下车，被挡住就绕车找一个空位
+ const h=vehicleHalfExtents(car.yaw);
  for(const a of [Math.PI/2,-Math.PI/2,Math.PI,0,2.2,-2.2]){
-  const ang=car.yaw+a, ex=car.x+Math.sin(ang)*2.9, ez=car.z+Math.cos(ang)*2.9;
-  const p=resolveHarborWalk(car.x,car.z,ex,ez,false);
-  if(Math.hypot(p.x-ex,p.z-ez)<0.35 && carGroundY(p.x,p.z)>3.2) return p;
+  const ang=car.yaw+a,sn=Math.sin(ang),cs=Math.cos(ang);
+  const distance=Math.min(Math.abs(sn)>.001?h.x/Math.abs(sn):Infinity,Math.abs(cs)>.001?h.z/Math.abs(cs):Infinity)+1.25;
+  const ex=car.x+sn*distance,ez=car.z+cs*distance;
+  const p=resolveHarborWalk(car.x,car.z,ex,ez,true);
+  if(Math.hypot(p.x-ex,p.z-ez)<.05&&!harborRectContains(p,carRect(),BODY_R)&&carGroundY(p.x,p.z)>3.2&&!harborBuildingAt(p.x,p.z))return p;
  }
- return {x:car.x+Math.sin(car.yaw+Math.PI/2)*2.9, z:car.z+Math.cos(car.yaw+Math.PI/2)*2.9};
+ return null;
 }
 function enterCar(){
  if(mode!==MODE.WALK||!vehicleNear||activeHarborBuilding)return;
@@ -5414,7 +5430,7 @@ function enterCar(){
 }
 function exitCar(){
  if(mode!==MODE.DRIVE)return;
- const spot=carExitSpot();
+ const spot=carExitSpot();if(!spot){showHint('车旁空间不足，挪开一点再下车');return;}
  car.spd=0; car.wheel=0; car.steer=0;
  setMode(MODE.WALK);
  region='harbor';
@@ -5437,8 +5453,8 @@ function updateActors(dt,t){
   roadster.g.rotation.set(0,car.yaw,0);
   roadster.lamp.intensity=periodIndex===2?1.2:0;
  }
- vehicleNear = mode===MODE.WALK && !activeHarborBuilding &&
-               Math.hypot(walk.x-car.x, walk.z-car.z) < 4.6;
+ const parkedBounds=vehicleHalfExtents(car.yaw);
+ vehicleNear=mode===MODE.WALK&&!activeHarborBuilding&&Math.hypot(Math.max(0,Math.abs(walk.x-car.x)-parkedBounds.x),Math.max(0,Math.abs(walk.z-car.z)-parkedBounds.z))<2.2;
  const show = (vehicleNear || mode===MODE.DRIVE) && !chromeOff && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
  if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':'上车 · 老爷车')+(innerWidth>700?' · F':'');
