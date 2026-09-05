@@ -4834,7 +4834,7 @@ for(const b of harborBuildings.filter(b=>!b.decorative)){
 // Pedestrians use several short street segments instead of a single sparse line.
 const harborRoutes=[
  [350,-120,918,-120],[350,-130,907,-130],
- [400,-173,471,-173],[570,-170,665,-170],[754,-168,838,-168],
+ [400,-173,471,-173],[570,-168,665,-168],[754,-168,838,-168],
  [382,-338,512,-338],[542,-338,735,-338],[758,-338,851,-338],
  [621,-413,621,-358]
 ];
@@ -4843,16 +4843,12 @@ for(let i=0;i<(isSmall?44:80);i++){
  harborVisitors.push({p,route,phase:i*.731,speed:.75+(i%5)*.16});
 }
 function animateHarborLife(dt,t){
- for(const v of harborVisitors){
-  const [ax,az,bx,bz]=v.route,len=Math.hypot(bx-ax,bz-az),travel=(t*v.speed+v.phase*31)%(len*2),forward=travel<len,u=(forward?travel:len*2-travel)/len;
-  v.p.g.position.set(ax+(bx-ax)*u,4.25,az+(bz-az)*u);v.p.g.rotation.y=Math.atan2((bx-ax)*(forward?1:-1),(bz-az)*(forward?1:-1));
-  v.p.legL.rotation.x=Math.sin(t*3.6+v.phase)*.38;v.p.legR.rotation.x=-v.p.legL.rotation.x;v.p.armL.rotation.x=-v.p.legL.rotation.x*.6;v.p.armR.rotation.x=v.p.legL.rotation.x*.6;
- }
- for(const s of harborStaff){s.p.armR.rotation.x=-.45+Math.sin(t*.8+s.phase)*.22;s.p.g.rotation.y+=Math.sin(t*.5+s.phase)*dt*.04;}
+ const frame=Math.min(.2,Math.max(0,dt)),steps=Math.max(1,Math.ceil(frame/.04));
+ for(let i=0;i<steps;i++)stepHarborCrowd(frame/steps);
+ for(const s of harborStaff){s.p.armR.rotation.x=-.45+Math.sin(t*.8+s.phase)*.22;s.p.g.rotation.y=s.restHeading+Math.sin(t*.5+s.phase)*.06;}
  const phase=(t%150)/150,u=phase<.45?phase/.45:phase<.5?1:phase<.95?1-(phase-.5)/.45:0;
  tram.position.set(380+u*510,4.3,-154);tram.rotation.y=phase<.5?0:Math.PI;
 }
-animateHarborLife(0,0);
 
 const harborMovingRoots=new Set([...harborVisitors.map(v=>v.p.g),...harborStaff.map(v=>v.p.g),...harborShips.map(v=>v.g),...harborTrams.map(v=>v.g),...harborBuildings.filter(b=>!b.decorative).flatMap(b=>b.doors)]);
 // Build collision volumes from the same solid geometry used to draw the harbour.
@@ -4890,25 +4886,25 @@ function compileHarborCollisions(){
  return compactHarborRects(outside);
 }
 const harborCollisionWorld=compileHarborCollisions();
-function harborRectContains(p,r){return Math.abs(p.x-r.x)<r.w/2+HARBOR_BODY-HARBOR_EPS&&Math.abs(p.z-r.z)<r.d/2+HARBOR_BODY-HARBOR_EPS;}
+function harborRectContains(p,r,radius=HARBOR_BODY){return Math.abs(p.x-r.x)<r.w/2+radius-HARBOR_EPS&&Math.abs(p.z-r.z)<r.d/2+radius-HARBOR_EPS;}
 function harborClamp(p,bounds){return bounds?{x:Math.max(bounds.minX,Math.min(bounds.maxX,p.x)),z:Math.max(bounds.minZ,Math.min(bounds.maxZ,p.z))}:p;}
-function harborRecover(point,rects,bounds){
+function harborRecover(point,rects,bounds,radius=HARBOR_BODY){
  const origin=harborClamp(point,bounds),queue=[origin],seen=new Set();
  for(let attempt=0;queue.length&&attempt<240;attempt++){
   queue.sort((a,b)=>Math.hypot(a.x-origin.x,a.z-origin.z)-Math.hypot(b.x-origin.x,b.z-origin.z));const p=queue.shift();
   const key=p.x.toFixed(4)+','+p.z.toFixed(4);if(seen.has(key))continue;seen.add(key);
-  const overlap=rects.filter(r=>harborRectContains(p,r));if(!overlap.length)return p;
+  const overlap=rects.filter(r=>harborRectContains(p,r,radius));if(!overlap.length)return p;
   for(const r of overlap.slice(0,6)){
-   const ex=r.w/2+HARBOR_BODY+HARBOR_EPS,ez=r.d/2+HARBOR_BODY+HARBOR_EPS;
+   const ex=r.w/2+radius+HARBOR_EPS,ez=r.d/2+radius+HARBOR_EPS;
    for(const next of [{x:r.x-ex,z:p.z},{x:r.x+ex,z:p.z},{x:p.x,z:r.z-ez},{x:p.x,z:r.z+ez}])queue.push(harborClamp(next,bounds));
   }
  }
  return null;
 }
-function harborSweepHit(p,delta,r){
+function harborSweepHit(p,delta,r,radius=HARBOR_BODY){
  let enter=-Infinity,leave=Infinity,normal={x:0,z:0};
  for(const axis of ['x','z']){
-  const extent=(axis==='x'?r.w:r.d)/2+HARBOR_BODY,lo=r[axis]-extent,hi=r[axis]+extent,v=delta[axis];
+  const extent=(axis==='x'?r.w:r.d)/2+radius,lo=r[axis]-extent,hi=r[axis]+extent,v=delta[axis];
   if(Math.abs(v)<1e-10){if(p[axis]<=lo+HARBOR_EPS||p[axis]>=hi-HARBOR_EPS)return null;continue;}
   const a=(lo-p[axis])/v,b=(hi-p[axis])/v,near=Math.min(a,b),far=Math.max(a,b);
   if(near>enter){enter=near;normal={x:0,z:0};normal[axis]=v>0?-1:1;}leave=Math.min(leave,far);
@@ -4916,13 +4912,13 @@ function harborSweepHit(p,delta,r){
  if(enter>leave||leave<0||enter< -HARBOR_EPS||enter>1)return null;
  return {time:Math.max(0,enter),normal};
 }
-function sweepHarborMotion(start,end,rects,bounds){
- let p=harborRecover(start,rects,bounds);if(!p)return {...start};
+function sweepHarborMotion(start,end,rects,bounds,radius=HARBOR_BODY){
+ let p=harborRecover(start,rects,bounds,radius);if(!p)return {...start};
  // Moving people or the tram can displace a stationary player; do not undo that recovery.
  const requested=harborClamp({x:p.x+end.x-start.x,z:p.z+end.z-start.z},bounds);
  let delta={x:requested.x-p.x,z:requested.z-p.z};
  for(let contact=0;contact<8&&Math.hypot(delta.x,delta.z)>1e-7;contact++){
-  let first=null;for(const r of rects){const hit=harborSweepHit(p,delta,r);if(hit&&(!first||hit.time<first.time))first=hit;}
+  let first=null;for(const r of rects){const hit=harborSweepHit(p,delta,r,radius);if(hit&&(!first||hit.time<first.time))first=hit;}
   if(!first){p.x+=delta.x;p.z+=delta.z;break;}
   const t=Math.max(0,first.time-HARBOR_EPS/Math.max(1,Math.hypot(delta.x,delta.z)));
   p.x+=delta.x*t;p.z+=delta.z*t;delta.x*=1-t;delta.z*=1-t;
@@ -4952,6 +4948,73 @@ function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
  return sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
 }
 
+// Stateful crowd movement: short collision-checked steps instead of time-based teleporting.
+const harborCrowdGrid=new Map(),harborStationaryPeople=[];
+for(const r of harborCollisionWorld){
+ for(let gx=Math.floor((r.x-r.w/2-2)/20);gx<=Math.floor((r.x+r.w/2+2)/20);gx++)for(let gz=Math.floor((r.z-r.d/2-2)/20);gz<=Math.floor((r.z+r.d/2+2)/20);gz++){
+  const key=gx+','+gz;if(!harborCrowdGrid.has(key))harborCrowdGrid.set(key,[]);harborCrowdGrid.get(key).push(r);
+ }
+}
+function harborNearbySolids(x,z,reach=4){
+ const found=new Set();for(let gx=Math.floor((x-reach)/20);gx<=Math.floor((x+reach)/20);gx++)for(let gz=Math.floor((z-reach)/20);gz<=Math.floor((z+reach)/20);gz++)for(const r of harborCrowdGrid.get(gx+','+gz)||[])found.add(r);return [...found];
+}
+function initializeHarborCrowd(){
+ const point=new THREE.Vector3();
+ for(const s of harborStaff){
+  s.p.g.getWorldPosition(point);const base=point.y,b=harborBuildings.find(b=>!b.decorative&&b.g===s.p.g.parent);
+  const rects=b?b.collisionFloors[0]:harborNearbySolids(point.x,point.z,10);
+  const start={x:point.x-(b?.x||0),z:point.z-(b?.z||0)},bounds=b?{minX:-b.w/2+1.5,maxX:b.w/2-1.5,minZ:-b.d/2+1.5,maxZ:b.d/2-1.5}:null;
+  const fixed=harborRecover(start,rects,bounds,.5)||start;
+  point.set(fixed.x+(b?.x||0),base,fixed.z+(b?.z||0));
+  harborStationaryPeople.push({x:point.x,z:point.z,w:1,d:1,y:base});
+  s.p.g.parent.worldToLocal(point);s.p.g.position.copy(point);s.restHeading=s.p.g.rotation.y;
+ }
+ const occupied=[];
+ for(const v of harborVisitors){
+  const [ax,az,bx,bz]=v.route,len=Math.hypot(bx-ax,bz-az),travel=(v.phase*31)%(len*2);v.forward=travel<len;
+  const u=(v.forward?travel:len*2-travel)/len,dir=v.forward?1:-1;
+  const start={x:ax+(bx-ax)*u-(bz-az)/len*dir*.8,z:az+(bz-az)*u+(bx-ax)/len*dir*.8};
+  v.corridor={minX:Math.min(ax,bx)-3.5,maxX:Math.max(ax,bx)+3.5,minZ:Math.min(az,bz)-3.5,maxZ:Math.max(az,bz)+3.5};
+  const solids=[...harborNearbySolids(start.x,start.z,12),...occupied,...harborStationaryPeople.filter(p=>Math.hypot(p.x-start.x,p.z-start.z)<8)];
+  const p=harborRecover(start,solids,v.corridor,.5)||start;
+  v.p.g.position.set(p.x,4.25,p.z);v.p.g.rotation.y=Math.atan2((bx-ax)*dir,(bz-az)*dir);v.gait=0;v.distanceWalked=0;v.actualSpeed=0;
+  occupied.push({x:p.x,z:p.z,w:1,d:1});
+ }
+}
+function stepHarborCrowd(dt){
+ if(dt<=0)return;
+ for(const v of harborVisitors){
+  const pos=v.p.g.position,[ax,az,bx,bz]=v.route,len=Math.hypot(bx-ax,bz-az);
+  let direction=v.forward?1:-1;
+  let target={x:(v.forward?bx:ax)-(bz-az)/len*direction*.8,z:(v.forward?bz:az)+(bx-ax)/len*direction*.8};
+  if(Math.hypot(target.x-pos.x,target.z-pos.z)<1){v.forward=!v.forward;direction=-direction;target={x:(v.forward?bx:ax)-(bz-az)/len*direction*.8,z:(v.forward?bz:az)+(bx-ax)/len*direction*.8};}
+  const distance=Math.hypot(target.x-pos.x,target.z-pos.z)||1;
+  let vx=(target.x-pos.x)/distance*v.speed,vz=(target.z-pos.z)/distance*v.speed;
+  const solids=harborNearbySolids(pos.x,pos.z),people=[];
+  for(const other of harborVisitors){if(other===v)continue;const op=other.p.g.position;if(Math.hypot(pos.x-op.x,pos.z-op.z)<5)people.push({x:op.x,z:op.z,w:1,d:1});}
+  for(const p of harborStationaryPeople)if(Math.abs(p.y-4.25)<1&&Math.hypot(pos.x-p.x,pos.z-p.z)<5)people.push(p);
+  if(mode===MODE.WALK&&!activeHarborBuilding&&region==='harbor'&&Math.hypot(pos.x-walk.x,pos.z-walk.z)<5)people.push({x:walk.x,z:walk.z,w:1.64,d:1.64});
+  for(const p of people){
+   const dx=pos.x-p.x,dz=pos.z-p.z,d=Math.hypot(dx,dz);if(d>.001&&d<2.8){const force=(2.8-d)*.8;vx+=dx/d*force;vz+=dz/d*force;}
+  }
+  // Steer away from nearby wall faces before the hard collision stop is reached.
+  for(const r of solids){
+   const qx=Math.max(r.x-r.w/2,Math.min(r.x+r.w/2,pos.x)),qz=Math.max(r.z-r.d/2,Math.min(r.z+r.d/2,pos.z));
+   const dx=pos.x-qx,dz=pos.z-qz,d=Math.hypot(dx,dz);if(d>.001&&d<1.2){vx+=dx/d*(1.2-d);vz+=dz/d*(1.2-d);}
+  }
+  const speed=Math.hypot(vx,vz);if(speed>v.speed){vx*=v.speed/speed;vz*=v.speed/speed;}
+  const cars=harborTrams.map(c=>({x:c.g.position.x,z:c.g.position.z,w:11,d:3.8}));
+  const next=sweepHarborMotion({x:pos.x,z:pos.z},{x:pos.x+vx*dt,z:pos.z+vz*dt},[...solids,...people,...cars],v.corridor,.5);
+  const dx=next.x-pos.x,dz=next.z-pos.z,moved=Math.hypot(dx,dz);v.actualSpeed=moved/dt;v.distanceWalked+=moved;v.gait+=moved*5.5;
+  pos.set(next.x,4.25,next.z);
+  if(moved>.001){const desired=Math.atan2(dx,dz),angle=Math.atan2(Math.sin(desired-v.p.g.rotation.y),Math.cos(desired-v.p.g.rotation.y));v.p.g.rotation.y+=angle*Math.min(1,dt*8);}
+  const stride=Math.sin(v.gait)*.38*Math.min(1,v.actualSpeed/v.speed);
+  v.p.legL.rotation.x=stride;v.p.legR.rotation.x=-stride;v.p.armL.rotation.x=-stride*.6;v.p.armR.rotation.x=stride*.6;
+ }
+}
+initializeHarborCrowd();
+
+animateHarborLife(0,0);
 const harborInstances=instanceResortMeshes(harborRoot);harborInstances.update();
 // Static buildings retain their instance transforms; only people, doors and vessels update.
 

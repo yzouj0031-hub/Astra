@@ -28,7 +28,7 @@ function test(width,height){
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -177,6 +177,29 @@ function test(width,height){
  a.setMode('sail');a.ship.x=309;a.ship.z=-200;a.ship.yaw=Math.PI/2;a.ship.spd=0;a.keys.w=true;
  for(let i=0;i<240;i++){a.updateSail(.05,i*.05);assert(a.terrainH(a.ship.x,a.ship.z)<-1.5,'Seawall collision pushes the boat toward water');}a.clearInput();
  console.log(`Victoria Harbour: ${landmarks.length} interiors, ${a.harborFacadeCount} street buildings, 7 ships, ${a.harborVisitors.length} pedestrians; doors, stairs up/down, exhibits, wall/furniture collisions, mode cleanup and dock landing passed.`);
+ // Sustained crowd simulation catches contacts missed by checking isolated path samples.
+ a.focusRegion('harbor');const walkedBefore=a.harborVisitors.map(v=>v.distanceWalked);
+ for(let frame=0;frame<1800;frame++){
+  const old=a.harborVisitors.map(v=>v.p.g.position.clone());a.stepHarborCrowd(.05);
+  a.harborVisitors.forEach((v,i)=>assert(v.p.g.position.distanceTo(old[i])<=v.speed*.05+.01,'Crowd moves continuously without teleporting'));
+  if(frame%10===0){
+   a.harborVisitors.forEach((v,i)=>{
+    const p=v.p.g.position;assert(a.harborNearbySolids(p.x,p.z).every(r=>!a.harborRectContains(p,r,.49)),`Pedestrian ${i} avoids static geometry at ${p.x},${p.z}`);
+    for(let j=i+1;j<a.harborVisitors.length;j++)assert(p.distanceTo(a.harborVisitors[j].p.g.position)>.98,`Pedestrians ${i}/${j} remain separate`);
+   });
+  }
+ }
+ const walkingCount=a.harborVisitors.filter((v,i)=>v.distanceWalked-walkedBefore[i]>10).length;
+ assert(walkingCount>a.harborVisitors.length*.75,'Most pedestrians continue along their routes instead of becoming stuck');
+ a.strollHarbor();let playerSpot;
+ for(const v of a.harborVisitors){if(v.route!==a.harborVisitors[0].route)continue;const p={x:v.p.g.position.x+(v.forward?3:-3),z:v.p.g.position.z};if(a.harborVisitors.every(n=>Math.hypot(n.p.g.position.x-p.x,n.p.g.position.z-p.z)>1.6)){playerSpot=p;break;}}
+ assert(playerSpot,'A free position exists in a pedestrian route');a.walk.x=playerSpot.x;a.walk.z=playerSpot.z;
+ for(let i=0;i<400;i++){
+  a.stepHarborCrowd(.05);
+  for(const v of a.harborVisitors)assert(Math.hypot(v.p.g.position.x-a.walk.x,v.p.g.position.z-a.walk.z)>1.28,'Pedestrians avoid a stationary player');
+ }
+ assert.equal(a.walk.x,playerSpot.x);assert.equal(a.walk.z,playerSpot.z);
+ console.log(`Crowd: 90-second obstacle and separation simulation, ${walkingCount} moving pedestrians, continuous steps and 20 seconds avoiding a stationary player passed.`);
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 5 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);
