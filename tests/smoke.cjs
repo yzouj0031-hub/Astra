@@ -28,7 +28,7 @@ function test(width,height){
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),car,roadster,player,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -200,9 +200,91 @@ function test(width,height){
  }
  assert.equal(a.walk.x,playerSpot.x);assert.equal(a.walk.z,playerSpot.z);
  console.log(`Crowd: 90-second obstacle and separation simulation, ${walkingCount} moving pedestrians, continuous steps and 20 seconds avoiding a stationary player passed.`);
+
+ // ---- Third-person character ----
+ a.strollHarbor();a.walk.tps=true;a.walk.vx=a.walk.vz=0;a.updateWalk(.016,1);a.updateActors(.016,1);
+ assert(a.player.g.visible,'The avatar is shown in third person');
+ const eye=a.walk.groundY+1.55;
+ assert(Math.hypot(a.camera.position.x-a.walk.x,a.camera.position.z-a.walk.z)>1.5,'The camera sits behind the character, not inside it');
+ assert(a.camera.position.y>a.walk.groundY+0.4,'The chase camera never sinks through the pavement');
+ assert(Math.abs(a.player.g.position.y-a.walk.groundY)<1e-6,'The avatar stands on the walking surface');
+ // Running turns the body toward travel, independently of where the camera looks.
+ a.walk.x=700;a.walk.z=-120;a.walk.yaw=0;a.walk.heading=0;a.walk.vx=a.walk.vz=0;
+ a.keys.d=true;a.keys.shift=true;
+ for(let i=0;i<60;i++){a.updateWalk(.05,i*.05);a.updateActors(.05,i*.05);}
+ a.clearInput();
+ assert(a.walk.x>702,'Strafe input moves the character');
+ assert(Math.abs(Math.sin(a.walk.heading-Math.PI/2))<0.25,'The body turns to face the direction of travel');
+ assert.equal(a.player.g.rotation.y,a.walk.heading,'The avatar mesh follows the body heading');
+ assert(a.walk.speed>8.5,`Shift sprints (${a.walk.speed.toFixed(1)} m/s)`);
+ // Toggling back to first person puts the camera in the head again.
+ a.toggleCameraView();a.updateWalk(.016,1);a.updateActors(.016,1);
+ assert(!a.walk.tps&&!a.player.g.visible,'First person hides the avatar');
+ assert(Math.abs(a.camera.position.x-a.walk.x)<1e-6&&Math.abs(a.camera.position.z-a.walk.z)<1e-6,'First-person camera sits on the character');
+ a.toggleCameraView();assert(a.walk.tps);
+ // Indoors the camera pulls in and stays inside the room.
+ nodes.get('harbor-building').value='museum';a.goHarborBuilding();a.updateHarbor(.05,150);a.harborInteract();
+ a.walk.yaw=0;a.keys.w=true;for(let i=0;i<12;i++)a.updateWalk(.05,i*.05);a.clearInput();
+ const inside=a.getHarborState().active;
+ assert(inside,'Entered an interior');
+ assert(Math.abs(a.camera.position.x-inside.x)<inside.w/2&&Math.abs(a.camera.position.z-inside.z)<inside.d/2,'Indoor chase camera stays inside the building');
+ assert(a.camera.position.y>a.worldWalkHeight(a.walk.x,a.walk.z)+0.3,'Indoor camera stays above the floor');
+ a.exitHarborBuilding();
+
+ // The parked car is a solid obstacle on foot.
+ a.walk.x=a.car.x;a.walk.z=a.car.z-8;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
+ for(let i=0;i<40;i++)a.updateWalk(.05,i*.05);a.clearInput();
+ assert(a.walk.z<a.car.z-2,`Walking into the parked car is blocked (${a.walk.z.toFixed(1)} vs ${a.car.z})`);
+
+ // ---- Driving ----
+ a.pickMode('drive');assert.equal(body.dataset.mode,'drive');assert.equal(body.dataset.region,'harbor');
+ const parked=a.resolveVehicle(a.car.x,a.car.z,a.car.x,a.car.z);
+ assert(!parked.hit&&Math.hypot(parked.x-a.car.x,parked.z-a.car.z)<.01,'The car is parked clear of the street furniture');
+ assert(a.carGroundY(a.car.x,a.car.z)>3.2,'The car is parked on the roadway');
+ const start={x:a.car.x,z:a.car.z};let peak=0;
+ a.keys.w=true;for(let i=0;i<200;i++){a.updateDrive(.05,i*.05);peak=Math.max(peak,a.car.spd);}
+ a.clearInput();
+ assert(peak>18,`The car reaches road speed (${(peak*3.6).toFixed(0)} km/h)`);
+ assert(Math.hypot(a.car.x-start.x,a.car.z-start.z)>120,'The car covers the length of the boulevard');
+ assert(a.roadster.g.position.x===a.car.x&&a.roadster.g.position.z===a.car.z,'The car body follows the simulated position');
+ // Steering signs: D turns right (yaw up), A turns left.
+ for(const [key,sign] of [['d',1],['a',-1]]){
+  a.car.x=650;a.car.z=-120;a.car.yaw=0;a.car.spd=18;a.car.wheel=0;
+  a.keys[key]=true;for(let i=0;i<20;i++)a.updateDrive(.05,i*.05);a.keys[key]=false;
+  const turn=a.car.yaw*sign;
+  assert(turn>0.2&&turn<1.4,`${key.toUpperCase()} turns the right way at a sane rate (${(a.car.yaw*180/Math.PI).toFixed(0)}deg/s)`);
+ }
+ a.clearInput();
+ // Walls stop the car instead of letting it pass through.
+ a.car.x=650;a.car.z=-120;a.car.yaw=0;a.car.spd=0;a.car.wheel=0;
+ a.keys.w=true;for(let i=0;i<200;i++){a.updateDrive(.05,i*.05);
+  assert(a.carGroundY(a.car.x,a.car.z)>3.2,'The car never leaves the roadway for the sea');
+  assert(a.resolveVehicle(a.car.x,a.car.z,a.car.x,a.car.z).hit===false,'The car never ends a frame inside a wall');
+ }
+ a.clearInput();
+ // Reverse and handbrake.
+ a.car.spd=14;a.keys.s=true;for(let i=0;i<60;i++)a.updateDrive(.05,i*.05);a.clearInput();
+ assert(a.car.spd<-1,'S brakes and then reverses');
+ a.car.spd=20;a.keys[' ']=true;for(let i=0;i<30;i++)a.updateDrive(.05,i*.05);a.clearInput();
+ assert(a.car.spd<10,'The handbrake scrubs off speed');
+ // Getting out leaves the player standing on solid ground beside the car.
+ a.car.spd=0;a.exitCar();
+ assert.equal(body.dataset.mode,'walk');
+ assert(a.carGroundY(a.walk.x,a.walk.z)>3.2,'The exit spot is on the roadway');
+ assert(Math.hypot(a.walk.x-a.car.x,a.walk.z-a.car.z)<4,'The player steps out next to the car');
+ const clearOfCar=a.resolveHarborWalk(a.walk.x,a.walk.z,a.walk.x,a.walk.z,false);
+ assert(Math.hypot(clearOfCar.x-a.walk.x,clearOfCar.z-a.walk.z)<.35,'The exit spot is not inside a wall');
+ a.updateActors(.05,1);
+ assert(a.getVehicleNear(),'Standing beside the car offers a way back in');
+ assert(!nodes.get('vehicle-interact').hidden,'The get-in prompt is shown');
+ a.enterCar();assert.equal(body.dataset.mode,'drive');
+ // Walking far away hides the prompt again.
+ a.exitCar();a.walk.x=a.car.x+40;a.walk.z=a.car.z;a.updateActors(.05,2);
+ assert(!a.getVehicleNear()&&nodes.get('vehicle-interact').hidden,'The prompt disappears once you walk away');
+ console.log(`Third person and driving: avatar rig, chase camera indoors and out, view toggle, ${(peak*3.6).toFixed(0)} km/h boulevard run, steering, walls, reverse, handbrake, get in and out passed.`);
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
- console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 5 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);
+ console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);
 }
 test(1440,900);test(390,844);
 console.log('All inline scripts parse. Tests use real Three.js scene objects with mocked DOM/renderer; GPU and visual rendering are not covered.');
