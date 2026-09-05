@@ -4920,8 +4920,12 @@ for(const b of harborBuildings.filter(b=>!b.decorative)){
 // Pedestrians use several short street segments instead of a single sparse line.
 const harborRoutes=[
  [350,-120,918,-120],[350,-130,907,-130],
- [400,-173,471,-173],[570,-168,665,-168],[754,-168,838,-168],
- [382,-338,512,-338],[542,-338,735,-338],[758,-338,851,-338],
+ [400,-173,428,-173],[444,-173,471,-173],
+ [570,-168,610,-168],[626,-168,665,-168],
+ [754,-168,788,-168],[804,-168,838,-168],
+ [382,-338,427,-338],[443,-338,512,-338],
+ [542,-338,735,-338],
+ [758,-338,793,-338],[809,-338,851,-338],
  [621,-413,621,-358]
 ];
 for(let i=0;i<(isSmall?44:80);i++){
@@ -5041,7 +5045,9 @@ function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
   if(floor===1&&oldZ-b.z>10.3) rects.push({x:b.x+b.stairX,z:b.z+10.5,w:6,d:.3});
  }
  for(const tram of harborTrams) rects.push({x:tram.g.position.x,z:tram.g.position.z,w:11,d:3.8});
- if(includePeople) for(const r of harborPeopleColliders(inside)) rects.push(r);
+ // 门洞和门前那条通道很窄，被人堵住就会卡死；这一段不把行人当硬碰撞，靠他们自己让开
+ const doorway=harborLandmarks.some(b=>Math.abs(x-b.x)<5&&z-b.z>b.d/2-4&&z-b.z<b.d/2+11);
+ if(includePeople&&!doorway) for(const r of harborPeopleColliders(inside)) rects.push(r);
  const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
  if(inside){
   const lx=p.x-inside.x,lz=p.z-inside.z;
@@ -5102,6 +5108,10 @@ function stepHarborCrowd(dt){
   if(Math.hypot(pos.x-car.x,pos.z-car.z)<11)people.push(carRect());
   for(const p of people){
    const dx=pos.x-p.x,dz=pos.z-p.z,d=Math.hypot(dx,dz);if(d>.001&&d<2.8){const force=(2.8-d)*.8;vx+=dx/d*force;vz+=dz/d*force;}
+  }
+  for(const b of harborLandmarks){
+   const dx=pos.x-b.x,dz=pos.z-(b.z+b.d/2+2);
+   if(Math.abs(dx)<7&&Math.abs(dz)<7){const d=Math.hypot(dx,dz)||.001;vx+=dx/d*(7-d)*.35;vz+=dz/d*(7-d)*.35;}
   }
   // Steer away from nearby wall faces before the hard collision stop is reached.
   for(const r of solids){

@@ -122,7 +122,7 @@ function test(width,height){
  a.focusHarbor();assert.equal(body.dataset.region,'harbor');assert(a.ctrl.tTarget.x>600);
  // New street details must preserve continuous walking routes and open shop interiors.
  a.strollHarbor();a.keys.w=true;
- for(let i=0;i<180;i++){a.stepHarborCrowd(.05);a.updateWalk(.05,i*.05);}a.clearInput();a.updateHarbor(.05,5);
+ for(let i=0;i<180;i++){if(i%2)a.stepHarborCrowd(.1);a.updateWalk(.05,i*.05);}a.clearInput();a.updateHarbor(.05,5);
  assert.equal(a.getHarborState().active?.id,'hotel','Walking up the opening street carries you into the hotel, with no key press');
  assert(!nodes.get('harbor-exit').hidden,'The interior panel opens on its own');
  a.walk.x=618;a.walk.z=-345;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
@@ -142,7 +142,7 @@ function test(width,height){
   // Walking straight ahead from the approach is the whole entry: no prompt, no teleport.
   a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
   const approach={x:a.walk.x,z:a.walk.z};let crossed=-1;
-  for(let i=0;i<160;i++){a.stepHarborCrowd(.05);a.updateWalk(.05,i*.05);if(crossed<0&&a.getHarborState().active===b)crossed=i;}
+  for(let i=0;i<90;i++){if(i%2)a.stepHarborCrowd(.1);a.updateWalk(.05,i*.05);if(crossed<0&&a.getHarborState().active===b)crossed=i;}
   a.clearInput();
   assert(crossed>0,b.name+' can be walked into from the street');
   assert(a.walk.z<approach.z-1,'The player really travelled, rather than being placed inside');
@@ -172,7 +172,7 @@ function test(width,height){
   // Leaving is the same doorway in reverse.
   a.walk.x=b.x;a.walk.z=b.z+b.d/2-6;a.walk.yaw=Math.PI;a.walk.vx=a.walk.vz=0;a.updateHarbor(.05,120);
   assert.equal(a.getHarborState().active,b);
-  a.keys.w=true;for(let i=0;i<140;i++){a.stepHarborCrowd(.05);a.updateWalk(.05,i*.05);}a.clearInput();
+  a.keys.w=true;for(let i=0;i<90;i++){if(i%2)a.stepHarborCrowd(.1);a.updateWalk(.05,i*.05);}a.clearInput();
   assert.equal(a.getHarborState().active,null,b.name+' can be walked out of');
   assert(a.walk.z>b.z+b.d/2+3,'The player ends up back on the street');
   assert(Math.abs(a.worldWalkHeight(a.walk.x,a.walk.z)-4.15)<.2,'Back on the roadway');
@@ -248,7 +248,7 @@ function test(width,height){
  // Indoors the camera pulls in and stays inside the room.
  nodes.get('harbor-building').value='museum';a.goHarborBuilding();a.updateHarbor(.05,150);
  a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
- for(let i=0;i<160;i++){a.stepHarborCrowd(.05);a.updateWalk(.05,i*.05);}a.clearInput();
+ for(let i=0;i<90;i++){if(i%2)a.stepHarborCrowd(.1);a.updateWalk(.05,i*.05);}a.clearInput();
  const inside=a.getHarborState().active;
  assert(inside,'Entered an interior');
  assert(Math.abs(a.camera.position.x-inside.x)<inside.w/2&&Math.abs(a.camera.position.z-inside.z)<inside.d/2,'Indoor chase camera stays inside the building');
