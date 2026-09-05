@@ -7,6 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const routes = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
+  ['/online.js', ['online.js', 'text/javascript; charset=utf-8']],
   ['/og.png', ['og.png', 'image/png']],
 ]);
 const port = Number(process.env.PORT || 8765);

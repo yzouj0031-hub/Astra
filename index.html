@@ -230,6 +230,20 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 @media(max-width:560px){#island-map{right:18px;bottom:155px;width:110px;border-radius:17px;padding:11px 8px}#map-canvas{width:92px;height:80px}.map-heading{font-size:8px}#map-caption{display:none}body.exploring #island-map{display:none}dialog{padding:28px}#toolbar .pill{min-width:82px}body.chrome-off #fishui,body.chrome-off #creel{opacity:0;pointer-events:none}}
 @media(max-height:540px){#intro{display:none}#island-map{display:none}#brand{top:16px}#toolbar{top:18px;flex-direction:row}#dock{bottom:12px}#readout{bottom:148px}}
 
+/* ---------- 可选实时同游 ---------- */
+#online-button[data-online="true"]{background:#e8c579;color:#203b42;border-color:#ffe8b8}
+#online-dialog{width:min(520px,calc(100vw - 28px));padding:30px}
+.online-fields{display:grid;grid-template-columns:1fr 150px;gap:10px;margin:15px 0}
+.online-fields input,#online-chat-input{width:100%;box-sizing:border-box;border:1px solid #31594b2e;border-radius:10px;background:#fffaf0;color:#285056;padding:12px 13px;font:14px "Microsoft YaHei",sans-serif}
+.online-actions{display:flex;gap:9px;flex-wrap:wrap}.online-actions button{flex:1;min-width:120px;border:0;border-radius:10px;padding:12px;background:#285760;color:#fff2dc;cursor:pointer}.online-actions .secondary{background:#d9cfb9;color:#36545a}
+#online-status{min-height:20px;margin:12px 0 0;font-size:11px;line-height:1.7;color:#6e817c}
+.online-room-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:7px 0 13px}.online-room-head strong{font:500 19px Georgia,serif;letter-spacing:.12em}.online-room-head span{font-size:11px;color:#738782}
+#online-peer-list{display:flex;gap:7px;flex-wrap:wrap;min-height:34px;margin-bottom:13px}.online-peer{display:inline-flex;align-items:center;gap:6px;border:1px solid #31594b20;border-radius:20px;padding:7px 10px;background:#fff9ed;font-size:11px}.online-peer i{width:8px;height:8px;border-radius:50%;display:block}
+#online-chat-log{height:160px;overflow:auto;border:1px solid #31594b18;border-radius:12px;background:#fff9ee;padding:10px;margin:8px 0}.online-chat-line{font-size:12px;line-height:1.65;color:#496762;overflow-wrap:anywhere}.online-chat-line b{color:#285056}.online-chat-line.system{color:#83918d;font-style:italic}
+.online-chat-send{display:grid;grid-template-columns:1fr auto;gap:8px}.online-chat-send button{border:0;border-radius:10px;background:#285760;color:#fff;padding:0 18px}
+.online-note{margin-top:13px;font-size:10px;line-height:1.75;color:#83918d}
+@media(max-width:560px){.online-fields{grid-template-columns:1fr}.online-chat-send button{padding:0 14px}#online-dialog{padding:25px 22px}}
+
 #vehicle-interact{position:fixed;bottom:226px;left:50%;transform:translateX(-50%);z-index:28;padding:12px 21px;border:1px solid #ffe6b866;border-radius:30px;background:#2c3f4b;color:#f6ecd6;box-shadow:0 5px 24px #052e3455;font-size:14px;white-space:nowrap}
 #greet-person{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:28;padding:13px 22px;border:1px solid #fff0cd66;border-radius:30px;background:#f1e8d2;color:#285056;box-shadow:0 5px 24px #052e3440;font-size:14px;white-space:nowrap}
 #resident-speech{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:27;width:min(390px,calc(100vw - 40px));padding:20px 24px;background:#f1e8d2f5;color:#285056;border-radius:18px;box-shadow:0 12px 36px #092d3c30;pointer-events:none}
@@ -267,11 +281,13 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="time-toggle" aria-label="切换时间：晨光、日落、星夜">☀ 晨光</button>
 <button class="pill" id="sound-toggle" aria-pressed="false">♫ 环境声</button>
 <button class="pill" id="photo-button">▣ 明信片</button>
+<button class="pill" id="online-button" aria-expanded="false">◎ 联机</button>
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
 <dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
+<dialog id="online-dialog"><button class="dialog-close" id="online-close" aria-label="关闭联机面板">×</button><span class="dialog-kicker">WANDER TOGETHER</span><h2>和朋友一起逛星屿。</h2><section id="online-setup"><div class="online-fields"><input id="online-name" maxlength="18" autocomplete="nickname" placeholder="你的名字"><input id="online-room-code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="房间码"></div><div class="online-actions"><button id="online-create">创建新房间</button><button id="online-join" class="secondary">加入房间</button></div><p id="online-status">联机是可选功能；没有网络时仍可正常单机游玩。</p></section><section id="online-room" hidden><div class="online-room-head"><div><span>当前房间</span><br><strong id="online-current-code">--------</strong></div><span id="online-count">1 人在线</span></div><div id="online-peer-list" aria-label="在线玩家"></div><div id="online-chat-log" aria-live="polite" aria-label="房间聊天"></div><div class="online-chat-send"><input id="online-chat-input" maxlength="160" placeholder="说点什么……"><button id="online-chat-send">发送</button></div><div class="online-actions" style="margin-top:12px"><button id="online-copy" class="secondary">复制邀请链接</button><button id="online-leave" class="secondary">离开房间</button></div><p class="online-note">房间通过随机代码临时建立，不保存聊天。请只把邀请链接发给认识的人；本版本同步位置、朝向和在线状态，不同步碰撞、车辆归属或游乐设施进度。</p></section></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
 <button id="vehicle-interact" hidden>上车 · F</button>
 <aside id="resident-speech" hidden role="status" aria-live="polite"><b id="resident-name"></b><p id="resident-words"></p></aside>
@@ -357,6 +373,7 @@ addEventListener("error", e=>{
 if(!window.THREE) fatal("three.js 没加载成功，检查网络或 CDN 是否被拦。");
 
 </script>
+<script src="./online.js"></script>
 <script>
 (function(){
 "use strict";
@@ -5253,6 +5270,55 @@ function buildAvatar(look){
 const player=buildAvatar({skin:0xe6b18b,shirt:0x2f4b63,pants:0x2b3038,hair:0x2a221c});
 player.g.name='玩家角色';player.g.visible=false;scene.add(player.g);
 
+const remotePlayers=new Map();
+const REMOTE_LOOKS=[
+ {skin:0xd9a27d,shirt:0x8a4e55,pants:0x303a49,hair:0x2d2020},
+ {skin:0xe4b996,shirt:0x496f75,pants:0x34333c,hair:0x523b2d},
+ {skin:0xc88967,shirt:0x6c587f,pants:0x2d3840,hair:0x201c1d},
+ {skin:0xedc7a5,shirt:0x977443,pants:0x3d4349,hair:0x644b31}
+];
+function remoteLook(color){return REMOTE_LOOKS[Math.abs(Number(color)||0)%REMOTE_LOOKS.length];}
+function makeRemoteLabel(name){
+ const canvas=document.createElement('canvas');canvas.width=256;canvas.height=64;const ctx=canvas.getContext('2d');
+ ctx.fillStyle='rgba(18,52,59,.82)';ctx.fillRect(5,5,246,54);
+ ctx.font='500 24px "Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff3da';ctx.fillText(String(name||'旅人').slice(0,18),128,32,226);
+ const texture=new THREE.CanvasTexture(canvas);texture.encoding=THREE.sRGBEncoding;const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const sprite=new THREE.Sprite(material);sprite.userData.remoteLabel=true;sprite.position.set(0,2.72,0);sprite.scale.set(3.8,.95,1);sprite.renderOrder=12;return sprite;
+}
+function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene.remove(r.avatar.g);r.avatar.g.traverse(o=>{if(o.userData?.remoteLabel){o.material?.map?.dispose?.();o.material?.dispose?.();}});remotePlayers.delete(id);}
+function upsertRemotePlayer(peer){
+ if(!peer||!peer.id||!peer.pose)return;
+ let r=remotePlayers.get(peer.id);
+ if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.name='联机玩家 '+peer.name;avatar.g.add(makeRemoteLabel(peer.name));scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
+ r.target.set(peer.pose.x,peer.pose.y,peer.pose.z);r.heading=peer.pose.heading;r.speed=peer.pose.speed;r.kind=peer.pose.kind;r.seen=true;
+ if(!r.avatar.g.visible){r.avatar.g.position.copy(r.target);r.avatar.g.rotation.y=r.heading;}
+ r.avatar.g.visible=true;
+}
+function animateRemotePlayers(dt,t){
+ for(const r of remotePlayers.values()){
+  if(!r.seen){r.avatar.g.visible=false;continue;}
+  r.avatar.g.position.lerp(r.target,Math.min(1,dt*10));
+  r.avatar.g.rotation.y+=Math.atan2(Math.sin(r.heading-r.avatar.g.rotation.y),Math.cos(r.heading-r.avatar.g.rotation.y))*Math.min(1,dt*10);
+  const gait=Math.min(1,Math.max(0,r.speed)/6);r.phase+=dt*Math.max(1,r.speed)*2;
+  const swing=Math.sin(r.phase)*(.16+.38*gait);
+  r.avatar.legs[0].pivot.rotation.x=swing;r.avatar.legs[1].pivot.rotation.x=-swing;
+  r.avatar.arms[0].pivot.rotation.x=-swing*.72;r.avatar.arms[1].pivot.rotation.x=swing*.72;
+  r.avatar.body.position.y=Math.sin(t*1.5)*.012+(gait?Math.abs(Math.sin(r.phase))*.04:0);
+ }
+}
+function localOnlinePose(){
+ let x=walk.x,y=walk.groundY,z=walk.z,heading=walk.heading,speed=walk.speed,kind=mode;
+ if(mode===MODE.DRIVE){x=car.x;y=car.y;z=car.z;heading=car.yaw;speed=Math.abs(car.spd);}
+ else if(mode===MODE.SAIL){x=ship.x;y=waveHeight(ship.x,ship.z,performance.now()/1000)+.4;z=ship.z;heading=ship.yaw;speed=Math.abs(ship.spd);}
+ else if(mode===MODE.FISH){x=fish.originX;y=fish.originY-1.7;z=fish.originZ;heading=fish.yaw;speed=0;}
+ else if(mode===MODE.RIDE){x=camera.position.x;y=camera.position.y-1.7;z=camera.position.z;heading=walk.heading;speed=0;}
+ return {x,y,z,heading,speed,kind,region};
+}
+const onlineWorld=window.AstraOnline?.init({
+ getPose:localOnlinePose,
+ onPeer:upsertRemotePlayer,
+ onPeerLeave:removeRemotePlayer
+});
+
 function animatePlayer(dt,t){
  const show = mode===MODE.WALK && walk.tps && Math.hypot(camera.position.x-walk.x,camera.position.z-walk.z)>.75;
  player.g.visible=show;
@@ -5448,6 +5514,7 @@ function toggleCameraView(){
 
 function updateActors(dt,t){
  animatePlayer(dt,t);
+ animateRemotePlayers(dt,t);
  if(mode!==MODE.DRIVE){
   roadster.g.position.set(car.x,car.y,car.z);
   roadster.g.rotation.set(0,car.yaw,0);

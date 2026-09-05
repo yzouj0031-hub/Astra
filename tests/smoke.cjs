@@ -1,6 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const HTML=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-const scripts=[...HTML.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+// External feature clients are tested separately; this harness executes only inline game scripts.
+const scripts=[...HTML.matchAll(/<script(?![^>]*\bsrc=)(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
 scripts.forEach((s,i)=>new vm.Script(s,{filename:`inline-${i}.js`}));
 const THREE={};
 vm.runInNewContext(scripts[0],{exports:THREE,module:{},console,performance},{filename:'embedded-three.js'});
