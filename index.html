@@ -270,7 +270,7 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
-<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>选择建筑后前往大门，按 E 或点按钮进入。<br>大厅内可自由走动；右侧楼梯通往二楼，靠近展牌按 E 阅读。<br>门边可退出，也可点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
+<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
 <button id="vehicle-interact" hidden>上车 · F</button>
@@ -278,7 +278,7 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <nav id="world-regions" aria-label="群岛区域"><button id="region-island" aria-pressed="true">静屿</button><button id="region-park" aria-pressed="false">星辉乐园</button><button id="region-harbor" aria-pressed="false">维多利亚港</button><button id="region-all" aria-pressed="false">群岛全景</button></nav>
 <section id="park-panel" hidden aria-label="游乐园项目"><div class="park-heading">星辉游乐岛 <span>听海，也听欢笑</span></div><label for="attraction-select">选择项目</label><select id="attraction-select"></select><div class="park-actions"><button id="ride-action">乘坐这个项目</button><button id="park-enter">入园漫步</button><button id="park-sail">码头出海</button></div><p>两岛由跨海栈桥相连 · 夜场随星夜亮灯</p></section>
 <button id="travel-action" hidden class="pill">靠岸</button>
-<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">骑楼街巷、海滨摊档与能穿行的街市。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button></div><div id="harbor-room">建筑内部可自由走动，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>推门参观 · E</button>
+<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">骑楼街巷、海滨摊档与能穿行的街市 · 大门可直接走进去。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button></div><div id="harbor-room">走到大门口就能直接进去，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>阅读展牌 · E</button>
 <div id="readout">
   <b id="ro-name">环岛俯瞰</b>
   <span id="ro-sub">拖动旋转 · 双指缩放</span>
@@ -1724,6 +1724,7 @@ function updateWalk(dt, t){
   }
   const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz);if(Math.abs(harborAdjusted.x-nx)>.001)walk.vx=0;if(Math.abs(harborAdjusted.z-nz)>.001)walk.vz=0;nx=harborAdjusted.x;nz=harborAdjusted.z;
   walk.x=nx; walk.z=nz;
+  syncHarborInterior();
   walk.speed=Math.hypot(walk.vx,walk.vz);
   if(walk.speed>0.4) walk.bob += dt*walk.speed*1.25;
   // 身体朝向跟着实际位移转，不跟镜头，这样才有第三人称的转身感
@@ -1748,6 +1749,8 @@ function chaseBlocked(x,y,z){
   if(y < worldWalkHeight(x,z)+0.42) return true;
   if(activeHarborBuilding){
     const b=activeHarborBuilding, lx=x-b.x, lz=z-b.z;
+    // 刚进门时镜头还留在门洞外面，那不算撞墙
+    if(Math.abs(lx)<3.4 && lz>b.d/2-0.9 && lz<b.d/2+5) return false;
     if(Math.abs(lx)>b.w/2-0.9||Math.abs(lz)>b.d/2-0.9) return true;
     for(const r of b.collisionFloors[harborFloor]) if(harborRectContains({x:lx,z:lz},r,0.3)) return true;
     return false;
@@ -4657,7 +4660,8 @@ function buildHarborLandmark(spec){
   const dome=add(b.g,G.sph(9,20,12),HM.roof,0,h+1,0);dome.scale.y=.8;
   add(b.g,G.cyl(2.2,2.7,3,10),HM.cream,0,h+9,0);add(b.g,G.cone(3.3,3,12),HM.roof,0,h+12,0);
  }
- for(let x=-w/2+5;x<w/2;x+=9)harborColumn(b.g,x,d/2+4,11,0);
+ // 门前留出一段没有柱子的通道，正对 8 米宽的门洞
+ for(let x=-w/2+5;x<w/2;x+=9)if(Math.abs(x)>5)harborColumn(b.g,x,d/2+4,11,0);
  hb(b.g,w+4,.8,9,HM.cream,0,11.3,d/2+3);
  harborSign(b.g,b.name+' / '+b.en,0,21.5,d/2+4,w*.75,2.6);
  const left=new THREE.Group(),right=new THREE.Group();left.position.set(-3.7,0,d/2+.05);right.position.set(3.7,0,d/2+.05);b.g.add(left,right);
@@ -4941,7 +4945,7 @@ function compactHarborRects(rects){
  return result;
 }
 function compileHarborCollisions(){
- harborRoot.updateMatrixWorld(true);const outside=harborBuildings.filter(b=>!b.walkThrough).map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}));
+ harborRoot.updateMatrixWorld(true);const outside=harborBuildings.filter(b=>!b.walkThrough).map(b=>({x:b.x,z:b.z,w:b.w,d:b.d,landmark:b.decorative?undefined:b.id}));
  const landmarks=harborBuildings.filter(b=>!b.decorative),box=new THREE.Box3();
  for(const b of landmarks)b.collisionFloors=[[],[]];
  harborRoot.traverse(o=>{
@@ -4968,6 +4972,14 @@ function compileHarborCollisions(){
  return compactHarborRects(outside);
 }
 const harborCollisionWorld=compileHarborCollisions();
+// 五座大建筑的墙、柱和家具换算到世界坐标，好和街面用同一套碰撞
+const harborLandmarks=harborBuildings.filter(b=>!b.decorative);
+for(const b of harborLandmarks) b.worldFloors=b.collisionFloors.map(list=>list.map(r=>({...r,x:r.x+b.x,z:r.z+b.z})));
+function harborBuildingAt(x,z){
+ for(const b of harborLandmarks) if(Math.abs(x-b.x)<b.w/2&&Math.abs(z-b.z)<b.d/2) return b;
+ return null;
+}
+function harborNearLandmark(b,x,z){ return Math.abs(x-b.x)<b.w/2+6&&Math.abs(z-b.z)<b.d/2+6; }
 function harborRectContains(p,r,radius=HARBOR_BODY){return Math.abs(p.x-r.x)<r.w/2+radius-HARBOR_EPS&&Math.abs(p.z-r.z)<r.d/2+radius-HARBOR_EPS;}
 function harborClamp(p,bounds){return bounds?{x:Math.max(bounds.minX,Math.min(bounds.maxX,p.x)),z:Math.max(bounds.minZ,Math.min(bounds.maxZ,p.z))}:p;}
 function harborRecover(point,rects,bounds,radius=HARBOR_BODY){
@@ -5008,26 +5020,37 @@ function sweepHarborMotion(start,end,rects,bounds,radius=HARBOR_BODY){
  }
  return p;
 }
-function harborPeopleColliders(b){
- const items=b?harborStaff.filter(v=>v.p.g.parent===b.g):[...harborVisitors,...harborStaff.filter(v=>v.p.g.parent!==b?.g)];
- const result=[],p=new THREE.Vector3(),base=b?4.3+harborFloor*10:4.25;
- for(const v of items){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x-(b?.x||0),z:p.z-(b?.z||0),w:.6,d:.6});}
+// inside: 玩家正站在哪座大建筑里（没有就是 null）。按脚下高度筛人，街上和楼上互不干扰。
+function harborPeopleColliders(inside){
+ const result=[],p=new THREE.Vector3(),base=inside?4.3+harborFloor*10:4.25;
+ for(const v of harborVisitors){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
+ for(const v of harborStaff){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
  return result;
 }
 function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
- if(Math.max(oldX,x)<320&&!activeHarborBuilding)return {x,z};
- if(activeHarborBuilding){
-  const b=activeHarborBuilding,start={x:oldX-b.x,z:oldZ-b.z},end={x:x-b.x,z:z-b.z};
-  const rects=[...b.collisionFloors[harborFloor],...(includePeople?harborPeopleColliders(b):[])];
-  // The foot of the stairwell cannot be entered from the upper floor's front corridor.
-  if(harborFloor===1&&start.z>10.3)rects.push({x:b.stairX,z:10.5,w:6,d:.3});
-  const bounds={minX:-b.w/2+1.5,maxX:b.w/2-1.5,minZ:-b.d/2+1.5,maxZ:b.d/2-1.5};
-  const p=sweepHarborMotion(start,end,rects,bounds);
-  if(Math.abs(p.x-b.stairX)<2.6){if(p.z<-14)harborFloor=1;else if(p.z>10.3&&start.z<=10.3)harborFloor=0;}
-  return {x:b.x+p.x,z:b.z+p.z};
+ if(Math.max(oldX,x)<320)return {x,z};
+ // 走到某座大建筑跟前时，用它自己的墙（门洞是真的缺口）换掉那块实心占地
+ const inside=harborBuildingAt(oldX,oldZ)||harborBuildingAt(x,z);
+ const open=harborLandmarks.filter(b=>harborNearLandmark(b,oldX,oldZ)||harborNearLandmark(b,x,z));
+ const rects=[];
+ for(const r of harborCollisionWorld) if(!r.landmark||!open.some(b=>b.id===r.landmark)) rects.push(r);
+ for(const b of open){
+  const floor=b===inside?harborFloor:0;
+  for(const r of b.worldFloors[floor]) rects.push(r);
+  // 二楼前廊不能一脚踩进楼梯井
+  if(floor===1&&oldZ-b.z>10.3) rects.push({x:b.x+b.stairX,z:b.z+10.5,w:6,d:.3});
  }
- const rects=[...harborCollisionWorld,...harborTrams.map(car=>({x:car.g.position.x,z:car.g.position.z,w:11,d:3.8})),...(includePeople?harborPeopleColliders(null):[])];
- return sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
+ for(const tram of harborTrams) rects.push({x:tram.g.position.x,z:tram.g.position.z,w:11,d:3.8});
+ if(includePeople) for(const r of harborPeopleColliders(inside)) rects.push(r);
+ const p=sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
+ if(inside){
+  const lx=p.x-inside.x,lz=p.z-inside.z;
+  if(Math.abs(lx-inside.stairX)<2.6){
+   if(lz<-14)harborFloor=1;
+   else if(lz>10.3&&oldZ-inside.z<=10.3)harborFloor=0;
+  }
+ }
+ return p;
 }
 
 // Stateful crowd movement: short collision-checked steps instead of time-based teleporting.
@@ -5112,54 +5135,65 @@ for(const b of harborBuildings.filter(b=>!b.decorative)){const o=document.create
 function harborChosen(){return harborBuildings.find(b=>b.id===harborAttractionSelect.value&&!b.decorative)||harborBuildings[0];}
 function closeHarborInterior(){if(activeHarborBuilding){activeHarborBuilding.doorOpen=false;activeHarborBuilding.light.intensity=0;}activeHarborBuilding=null;harborFloor=0;document.body.classList.remove('inside-harbor');$('harbor-exit').hidden=true;}
 function visitHarbor(){
- closeHarborInterior();region='harbor';setMode(MODE.WALK);walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=.06;walk.vx=walk.vz=0;faceAway();updateRegionUi();showHint('维多利亚港 · 沿海滨大道步行，走近大门按 E 参观');
+ closeHarborInterior();region='harbor';setMode(MODE.WALK);walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=.06;walk.vx=walk.vz=0;faceAway();updateRegionUi();showHint('维多利亚港 · 沿海滨大道步行，走到大门就能直接进去');
 }
 function focusHarbor(){
  closeHarborInterior();region='harbor';setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(618,12,-196);ctrl.tDist=innerWidth<560?285:220;ctrl.tTheta=.62;ctrl.tPhi=1.26;updateRegionUi();roName.textContent='旧维多利亚港';roSub.textContent='约 1900—1920 年风格 · 五座建筑可入内';
 }
 function strollHarbor(){visitHarbor();walk.x=638;walk.z=-126;walk.yaw=.42;walk.pitch=-.08;faceAway();updateWalk(0,0);showHint('WASD 沿街漫步 · 左上「维多利亚港」打开建筑导览');}
-function goHarborBuilding(){visitHarbor();const b=harborChosen();walk.x=b.entry.x;walk.z=b.entry.z+2;walk.yaw=0;walk.pitch=.04;faceAway();showHint(b.name+' · 走近大门，按 E 推门参观');}
-function enterHarborBuilding(b){
- if(!b||b.decorative)return;closeHarborInterior();region='harbor';setMode(MODE.WALK);activeHarborBuilding=b;harborFloor=0;b.doorOpen=true;
- walk.x=b.x;walk.z=b.z+b.d/2-5;walk.yaw=0;walk.pitch=0;walk.vx=walk.vz=0;faceAway();
+function goHarborBuilding(){visitHarbor();const b=harborChosen();walk.x=b.entry.x;walk.z=b.entry.z+2;walk.yaw=0;walk.pitch=.04;faceAway();showHint(b.name+' · 往前走就进去了，无需按键');}
+// 跨过门槛就算进屋，不再有按键和瞬移；这里只负责界面状态
+function beginHarborInterior(b){
+ activeHarborBuilding=b;harborFloor=0;
  document.body.classList.add('inside-harbor');$('harbor-exit').hidden=false;$('harbor-room').textContent=b.name+' / '+b.rooms[0];
- roName.textContent=b.name;roSub.textContent='WASD 漫游 · 右侧楼梯可上楼 · E 阅读展牌';updateRegionUi();showHint('已进入'+b.name+' · 右侧楼梯通往二楼');
+ roName.textContent=b.name;roSub.textContent='WASD 漫游 · 右侧楼梯可上楼 · E 阅读展牌';updateRegionUi();showHint('走进'+b.name+' · 右侧楼梯通往二楼，原路走出去即可');
+}
+function endHarborInterior(){
+ closeHarborInterior();
+ roName.textContent='维多利亚港 · 海滨大道';roSub.textContent='沿街漫步 · 走近大门直接走进去';updateRegionUi();
+}
+function syncHarborInterior(){
+ const b=(mode===MODE.WALK&&region==='harbor')?harborBuildingAt(walk.x,walk.z):null;
+ if(b===activeHarborBuilding)return;
+ if(b)beginHarborInterior(b);else endHarborInterior();
 }
 function exitHarborBuilding(){
- const b=activeHarborBuilding;if(!b)return;closeHarborInterior();walk.x=b.entry.x;walk.z=b.entry.z;walk.yaw=Math.PI;walk.vx=walk.vz=0;faceAway();roName.textContent='维多利亚港 · 海滨大道';roSub.textContent='沿街漫步 · 走近大门按 E 参观';
+ const b=activeHarborBuilding;if(!b)return;walk.x=b.entry.x;walk.z=b.entry.z;walk.yaw=Math.PI;walk.vx=walk.vz=0;faceAway();endHarborInterior();
 }
 function harborSurface(x,z){
  if(x<320)return null;
- if(activeHarborBuilding){const b=activeHarborBuilding,lx=x-b.x,lz=z-b.z;if(Math.abs(lx-b.stairX)<2.65&&lz>=-14.3&&lz<=10.3){const height=Math.max(0,Math.min(10,(10-lz)/24*10));return 4.3+height;}return 4.3+harborFloor*10;}
+ const b=harborBuildingAt(x,z);
+ if(b){
+  const lx=x-b.x,lz=z-b.z;
+  if(Math.abs(lx-b.stairX)<2.65&&lz>=-14.3&&lz<=10.3){const height=Math.max(0,Math.min(10,(10-lz)/24*10));return 4.3+height;}
+  return 4.3+(b===activeHarborBuilding?harborFloor:0)*10;
+ }
  if(x>=626&&x<=650&&z>=-92&&z<=-22)return 4.25;
  return harborGroundH(x,z);
 }
 function harborInteract(){
  if(mode!==MODE.WALK||!harborNearby||document.querySelector('dialog[open]'))return;
- if(harborNearby.type==='door')enterHarborBuilding(harborNearby.b);
- else if(harborNearby.type==='exit')exitHarborBuilding();
- else showHint(harborNearby.text);
+ showHint(harborNearby.text);
 }
 let harborAnimAcc=0;
 function updateHarbor(dt,t){
+ syncHarborInterior();
  harborAnimAcc+=dt;const near=camera.position.x>270;
  if(harborAnimAcc>(near?.025:.12)){
-  for(const b of harborBuildings.filter(b=>!b.decorative)){const target=b.doorOpen?Math.PI*.47:0;b.doors[0].rotation.y+=(target-b.doors[0].rotation.y)*Math.min(1,harborAnimAcc*5);b.doors[1].rotation.y+=(-target-b.doors[1].rotation.y)*Math.min(1,harborAnimAcc*5);b.light.intensity=activeHarborBuilding===b?(periodIndex===2?1.8:1.0):0;}
+  for(const b of harborLandmarks)b.doorOpen=b===activeHarborBuilding||(mode===MODE.WALK&&region==='harbor'&&Math.hypot(walk.x-b.entry.x,walk.z-b.entry.z)<15);
+  for(const b of harborLandmarks){const target=b.doorOpen?Math.PI*.47:0;b.doors[0].rotation.y+=(target-b.doors[0].rotation.y)*Math.min(1,harborAnimAcc*5);b.doors[1].rotation.y+=(-target-b.doors[1].rotation.y)*Math.min(1,harborAnimAcc*5);b.light.intensity=activeHarborBuilding===b?(periodIndex===2?1.8:1.0):0;}
   animateHarborLife(harborAnimAcc,t);
   for(const boat of harborShips){boat.g.position.y=waveHeight(boat.x,boat.z,t)+.45;boat.g.rotation.z=Math.sin(t*.6+boat.phase)*.025;}
   harborWindowMat.emissiveIntensity=periodIndex===2?.9:periodIndex===1?.35:.08;harborInstances.update();harborAnimAcc=0;
  }
  harborNearby=null;
- if(mode===MODE.WALK&&region==='harbor'&&!document.querySelector('dialog[open]')){
-  if(activeHarborBuilding){
-   const b=activeHarborBuilding;$('harbor-room').textContent=b.name+' / '+b.rooms[harborFloor];
-   if(harborFloor===0&&Math.hypot(walk.x-b.x,walk.z-(b.z+b.d/2-3))<7)harborNearby={type:'exit'};
-   for(const e of b.exhibitPoints)if(e.floor===harborFloor&&Math.hypot(walk.x-e.x,walk.z-e.z)<7)harborNearby={type:'exhibit',text:e.text};
-  }else{for(const b of harborBuildings.filter(b=>!b.decorative))if(Math.hypot(walk.x-b.entry.x,walk.z-b.entry.z)<12){harborNearby={type:'door',b};break;}}
+ if(mode===MODE.WALK&&region==='harbor'&&!document.querySelector('dialog[open]')&&activeHarborBuilding){
+  const b=activeHarborBuilding;$('harbor-room').textContent=b.name+' / '+b.rooms[harborFloor];
+  for(const e of b.exhibitPoints)if(e.floor===harborFloor&&Math.hypot(walk.x-e.x,walk.z-e.z)<7)harborNearby={type:'exhibit',text:e.text};
  }
  const button=$('harbor-interact');button.hidden=!harborNearby||chromeOff;
- if(harborNearby)button.textContent=(harborNearby.type==='door'?'推门参观 · '+harborNearby.b.name:harborNearby.type==='exit'?'回到海滨大道':'阅读展牌')+(innerWidth>700?' · E':'');
- if(mode!==MODE.WALK&&activeHarborBuilding)closeHarborInterior();
+ if(harborNearby)button.textContent='阅读展牌'+(innerWidth>700?' · E':'');
+ if(mode!==MODE.WALK&&activeHarborBuilding)endHarborInterior();
  if(mode===MODE.SAIL&&Math.hypot(ship.x-638,ship.z+15)<35)$('travel-action').textContent='靠岸 · 维多利亚港';
 }
 $('region-harbor').onclick=focusHarbor;$('harbor-walk').onclick=strollHarbor;$('harbor-go').onclick=goHarborBuilding;$('harbor-exit').onclick=exitHarborBuilding;$('harbor-interact').onclick=harborInteract;
