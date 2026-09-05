@@ -1682,7 +1682,7 @@ function updateWalk(dt, t){
     const dx=nx-n.g.position.x,dz=nz-n.g.position.z,d=Math.hypot(dx,dz),radius=1.0;
     if(d<radius){const angle=d>1e-5?Math.atan2(dz,dx):0;nx=n.g.position.x+Math.cos(angle)*radius;nz=n.g.position.z+Math.sin(angle)*radius;walk.vx*=.4;walk.vz*=.4;}
   }
-  const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz);nx=harborAdjusted.x;nz=harborAdjusted.z;
+  const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz);if(Math.abs(harborAdjusted.x-nx)>.001)walk.vx=0;if(Math.abs(harborAdjusted.z-nz)>.001)walk.vz=0;nx=harborAdjusted.x;nz=harborAdjusted.z;
   walk.x=nx; walk.z=nz;
   walk.speed=Math.hypot(walk.vx,walk.vz);
   if(walk.speed>0.4) walk.bob += dt*walk.speed*1.25;
@@ -4587,7 +4587,7 @@ function buildHarborLandmark(spec){
  hb(b.g,10,.3,d/2-14,HM.floor,w/2-6,9.85,-(d/2+14)/2);
  hb(b.g,10,.3,d/2-10,HM.floor,w/2-6,9.85,(d/2+10)/2);
  hb(b.g,w-2,.4,d-2,HM.paper,0,20.5,0);
- for(let i=0;i<30;i++){const z=10-(i+.5)*.8,y=(i+1)/3;hb(b.g,5,y,.82,HM.floor,sx,y/2,z);}
+ for(let i=0;i<30;i++){const z=10-(i+.5)*.8,y=(i+1)/3;hb(b.g,5,y,.82,HM.floor,sx,y/2,z).userData.harborWalkSurface=true;}
  strut(b.g,sx-2.7,1,10,sx-2.7,11,-14,.08,HM.wood);strut(b.g,sx+2.7,1,10,sx+2.7,11,-14,.08,HM.wood);
  b.furniture.push({x:sx-3,z:-2,w:.25,d:22,floor:'both'});
  b.furniture.push({x:sx+3,z:-2,w:.25,d:22,floor:'both'});
@@ -4722,9 +4722,10 @@ function buildInfill(x,z,w,d,index){
  for(const side of [-1,1])streetSolid(g,1,6,d,mat,side*w/2,3,0,x,z);
  for(let xx=-w/2+3;xx<w/2;xx+=7){
   for(let yy=10;yy<h;yy+=6){hb(g,2.5,3.3,.15,harborWindowMat,xx,yy,d/2+.1);hb(g,3.4,.25,1.4,HM.paper,xx,yy-1.8,d/2+.4);}
-  if(Math.abs(xx)>3){harborColumn(g,xx,d/2+1,6,0);harborStreetObstacles.push({x:x+xx,z:z+d/2+1,w:1.7,d:1.7});}arch(g,xx,0,d/2+1.5,5.5,6,HM.cream);
-  hb(g,3,3,1.2,HM.wood,xx,1.5,d/2-7);goods(g,xx,3,d/2-7,index);
+  if(Math.abs(xx)>5){harborColumn(g,xx,d/2+1,6,0);harborStreetObstacles.push({x:x+xx,z:z+d/2+1,w:1.7,d:1.7});arch(g,xx,0,d/2+1.5,5.5,6,HM.cream);
+   hb(g,3,3,1.2,HM.wood,xx,1.5,d/2-7);goods(g,xx,3,d/2-7,index);}
  }
+ arch(g,0,0,d/2+1.5,8,6,HM.cream);
  hb(g,w+1,.7,d+1,HM.darkstone,0,h,0);
  for(const side of [-1,1]){
   streetSolid(g,2,3.8,d-18,HM.wood,side*(w/2-4),1.9,-3,x,z);
@@ -4835,7 +4836,7 @@ const harborRoutes=[
  [350,-120,918,-120],[350,-130,907,-130],
  [400,-173,471,-173],[570,-170,665,-170],[754,-168,838,-168],
  [382,-338,512,-338],[542,-338,735,-338],[758,-338,851,-338],
- [618,-413,618,-358]
+ [621,-413,621,-358]
 ];
 for(let i=0;i<(isSmall?44:80);i++){
  const p=harborPerson(harborRoot,0,4.25,0);const route=harborRoutes[i%harborRoutes.length];
@@ -4853,9 +4854,107 @@ function animateHarborLife(dt,t){
 }
 animateHarborLife(0,0);
 
+const harborMovingRoots=new Set([...harborVisitors.map(v=>v.p.g),...harborStaff.map(v=>v.p.g),...harborShips.map(v=>v.g),...harborTrams.map(v=>v.g),...harborBuildings.filter(b=>!b.decorative).flatMap(b=>b.doors)]);
+// Build collision volumes from the same solid geometry used to draw the harbour.
+const HARBOR_BODY=.82,HARBOR_EPS=.0001;
+function compactHarborRects(rects){
+ const result=[];rects.sort((a,b)=>b.w*b.d-a.w*a.d);
+ for(const r of rects)if(r.w>.001&&r.d>.001&&!result.some(o=>Math.abs(r.x-o.x)+r.w/2<=o.w/2+.001&&Math.abs(r.z-o.z)+r.d/2<=o.d/2+.001))result.push(r);
+ return result;
+}
+function compileHarborCollisions(){
+ harborRoot.updateMatrixWorld(true);const outside=harborBuildings.filter(b=>!b.walkThrough).map(b=>({x:b.x,z:b.z,w:b.w,d:b.d}));
+ const landmarks=harborBuildings.filter(b=>!b.decorative),box=new THREE.Box3();
+ for(const b of landmarks)b.collisionFloors=[[],[]];
+ harborRoot.traverse(o=>{
+  if(!o.isMesh||harborMoves(o)||o.userData.harborWalkSurface||! /^(Box|Cylinder)(Buffer)?Geometry$/.test(o.geometry.type))return;
+  o.geometry.computeBoundingBox();box.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+  const r={x:(box.min.x+box.max.x)/2,z:(box.min.z+box.max.z)/2,w:box.max.x-box.min.x,d:box.max.z-box.min.z};
+  if(box.max.y>4.5&&box.min.y<6.3)outside.push(r);
+  for(const b of landmarks){
+   let child=o;while(child&&child!==b.g)child=child.parent;if(!child)continue;
+   for(const floor of [0,1]){const base=4.3+floor*10;if(box.max.y>base+.3&&box.min.y<base+2) b.collisionFloors[floor].push({...r,x:r.x-b.x,z:r.z-b.z});}
+   break;
+  }
+ });
+ for(const b of landmarks){
+  for(const floor of [0,1]){
+   b.collisionFloors[floor].push(...b.furniture.filter(o=>o.floor==='both'||o.floor===floor));
+   b.collisionFloors[floor]=compactHarborRects(b.collisionFloors[floor]);
+  }
+ }
+ // The stone quay and timber pier are level platforms; their edges are not ramps.
+ outside.push({x:329.5,z:-305,w:1,d:430},{x:950.5,z:-305,w:1,d:430},{x:640,z:-520.5,w:620,d:1},
+  {x:478.25,z:-89.5,w:296.5,d:1},{x:799.75,z:-89.5,w:300.5,d:1},
+  {x:626.25,z:-56,w:.5,d:68},{x:649.75,z:-56,w:.5,d:68},{x:638,z:-21.75,w:23,d:.5});
+ return compactHarborRects(outside);
+}
+const harborCollisionWorld=compileHarborCollisions();
+function harborRectContains(p,r){return Math.abs(p.x-r.x)<r.w/2+HARBOR_BODY-HARBOR_EPS&&Math.abs(p.z-r.z)<r.d/2+HARBOR_BODY-HARBOR_EPS;}
+function harborClamp(p,bounds){return bounds?{x:Math.max(bounds.minX,Math.min(bounds.maxX,p.x)),z:Math.max(bounds.minZ,Math.min(bounds.maxZ,p.z))}:p;}
+function harborRecover(point,rects,bounds){
+ const origin=harborClamp(point,bounds),queue=[origin],seen=new Set();
+ for(let attempt=0;queue.length&&attempt<240;attempt++){
+  queue.sort((a,b)=>Math.hypot(a.x-origin.x,a.z-origin.z)-Math.hypot(b.x-origin.x,b.z-origin.z));const p=queue.shift();
+  const key=p.x.toFixed(4)+','+p.z.toFixed(4);if(seen.has(key))continue;seen.add(key);
+  const overlap=rects.filter(r=>harborRectContains(p,r));if(!overlap.length)return p;
+  for(const r of overlap.slice(0,6)){
+   const ex=r.w/2+HARBOR_BODY+HARBOR_EPS,ez=r.d/2+HARBOR_BODY+HARBOR_EPS;
+   for(const next of [{x:r.x-ex,z:p.z},{x:r.x+ex,z:p.z},{x:p.x,z:r.z-ez},{x:p.x,z:r.z+ez}])queue.push(harborClamp(next,bounds));
+  }
+ }
+ return null;
+}
+function harborSweepHit(p,delta,r){
+ let enter=-Infinity,leave=Infinity,normal={x:0,z:0};
+ for(const axis of ['x','z']){
+  const extent=(axis==='x'?r.w:r.d)/2+HARBOR_BODY,lo=r[axis]-extent,hi=r[axis]+extent,v=delta[axis];
+  if(Math.abs(v)<1e-10){if(p[axis]<=lo+HARBOR_EPS||p[axis]>=hi-HARBOR_EPS)return null;continue;}
+  const a=(lo-p[axis])/v,b=(hi-p[axis])/v,near=Math.min(a,b),far=Math.max(a,b);
+  if(near>enter){enter=near;normal={x:0,z:0};normal[axis]=v>0?-1:1;}leave=Math.min(leave,far);
+ }
+ if(enter>leave||leave<0||enter< -HARBOR_EPS||enter>1)return null;
+ return {time:Math.max(0,enter),normal};
+}
+function sweepHarborMotion(start,end,rects,bounds){
+ let p=harborRecover(start,rects,bounds);if(!p)return {...start};
+ // Moving people or the tram can displace a stationary player; do not undo that recovery.
+ const requested=harborClamp({x:p.x+end.x-start.x,z:p.z+end.z-start.z},bounds);
+ let delta={x:requested.x-p.x,z:requested.z-p.z};
+ for(let contact=0;contact<8&&Math.hypot(delta.x,delta.z)>1e-7;contact++){
+  let first=null;for(const r of rects){const hit=harborSweepHit(p,delta,r);if(hit&&(!first||hit.time<first.time))first=hit;}
+  if(!first){p.x+=delta.x;p.z+=delta.z;break;}
+  const t=Math.max(0,first.time-HARBOR_EPS/Math.max(1,Math.hypot(delta.x,delta.z)));
+  p.x+=delta.x*t;p.z+=delta.z*t;delta.x*=1-t;delta.z*=1-t;
+  const dot=delta.x*first.normal.x+delta.z*first.normal.z;if(dot<0){delta.x-=dot*first.normal.x;delta.z-=dot*first.normal.z;}
+ }
+ return p;
+}
+function harborPeopleColliders(b){
+ const items=b?harborStaff.filter(v=>v.p.g.parent===b.g):[...harborVisitors,...harborStaff.filter(v=>v.p.g.parent!==b?.g)];
+ const result=[],p=new THREE.Vector3(),base=b?4.3+harborFloor*10:4.25;
+ for(const v of items){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x-(b?.x||0),z:p.z-(b?.z||0),w:.6,d:.6});}
+ return result;
+}
+function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
+ if(Math.max(oldX,x)<320&&!activeHarborBuilding)return {x,z};
+ if(activeHarborBuilding){
+  const b=activeHarborBuilding,start={x:oldX-b.x,z:oldZ-b.z},end={x:x-b.x,z:z-b.z};
+  const rects=[...b.collisionFloors[harborFloor],...(includePeople?harborPeopleColliders(b):[])];
+  // The foot of the stairwell cannot be entered from the upper floor's front corridor.
+  if(harborFloor===1&&start.z>10.3)rects.push({x:b.stairX,z:10.5,w:6,d:.3});
+  const bounds={minX:-b.w/2+1.5,maxX:b.w/2-1.5,minZ:-b.d/2+1.5,maxZ:b.d/2-1.5};
+  const p=sweepHarborMotion(start,end,rects,bounds);
+  if(Math.abs(p.x-b.stairX)<2.6){if(p.z<-14)harborFloor=1;else if(p.z>10.3&&start.z<=10.3)harborFloor=0;}
+  return {x:b.x+p.x,z:b.z+p.z};
+ }
+ const rects=[...harborCollisionWorld,...harborTrams.map(car=>({x:car.g.position.x,z:car.g.position.z,w:11,d:3.8})),...(includePeople?harborPeopleColliders(null):[])];
+ return sweepHarborMotion({x:oldX,z:oldZ},{x,z},rects);
+}
+
 const harborInstances=instanceResortMeshes(harborRoot);harborInstances.update();
 // Static buildings retain their instance transforms; only people, doors and vessels update.
-const harborMovingRoots=new Set([...harborVisitors.map(v=>v.p.g),...harborStaff.map(v=>v.p.g),...harborShips.map(v=>v.g),...harborTrams.map(v=>v.g),...harborBuildings.filter(b=>!b.decorative).flatMap(b=>b.doors)]);
+
 function harborMoves(o){for(let p=o;p&&p!==harborRoot;p=p.parent)if(harborMovingRoots.has(p))return true;return false;}
 const harborMovingBatches=harborInstances.batches.map(b=>({mesh:b.mesh,items:b.items.map((o,i)=>({o,i})).filter(v=>harborMoves(v.o))})).filter(b=>b.items.length);
 harborRoot.traverse(o=>{if(!harborMoves(o)){o.updateMatrix();o.matrixAutoUpdate=false;}});
@@ -4888,28 +4987,6 @@ function harborSurface(x,z){
  if(activeHarborBuilding){const b=activeHarborBuilding,lx=x-b.x,lz=z-b.z;if(Math.abs(lx-b.stairX)<2.65&&lz>=-14.3&&lz<=10.3){const height=Math.max(0,Math.min(10,(10-lz)/24*10));return 4.3+height;}return 4.3+harborFloor*10;}
  if(x>=626&&x<=650&&z>=-92&&z<=-22)return 4.25;
  return harborGroundH(x,z);
-}
-function pushOutRect(x,z,r){
- const minX=r.x-r.w/2-.82,maxX=r.x+r.w/2+.82,minZ=r.z-r.d/2-.82,maxZ=r.z+r.d/2+.82;
- if(x<=minX||x>=maxX||z<=minZ||z>=maxZ)return {x,z};
- const distances=[x-minX,maxX-x,z-minZ,maxZ-z],k=distances.indexOf(Math.min(...distances));
- return {x:k===0?minX:k===1?maxX:x,z:k===2?minZ:k===3?maxZ:z};
-}
-function resolveHarborWalk(oldX,oldZ,x,z){
- if(x<320&&!activeHarborBuilding)return {x,z};
- if(activeHarborBuilding){
-  const b=activeHarborBuilding;let lx=Math.max(-b.w/2+1.4,Math.min(b.w/2-1.4,x-b.x)),lz=Math.max(-b.d/2+1.4,Math.min(b.d/2-1.4,z-b.z));
-  for(const o of b.furniture){if(o.floor!=='both'&&o.floor!==harborFloor)continue;const p=pushOutRect(lx,lz,o);lx=p.x;lz=p.z;}
-  if(Math.abs(lx-b.stairX)<2.6){
-   if(harborFloor===1&&lz>10&&!(Math.abs(oldX-b.x-b.stairX)<2.6&&oldZ-b.z<=10.3)){lx=oldX-b.x;lz=oldZ-b.z;}
-   else if(lz<-14)harborFloor=1;else if(lz>10)harborFloor=0;
-  }
-  return {x:b.x+lx,z:b.z+lz};
- }
- for(const b of harborBuildings){if(b.walkThrough)continue;const p=pushOutRect(x,z,b);x=p.x;z=p.z;}
- for(const o of harborStreetObstacles){const p=pushOutRect(x,z,o);x=p.x;z=p.z;}
- for(const car of harborTrams){const p=pushOutRect(x,z,{x:car.g.position.x,z:car.g.position.z,w:11,d:3.8});x=p.x;z=p.z;}
- return {x,z};
 }
 function harborInteract(){
  if(mode!==MODE.WALK||!harborNearby||document.querySelector('dialog[open]'))return;

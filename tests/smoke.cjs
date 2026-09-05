@@ -28,7 +28,7 @@ function test(width,height){
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -78,6 +78,41 @@ function test(width,height){
  const landmarks=a.harborBuildings.filter(b=>!b.decorative);
  assert.equal(landmarks.length,5);assert(a.harborFacadeCount>=15,'Dense streets contain many buildings');
  assert.equal(a.harborVisitors.length,width<560?44:80);assert.equal(a.harborShips.length,7);
+ // Continuous collision checks prevent a whole frame from crossing thin solids.
+ for(const wall of [{x:0,z:0,w:.12,d:20},{x:0,z:0,w:20,d:.12}]){
+  const acrossX=wall.w<wall.d;
+  for(const direction of [-1,1]){
+   const start=acrossX?{x:-5*direction,z:-8}:{x:-8,z:-5*direction};
+   const end=acrossX?{x:15*direction,z:8}:{x:8,z:15*direction};
+   const p=a.sweepHarborMotion(start,end,[wall]);
+   assert(!a.harborRectContains(p,wall));assert((acrossX?p.x:p.z)*direction<-.87,'Large diagonal step stops on the near side of a thin wall');
+  }
+ }
+ const corner=[{x:0,z:0,w:.15,d:10},{x:4.9,z:4.9,w:10,d:.15}];
+ const stopped=a.sweepHarborMotion({x:-3,z:-3},{x:20,z:20},corner);
+ assert(stopped.x<-.89&&stopped.z<4.01,'Sliding cannot squeeze through a joined corner');
+ const overlapping=[{x:0,z:0,w:4,d:4},{x:3,z:0,w:4,d:4}];
+ const recovered=a.sweepHarborMotion({x:1.5,z:0},{x:1.5,z:0},overlapping);
+ assert(overlapping.every(r=>!a.harborRectContains(recovered,r)),'Recovery leaves every overlapping collider');
+ const column=a.resolveHarborWalk(625,-385,635,-385,false);
+ assert(column.x<627.2,'Market columns block movement');
+ const bench=a.resolveHarborWalk(353,-94,353,-101,false);
+ assert(bench.z>-96.6,'Quay benches block movement');
+ const lamp=a.resolveHarborWalk(342,-99,350,-99,false);
+ assert(lamp.x<345,'Lamp posts block movement');
+ const quay=a.resolveHarborWalk(580,-94,580,-80,false);
+ assert(quay.z<-90.8,'Cannot walk off the stone quay through its vertical edge');
+ a.strollHarbor();a.walk.x=504;a.walk.z=-238;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=a.keys.shift=true;
+ for(let i=0;i<12;i++)a.updateWalk(.5,i*.5);a.clearInput();
+ assert(a.walk.z>-241.7,'Running during long frames cannot cross a shop back wall');
+ a.animateHarborLife(.05,10);const tramX=380+10/150/.45*510;
+ const pushed=a.resolveHarborWalk(tramX,-154,tramX,-154,false);
+ assert(!a.harborRectContains(pushed,{x:tramX,z:-154,w:11,d:3.8}),'Moving tram contact separates the player');
+ assert(a.harborCollisionWorld.every(r=>!a.harborRectContains(pushed,r)),'Tram cannot push the player into scenery');
+ const person=a.harborVisitors[0].p.g.position;
+ const personStop=a.resolveHarborWalk(person.x-4,person.z,person.x+4,person.z);
+ assert(personStop.x<person.x-1.1,'The player cannot walk straight through a pedestrian');
+ console.log(`Harbour collision: ${a.harborCollisionWorld.length} static volumes; thin-wall sweeps, corners, overlap recovery, poles, benches, quay edges, running and tram contact passed.`);
  a.scene.updateMatrixWorld(true);
  const solids=[];a.scene.traverse(o=>{if(o.isMesh&&o.visible&&!Array.isArray(o.material)&&(!o.material.transparent||o.material.opacity>.8))solids.push(o);});
  for(const b of landmarks){
@@ -92,14 +127,14 @@ function test(width,height){
  assert.equal(a.getHarborState().nearby?.b.id,'hotel');
  a.walk.x=618;a.walk.z=-345;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
  for(let i=0;i<180;i++)a.updateWalk(.05,i*.05);a.clearInput();
- assert(a.walk.z<-420,'The covered market can be crossed from end to end');
+ assert(a.walk.z<-420,`The covered market can be crossed from end to end (${a.walk.x},${a.walk.z})`);
  a.walk.x=504;a.walk.z=-177;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
  for(let i=0;i<70;i++)a.updateWalk(.05,i*.05);a.clearInput();
  assert(a.walk.z<-204,'An arcade shop can be entered directly from the street');
  for(const b of landmarks)assert(b.roomGroups>4,b.name+' contains usable furniture groups');
  for(const t of [0,40,110]){
   a.animateHarborLife(.05,t);
-  for(const v of a.harborVisitors){const p=v.p.g.position,adjusted=a.resolveHarborWalk(p.x,p.z,p.x,p.z);assert(Math.hypot(adjusted.x-p.x,adjusted.z-p.z)<.01,`Pedestrian route avoids obstacles at ${p.x.toFixed(2)},${p.z.toFixed(2)}`);}
+  for(const v of a.harborVisitors){const p=v.p.g.position,adjusted=a.resolveHarborWalk(p.x,p.z,p.x,p.z,false);assert(Math.hypot(adjusted.x-p.x,adjusted.z-p.z)<.01,`Pedestrian route avoids obstacles at ${p.x.toFixed(2)},${p.z.toFixed(2)}`);}
  }
  for(const b of landmarks){
   nodes.get('harbor-building').value=b.id;a.goHarborBuilding();a.updateHarbor(.05,100);
@@ -114,6 +149,8 @@ function test(width,height){
   assert(a.walk.z<b.z-14,`Climbed all steps (${a.walk.z-b.z})`);
   assert(Math.abs(a.worldWalkHeight(a.walk.x,a.walk.z)-14.3)<.01,'Upper floor supports player');
   assert(Math.abs(a.camera.position.y-16.02)<.3,'Camera follows upper floor');
+  const stairSide=a.resolveHarborWalk(b.x+b.stairX-6,b.z+11.1,b.x+b.stairX,b.z+9.7,false);
+  assert.equal(a.getHarborState().floor,1);assert(a.worldWalkHeight(stairSide.x,stairSide.z)>14.2,'Upper corridor cannot drop into the foot of the stairwell');
   const e=b.exhibitPoints[1];a.walk.x=e.x;a.walk.z=e.z;a.updateHarbor(.05,110);
   assert.equal(a.getHarborState().nearby?.type,'exhibit');a.harborInteract();
   // Solid walls and furniture constrain movement on the occupied floor.
