@@ -250,6 +250,7 @@ body[data-region=harbor] #intro{opacity:0}body.chrome-off #harbor-panel,body.chr
 @media(max-width:850px){#world-regions{left:24px;top:110px}#harbor-panel{left:24px;top:180px;width:275px;padding:18px}.harbor-heading{font-size:23px}}
 @media(max-width:560px){#world-regions{top:89px;left:15px;max-width:calc(100vw - 112px);border-radius:16px;gap:0}#world-regions button{font-size:11px;padding:8px 10px}#harbor-panel{top:177px;left:15px;width:calc(100vw - 117px);padding:14px}.harbor-heading{font-size:21px}.harbor-heading span,.harbor-caption,#harbor-panel small{display:none}#harbor-panel label{font-size:12px;margin-top:12px}#harbor-building{font-size:12px;padding:9px}.harbor-actions button{font-size:12px;padding:10px 5px}#harbor-room{font-size:12px}#harbor-interact{bottom:175px;font-size:13px;white-space:nowrap}.harbor-actions{gap:6px}#park-panel{top:177px}#intro{top:37%}body.inside-harbor #harbor-panel{top:177px}}
 @media(max-height:600px){#harbor-panel{top:160px;max-height:calc(100vh - 320px);overflow:auto;touch-action:pan-y}.harbor-caption,#harbor-panel small{display:none}}
+body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{display:none}
 </style>
 <meta property="og:type" content="website"><meta property="og:title" content="星屿 · 海岛游乐园"><meta property="og:description" content="静屿、星辉乐园与旧维多利亚港。听海、乘坐游乐设施，走进大建筑参观。"><meta name="twitter:card" content="summary"><meta name="twitter:title" content="星屿 · 海岛游乐园"><meta name="twitter:description" content="静屿、星辉乐园与旧维多利亚港。听海、乘坐游乐设施，走进大建筑参观。"></head>
 <body>
@@ -275,7 +276,7 @@ body[data-region=harbor] #intro{opacity:0}body.chrome-off #harbor-panel,body.chr
 <nav id="world-regions" aria-label="群岛区域"><button id="region-island" aria-pressed="true">静屿</button><button id="region-park" aria-pressed="false">星辉乐园</button><button id="region-harbor" aria-pressed="false">维多利亚港</button><button id="region-all" aria-pressed="false">群岛全景</button></nav>
 <section id="park-panel" hidden aria-label="游乐园项目"><div class="park-heading">星辉游乐岛 <span>听海，也听欢笑</span></div><label for="attraction-select">选择项目</label><select id="attraction-select"></select><div class="park-actions"><button id="ride-action">乘坐这个项目</button><button id="park-enter">入园漫步</button><button id="park-sail">码头出海</button></div><p>两岛由跨海栈桥相连 · 夜场随星夜亮灯</p></section>
 <button id="travel-action" hidden class="pill">靠岸</button>
-<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">海滨长廊、石砌拱廊与旧时代的远航。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button></div><div id="harbor-room">建筑内部可自由走动，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>推门参观 · E</button>
+<section id="harbor-panel" hidden aria-label="维多利亚港参观"><div class="harbor-heading">維多利亞港 <span>VICTORIA HARBOUR · c. 1900–1920</span></div><p class="harbor-caption">骑楼街巷、海滨摊档与能穿行的街市。</p><label for="harbor-building">五座建筑 · 可入内参观</label><select id="harbor-building"></select><div class="harbor-actions"><button id="harbor-go">前往大门</button><button id="harbor-walk">海滨漫步</button><button id="harbor-sail">港口出海</button></div><div id="harbor-room">建筑内部可自由走动，右侧楼梯通往二楼。</div><button id="harbor-exit" hidden>离开建筑 · 回到街道</button><small>历史风格创作 · 非原址精确复原</small></section><button id="harbor-interact" hidden>推门参观 · E</button>
 <div id="readout">
   <b id="ro-name">环岛俯瞰</b>
   <span id="ro-sub">拖动旋转 · 双指缩放</span>
@@ -4669,11 +4670,198 @@ for(let i=0;i<7;i++){
  else{add(boatRoot,G.cyl(1.1,1.3,6,10),HM.iron,-2,7,0);for(let wx=-7;wx<8;wx+=3)hb(boatRoot,1.4,1.3,.1,harborWindowMat,wx,2.5,3.1);}
  harborShips.push({g:boatRoot,x,z,phase:i*1.7});
 }
-// A compact group of pedestrians strolls along the promenade.
-for(let i=0;i<(isSmall?12:22);i++){
- const p=parkModule.makePerson({child:i%9===0});p.g.scale.multiplyScalar(.75);harborRoot.add(p.g);harborVisitors.push({p,phase:i*.63,x:350+i*24,z:-117+(i%3)*6});
+// Street rooms, trading activity and furnished interiors at pedestrian scale.
+const harborStreetObstacles=[],harborStaff=[],harborStalls=[],harborTrams=[];
+function streetSolid(p,w,h,d,m,x,y,z,ox=0,oz=0){
+ const mesh=hb(p,w,h,d,m,x,y,z);harborStreetObstacles.push({x:x+ox,z:z+oz,w,d});return mesh;
 }
+function harborPerson(parent,x,y,z,heading=0){
+ const p=parkModule.makePerson();if(p.balloon)p.balloon.parent.remove(p.balloon);
+ p.g.scale.multiplyScalar(.75);p.g.position.set(x,y,z);p.g.rotation.y=heading;parent.add(p.g);
+ add(p.g,G.cyl(.36,.36,.07,9),HM.wood,0,2.83,0);add(p.g,G.cyl(.23,.26,.2,9),HM.cream,0,2.94,0);
+ return p;
+}
+function goods(parent,x,y,z,seed=0){
+ for(let k=0;k<3;k++){
+  const dx=x+(k-1)*1.15;hb(parent,1,.65,1.4,HM.wood,dx,y+.32,z);
+  for(let j=0;j<4;j++)add(parent,G.sph(.22,6,5),[HM.red,HM.green,HM.paper][seed%3],dx+(j%2-.5)*.45,y+.78,z+(Math.floor(j/2)-.5)*.55);
+ }
+}
+function tradingStall(x,z,index,parent=harborRoot,ox=0,oz=0){
+ const m=[HM.red,HM.green,HM.blue][index%3];
+ streetSolid(parent,5.7,1.5,2,HM.wood,x,5,z,ox,oz);
+ for(const dx of [-3,3])for(const dz of [-1.7,1.7])hb(parent,.13,4.2,.13,HM.wood,x+dx,6.2,z+dz);
+ for(let i=0;i<8;i++)hb(parent,.8,.15,4.7,i%2?HM.paper:m,x-2.8+i*.8,8.45,z);
+ hb(parent,6.4,.65,.13,m,x,8.1,z+2.3);goods(parent,x,5.8,z,index);
+ const p=harborPerson(parent,x,4.25,z-2.8);harborStaff.push({p,phase:index*.7});
+ harborStalls.push({x:x+ox,z:z+oz,w:5.7,d:2});
+ if(index%3===0)harborSign(parent,['茶葉 · TEA','鮮果 · FRUIT','洋貨 · GOODS'][index%3],x,7.3,z+.2,4.8,1.2);
+}
+// Stone texture replaces the uninterrupted flat ground colour.
+const pavingCanvas=document.createElement('canvas');pavingCanvas.width=pavingCanvas.height=256;
+const pavingCtx=pavingCanvas.getContext('2d');pavingCtx.fillStyle='#62635b';pavingCtx.fillRect(0,0,256,256);
+for(let row=0;row<16;row++)for(let col=-1;col<9;col++){
+ const shade=116+((row*17+col*13+47)%22);pavingCtx.fillStyle=`rgb(${shade},${shade-2},${shade-10})`;
+ pavingCtx.fillRect(col*32+(row%2)*16+1,row*16+1,30,14);
+}
+const pavingTexture=new THREE.CanvasTexture(pavingCanvas);pavingTexture.wrapS=pavingTexture.wrapT=THREE.RepeatWrapping;pavingTexture.repeat.set(42,30);pavingTexture.encoding=THREE.sRGBEncoding;
+const pavingMat=new THREE.MeshStandardMaterial({map:pavingTexture,roughness:1});
+const paving=add(harborRoot,new THREE.PlaneGeometry(620,430),pavingMat,640,4.115,-305,false,true);paving.rotation.x=-Math.PI/2;
+
+// Fill the broad gaps between monuments with narrow, attached commercial fronts.
+const infillSpecs=[
+ [348,-213,28,60],[384,-213,20,60],[504,-213,38,60],[548,-213,20,60],[692,-213,20,60],[727,-213,22,60],[892,-211,70,60],
+ [348,-385,28,64],[386,-385,18,64],[502,-385,34,64],[547,-385,22,64],[691,-385,20,64],[728,-385,24,64],[892,-385,66,64]
+];
+function buildInfill(x,z,w,d,index){
+ const g=new THREE.Group();g.position.set(x,4.3,z);harborRoot.add(g);const h=22+(index%3)*7;
+ const mat=[HM.brick,HM.stone,HM.cream][index%3];
+ // Open arcade at street level; the upper dwelling forms a continuous street wall.
+ hb(g,w,h-6,d,mat,0,6+(h-6)/2,0);
+ streetSolid(g,w,6,1,mat,0,3,-d/2,x,z);
+ for(const side of [-1,1])streetSolid(g,1,6,d,mat,side*w/2,3,0,x,z);
+ for(let xx=-w/2+3;xx<w/2;xx+=7){
+  for(let yy=10;yy<h;yy+=6){hb(g,2.5,3.3,.15,harborWindowMat,xx,yy,d/2+.1);hb(g,3.4,.25,1.4,HM.paper,xx,yy-1.8,d/2+.4);}
+  if(Math.abs(xx)>3){harborColumn(g,xx,d/2+1,6,0);harborStreetObstacles.push({x:x+xx,z:z+d/2+1,w:1.7,d:1.7});}arch(g,xx,0,d/2+1.5,5.5,6,HM.cream);
+  hb(g,3,3,1.2,HM.wood,xx,1.5,d/2-7);goods(g,xx,3,d/2-7,index);
+ }
+ hb(g,w+1,.7,d+1,HM.darkstone,0,h,0);
+ for(const side of [-1,1]){
+  streetSolid(g,2,3.8,d-18,HM.wood,side*(w/2-4),1.9,-3,x,z);
+  for(let zz=-d/2+8;zz<d/2-12;zz+=4)for(const yy of [1.2,2.7,4]){
+   hb(g,2.2,.15,3.9,HM.cream,side*(w/2-4),yy,zz);goods(g,side*(w/2-4),yy+.1,zz,index);
+  }
+ }
+ const shopkeeper=harborPerson(g,w/2-5,0,d/2-10);harborStaff.push({p:shopkeeper,phase:index});
+ harborSign(g,['同德藥房','福記茶樓','永安布莊','海員旅店','大昌米行','書報信局','海港雜貨'][index%7],0,6.9,d/2+1.7,Math.min(w-2,24),1.7);
+ harborSign(g,['藥','茶','布','客棧','米','書','雜貨'][index%7],-w/2+2,12,d/2+2.5,2.1,6);
+ for(const zz of [-d/2+7,0]){hb(g,w-3,.3,1,HM.wood,0,h+2,zz);for(let j=0;j<3;j++)hb(g,1.5,2.4,.12,[HM.paper,HM.red,HM.blue][j],-3+j*3,h+.6,zz);}
+ harborBuildings.push({id:'infill-'+index,name:'骑楼商号',x,z,w,d,h,g,decorative:true,walkThrough:true,furniture:[]});harborFacadeCount++;
+}
+infillSpecs.forEach((v,i)=>buildInfill(...v,i));
+
+// A covered market occupies the formerly empty central block behind the hotel.
+const market=new THREE.Group();market.position.set(618,0,-385);harborRoot.add(market);
+for(const side of [-1,1])streetSolid(market,1,10,64,HM.brick,side*49,9.3,0,618,-385);
+for(const z of [-32,32])for(const side of [-1,1])streetSolid(market,40,10,1,HM.brick,side*29,9.3,z,618,-385);
+for(let x=-44;x<=44;x+=11)if(x!==0)for(const z of [-29,0,29])harborColumn(market,x,z,10,4.3);
+for(const side of [-1,1]){const roof=hb(market,53,.5,67,HM.roof,side*24,16,0);roof.rotation.z=-side*.17;}
+harborSign(market,'中環街市 · CENTRAL MARKET',0,13,33,36,3);
+for(const x of [-32,-17,17,32])for(const z of [-19,-5,9,23])tradingStall(x,z,harborStalls.length,market,618,-385);
+harborBuildings.push({id:'market',name:'穿行街市',x:618,z:-385,w:98,d:64,h:18,g:market,decorative:true,walkThrough:true,furniture:[]});
+
+// Closely spaced stalls and cafe tables frame a clear promenade and entrance paths.
+for(let x=360,i=0;x<925;x+=17,i++){
+ if([436,618,638,796].some(door=>Math.abs(x-door)<12))continue;
+ tradingStall(x,-140,i);
+ if(i%2===0){
+  streetSolid(harborRoot,2.8,1.3,2,HM.wood,x+5,4.9,-143);
+  for(const dx of [4,6]){const wheel=add(harborRoot,G.cyl(.65,.65,.18,10),HM.iron,x+dx,4.7,-144);wheel.rotation.x=Math.PI/2;}
+  goods(harborRoot,x+5,5.6,-143,i);
+ }
+}
+for(let x=353,i=0;x<920;x+=27,i++){
+ if(Math.abs(x-638)<12)continue;
+ hb(harborRoot,5,.3,1.3,HM.wood,x,5.3,-98);hb(harborRoot,5,1,.15,HM.wood,x,5.9,-98.7);
+ for(const dx of [-1.8,1.8])hb(harborRoot,.18,1.1,1.1,HM.iron,x+dx,4.7,-98);
+ for(let k=0;k<3;k++){
+  const crate=streetSolid(harborRoot,1.6,1.5,1.6,HM.wood,x+k*1.8,4.9+(k===2?.4:0),-103);
+  for(const dz of [-.65,.65])hb(harborRoot,1.8,.12,.16,HM.darkstone,crate.position.x,crate.position.y+.5,-103+dz);
+ }
+ if(i%3===0){add(harborRoot,G.cyl(.8,1,1.2,9),HM.wood,x,4.9,-106);for(const yy of [4.55,5.3])add(harborRoot,new THREE.TorusGeometry(.87,.06,5,12),HM.iron,x,yy,-106).rotation.x=Math.PI/2;}
+}
+for(let x=360;x<920;x+=28){
+ strut(harborRoot,x,11,-137,x+28,11,-137,.045,HM.iron);
+ for(let k=0;k<6;k++){const flag=new THREE.Shape();flag.moveTo(0,0);flag.lineTo(1.3,0);flag.lineTo(.65,-1.6);add(harborRoot,new THREE.ShapeGeometry(flag),[HM.red,HM.paper,HM.blue][k%3],x+k*4.5,10.7,-137,false);}
+}
+// Tram rails and one moving car, with bounded movement between the quay stops.
+for(const z of [-153,-155])hb(harborRoot,550,.07,.13,HM.iron,638,4.3,z);
+for(const x of [410,620,835]){harborSign(harborRoot,'電車站 · TRAM',x,8,-159,8,1.6);hb(harborRoot,.12,4,.12,HM.iron,x,6.2,-159);}
+const tram=new THREE.Group();harborRoot.add(tram);
+hb(tram,11,1.8,3.8,HM.green,0,1.6,0);hb(tram,11,.2,4.2,HM.cream,0,2.6,0);hb(tram,11,.3,4.2,HM.roof,0,5,0);
+for(const z of [-1.9,1.9])for(let x=-4.5;x<=4.5;x+=1.8){hb(tram,.12,2.4,.12,HM.cream,x,3.8,z);hb(tram,1.6,1.6,.1,harborGlass,x+.8,3.8,z);}
+for(const x of [-3.6,3.6])for(const z of [-1.9,1.9])add(tram,G.cyl(.65,.65,.2,10),HM.iron,x,.6,z).rotation.x=Math.PI/2;
+strut(tram,0,5,0,-3,8,0,.09,HM.iron);harborSign(tram,'西環 ↔ 碼頭',0,1.7,1.95,8,1.2);
+harborTrams.push({g:tram});
+
+// Populate unused floor space with functional groups, while reserving circulation.
+function interiorSpace(b,x,z,w,d,floor){
+ if(x+w/2>b.stairX-7||x-w/2<-b.w/2+2||Math.abs(z)+d/2>b.d/2-3)return false;
+ if(Math.abs(x)<5&&z>0)return false;
+ if(floor===0&&z+d/2>b.d/2-10)return false;
+ if(b.kind==='hotel'&&floor===1&&z>5)return false;
+ if(b.exhibitPoints.some(e=>e.floor===floor&&Math.hypot(b.x+x-e.x,b.z+z-e.z)<8))return false;
+ return !b.furniture.some(o=>(o.floor==='both'||o.floor===floor)&&Math.abs(x-o.x)<(w+o.w)/2+1.2&&Math.abs(z-o.z)<(d+o.d)/2+1.2);
+}
+for(const b of harborBuildings.filter(b=>!b.decorative)){
+ b.roomGroups=0;
+ for(const floor of [0,1]){
+  const y=floor*10;
+  // Inset floor borders, carpets, wall panels and doors break up large blank surfaces.
+  for(const side of [-1,1])hb(b.g,.2,.02,b.d-3,HM.wood,side*(b.w/2-2),y+.03,0);
+  hb(b.g,8,.025,b.d-8,HM.red,0,y+.035,0);
+  for(let z=-b.d/2+6;z<b.d/2-4;z+=8)for(const side of [-1,1]){
+   hb(b.g,.2,2.6,6,HM.wood,side*(b.w/2-.75),y+1.3,z);
+   hb(b.g,.24,2.2,5.5,HM.cream,side*(b.w/2-.9),y+1.3,z);
+  }
+  for(let x=-b.w/2+8;x<b.stairX-8;x+=11)for(let z=-b.d/2+9;z<b.d/2-5;z+=11){
+   if(!interiorSpace(b,x,z,7,6,floor))continue;
+   const index=b.roomGroups++;
+   if(b.kind==='museum'){
+    furnitureBox(b,5,1.4,3,HM.wood,x,y+.7,z,true,floor);
+    if(index%2){add(b.g,G.sph(1.3,12,8),HM.blue,x,y+2.7,z);add(b.g,new THREE.TorusGeometry(1.6,.12,6,24),HM.cream,x,y+2.7,z).rotation.x=.65;}
+    else {hb(b.g,4,.6,1.4,HM.darkstone,x,y+2,z);strut(b.g,x,y+2,z,x,y+5,z,.06,HM.wood);hb(b.g,2,2,.1,HM.paper,x+1,y+3.7,z);}
+    harborSign(b.g,index%2?'地理與遠航':'商船與航線',x,y+1.5,z+1.6,4,1);
+   }else if(b.kind==='hotel'){
+    furnitureBox(b,5,1.2,2,HM.green,x,y+.6,z-1.5,true,floor);hb(b.g,5,1,.4,HM.green,x,y+1.4,z-2.3);
+    furnitureBox(b,3,.8,2,HM.wood,x,y+.4,z+1.8,true,floor);
+    add(b.g,G.cyl(.25,.2,.5,8),HM.paper,x,y+1.05,z+1.8);add(b.g,G.sph(.42,7,5),HM.green,x,y+1.5,z+1.8);
+   }else{
+    furnitureBox(b,5,1.5,3,HM.wood,x,y+.75,z,true,floor);
+    for(const side of [-1,1]){furnitureBox(b,1.5,.85,1.5,HM.wood,x+side*2,y+.43,z+2.4,true,floor);hb(b.g,1.5,1.1,.15,HM.wood,x+side*2,y+1.2,z+3.1);}
+    for(let k=0;k<4;k++)hb(b.g,1,.09,1.3,[HM.paper,HM.red,HM.green][k%3],x-1.5+k,y+1.55+k*.025,z);
+    add(b.g,G.cyl(.3,.4,.5,8),HM.iron,x+1.8,y+1.8,z-.7);
+   }
+  }
+ }
+ for(let i=0;i<4;i++){
+  const x=-b.w/2+6+i*4,z=-b.d/2+5;
+  const p=harborPerson(b.g,x,0,z,0);harborStaff.push({p,phase:i+b.x});
+ }
+}
+
+// Pedestrians use several short street segments instead of a single sparse line.
+const harborRoutes=[
+ [350,-120,918,-120],[350,-130,907,-130],
+ [400,-173,471,-173],[570,-170,665,-170],[754,-168,838,-168],
+ [382,-338,512,-338],[542,-338,735,-338],[758,-338,851,-338],
+ [618,-413,618,-358]
+];
+for(let i=0;i<(isSmall?44:80);i++){
+ const p=harborPerson(harborRoot,0,4.25,0);const route=harborRoutes[i%harborRoutes.length];
+ harborVisitors.push({p,route,phase:i*.731,speed:.75+(i%5)*.16});
+}
+function animateHarborLife(dt,t){
+ for(const v of harborVisitors){
+  const [ax,az,bx,bz]=v.route,len=Math.hypot(bx-ax,bz-az),travel=(t*v.speed+v.phase*31)%(len*2),forward=travel<len,u=(forward?travel:len*2-travel)/len;
+  v.p.g.position.set(ax+(bx-ax)*u,4.25,az+(bz-az)*u);v.p.g.rotation.y=Math.atan2((bx-ax)*(forward?1:-1),(bz-az)*(forward?1:-1));
+  v.p.legL.rotation.x=Math.sin(t*3.6+v.phase)*.38;v.p.legR.rotation.x=-v.p.legL.rotation.x;v.p.armL.rotation.x=-v.p.legL.rotation.x*.6;v.p.armR.rotation.x=v.p.legL.rotation.x*.6;
+ }
+ for(const s of harborStaff){s.p.armR.rotation.x=-.45+Math.sin(t*.8+s.phase)*.22;s.p.g.rotation.y+=Math.sin(t*.5+s.phase)*dt*.04;}
+ const phase=(t%150)/150,u=phase<.45?phase/.45:phase<.5?1:phase<.95?1-(phase-.5)/.45:0;
+ tram.position.set(380+u*510,4.3,-154);tram.rotation.y=phase<.5?0:Math.PI;
+}
+animateHarborLife(0,0);
+
 const harborInstances=instanceResortMeshes(harborRoot);harborInstances.update();
+// Static buildings retain their instance transforms; only people, doors and vessels update.
+const harborMovingRoots=new Set([...harborVisitors.map(v=>v.p.g),...harborStaff.map(v=>v.p.g),...harborShips.map(v=>v.g),...harborTrams.map(v=>v.g),...harborBuildings.filter(b=>!b.decorative).flatMap(b=>b.doors)]);
+function harborMoves(o){for(let p=o;p&&p!==harborRoot;p=p.parent)if(harborMovingRoots.has(p))return true;return false;}
+const harborMovingBatches=harborInstances.batches.map(b=>({mesh:b.mesh,items:b.items.map((o,i)=>({o,i})).filter(v=>harborMoves(v.o))})).filter(b=>b.items.length);
+harborRoot.traverse(o=>{if(!harborMoves(o)){o.updateMatrix();o.matrixAutoUpdate=false;}});
+for(const b of harborInstances.batches)for(const o of b.items)if(!harborMoves(o)&&o.parent)o.parent.remove(o);
+const harborInverse=new THREE.Matrix4().copy(harborRoot.matrixWorld).invert(),harborMatrix=new THREE.Matrix4();
+harborInstances.update=()=>{for(const g of harborMovingRoots)g.updateWorldMatrix(true,true);for(const b of harborMovingBatches){for(const {o,i} of b.items){harborMatrix.multiplyMatrices(harborInverse,o.matrixWorld);b.mesh.setMatrixAt(i,harborMatrix);}b.mesh.instanceMatrix.needsUpdate=true;}};
 const harborAttractionSelect=$('harbor-building');
 for(const b of harborBuildings.filter(b=>!b.decorative)){const o=document.createElement('option');o.value=b.id;o.textContent=b.name+' · 可入内';harborAttractionSelect.appendChild(o);}harborAttractionSelect.value='customs';
 function harborChosen(){return harborBuildings.find(b=>b.id===harborAttractionSelect.value&&!b.decorative)||harborBuildings[0];}
@@ -4682,8 +4870,9 @@ function visitHarbor(){
  closeHarborInterior();region='harbor';setMode(MODE.WALK);walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=.06;walk.vx=walk.vz=0;updateRegionUi();showHint('维多利亚港 · 沿海滨大道步行，走近大门按 E 参观');
 }
 function focusHarbor(){
- closeHarborInterior();region='harbor';setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(640,20,-240);ctrl.tDist=innerWidth<560?840:620;ctrl.tTheta=.9;ctrl.tPhi=1.04;updateRegionUi();roName.textContent='旧维多利亚港';roSub.textContent='约 1900—1920 年风格 · 五座建筑可入内';
+ closeHarborInterior();region='harbor';setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(618,12,-196);ctrl.tDist=innerWidth<560?285:220;ctrl.tTheta=.62;ctrl.tPhi=1.26;updateRegionUi();roName.textContent='旧维多利亚港';roSub.textContent='约 1900—1920 年风格 · 五座建筑可入内';
 }
+function strollHarbor(){visitHarbor();walk.x=638;walk.z=-126;walk.yaw=.42;walk.pitch=-.08;updateWalk(0,0);showHint('WASD 沿街漫步 · 左上「维多利亚港」打开建筑导览');}
 function goHarborBuilding(){visitHarbor();const b=harborChosen();walk.x=b.entry.x;walk.z=b.entry.z+2;walk.yaw=0;walk.pitch=.04;showHint(b.name+' · 走近大门，按 E 推门参观');}
 function enterHarborBuilding(b){
  if(!b||b.decorative)return;closeHarborInterior();region='harbor';setMode(MODE.WALK);activeHarborBuilding=b;harborFloor=0;b.doorOpen=true;
@@ -4717,7 +4906,9 @@ function resolveHarborWalk(oldX,oldZ,x,z){
   }
   return {x:b.x+lx,z:b.z+lz};
  }
- for(const b of harborBuildings){const p=pushOutRect(x,z,b);x=p.x;z=p.z;}
+ for(const b of harborBuildings){if(b.walkThrough)continue;const p=pushOutRect(x,z,b);x=p.x;z=p.z;}
+ for(const o of harborStreetObstacles){const p=pushOutRect(x,z,o);x=p.x;z=p.z;}
+ for(const car of harborTrams){const p=pushOutRect(x,z,{x:car.g.position.x,z:car.g.position.z,w:11,d:3.8});x=p.x;z=p.z;}
  return {x,z};
 }
 function harborInteract(){
@@ -4731,7 +4922,7 @@ function updateHarbor(dt,t){
  harborAnimAcc+=dt;const near=camera.position.x>270;
  if(harborAnimAcc>(near?.025:.12)){
   for(const b of harborBuildings.filter(b=>!b.decorative)){const target=b.doorOpen?Math.PI*.47:0;b.doors[0].rotation.y+=(target-b.doors[0].rotation.y)*Math.min(1,harborAnimAcc*5);b.doors[1].rotation.y+=(-target-b.doors[1].rotation.y)*Math.min(1,harborAnimAcc*5);b.light.intensity=activeHarborBuilding===b?(periodIndex===2?1.8:1.0):0;}
-  for(const v of harborVisitors){const x=350+((t*1.4+v.phase*77)%570);v.p.g.position.set(x,4.25+Math.abs(Math.sin(t*3+v.phase))*.03,v.z);v.p.g.rotation.y=Math.PI/2;v.p.legL.rotation.x=Math.sin(t*3+v.phase)*.42;v.p.legR.rotation.x=-v.p.legL.rotation.x;v.p.armL.rotation.x=-v.p.legL.rotation.x*.5;v.p.armR.rotation.x=v.p.legL.rotation.x*.5;}
+  animateHarborLife(harborAnimAcc,t);
   for(const boat of harborShips){boat.g.position.y=waveHeight(boat.x,boat.z,t)+.45;boat.g.rotation.z=Math.sin(t*.6+boat.phase)*.025;}
   harborWindowMat.emissiveIntensity=periodIndex===2?.9:periodIndex===1?.35:.08;harborInstances.update();harborAnimAcc=0;
  }
@@ -4748,7 +4939,7 @@ function updateHarbor(dt,t){
  if(mode!==MODE.WALK&&activeHarborBuilding)closeHarborInterior();
  if(mode===MODE.SAIL&&Math.hypot(ship.x-638,ship.z+15)<35)$('travel-action').textContent='靠岸 · 维多利亚港';
 }
-$('region-harbor').onclick=focusHarbor;$('harbor-walk').onclick=visitHarbor;$('harbor-go').onclick=goHarborBuilding;$('harbor-exit').onclick=exitHarborBuilding;$('harbor-interact').onclick=harborInteract;
+$('region-harbor').onclick=focusHarbor;$('harbor-walk').onclick=strollHarbor;$('harbor-go').onclick=goHarborBuilding;$('harbor-exit').onclick=exitHarborBuilding;$('harbor-interact').onclick=harborInteract;
 $('harbor-sail').onclick=()=>{closeHarborInterior();region='harbor';setMode(MODE.SAIL);ship.x=658;ship.z=-10;ship.yaw=0;ship.spd=0;updateRegionUi();};
 addEventListener('keydown',e=>{if(e.key.toLowerCase()==='e'&&!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(e.target?.closest?.('input,textarea,select'))return;harborInteract();}});
 
@@ -4757,12 +4948,12 @@ placeToggle();
 joyRelease();
 resetFishing();
 updateCreel();
-applyOrbit();
+strollHarbor();
 tick();
 
 setTimeout(()=>{
   $("boot").classList.add("gone");
-  setTimeout(()=>showHint("静屿听海 · 星辉乐园乘坐 · 栈桥连通两岛"), 900);
+  setTimeout(()=>showHint("旧港街市已开张 · WASD 漫步，走近建筑按 E 参观"), 900);
 }, 1000);
 
 }catch(err){

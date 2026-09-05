@@ -28,8 +28,8 @@ function test(width,height){
  const three={...THREE,WebGLRenderer:function(){return renderer;}};
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
- vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby})};\nsetMode(MODE.VIEW);');
+ vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
  const outward={x:-Math.sin(a.fish.yaw),z:-Math.cos(a.fish.yaw)};
@@ -77,7 +77,7 @@ function test(width,height){
  // Every landmark must be reachable, enterable and traversable on both floors.
  const landmarks=a.harborBuildings.filter(b=>!b.decorative);
  assert.equal(landmarks.length,5);assert(a.harborFacadeCount>=15,'Dense streets contain many buildings');
- assert.equal(a.harborVisitors.length,width<560?12:22);assert.equal(a.harborShips.length,7);
+ assert.equal(a.harborVisitors.length,width<560?44:80);assert.equal(a.harborShips.length,7);
  a.scene.updateMatrixWorld(true);
  const solids=[];a.scene.traverse(o=>{if(o.isMesh&&o.visible&&!Array.isArray(o.material)&&(!o.material.transparent||o.material.opacity>.8))solids.push(o);});
  for(const b of landmarks){
@@ -85,6 +85,22 @@ function test(width,height){
   assert.equal(ray.intersectObjects(solids,false).length,0,b.name+' upstairs window has an actual view through the facade');
  }
  a.focusHarbor();assert.equal(body.dataset.region,'harbor');assert(a.ctrl.tTarget.x>600);
+ // New street details must preserve continuous walking routes and open shop interiors.
+ a.strollHarbor();a.keys.w=true;
+ for(let i=0;i<85;i++)a.updateWalk(.05,i*.05);a.clearInput();a.updateHarbor(.05,5);
+ assert.equal(a.getHarborState().nearby?.type,'door','Can walk from the opening street scene to the hotel');
+ assert.equal(a.getHarborState().nearby?.b.id,'hotel');
+ a.walk.x=618;a.walk.z=-345;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
+ for(let i=0;i<180;i++)a.updateWalk(.05,i*.05);a.clearInput();
+ assert(a.walk.z<-420,'The covered market can be crossed from end to end');
+ a.walk.x=504;a.walk.z=-177;a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
+ for(let i=0;i<70;i++)a.updateWalk(.05,i*.05);a.clearInput();
+ assert(a.walk.z<-204,'An arcade shop can be entered directly from the street');
+ for(const b of landmarks)assert(b.roomGroups>4,b.name+' contains usable furniture groups');
+ for(const t of [0,40,110]){
+  a.animateHarborLife(.05,t);
+  for(const v of a.harborVisitors){const p=v.p.g.position,adjusted=a.resolveHarborWalk(p.x,p.z,p.x,p.z);assert(Math.hypot(adjusted.x-p.x,adjusted.z-p.z)<.01,`Pedestrian route avoids obstacles at ${p.x.toFixed(2)},${p.z.toFixed(2)}`);}
+ }
  for(const b of landmarks){
   nodes.get('harbor-building').value=b.id;a.goHarborBuilding();a.updateHarbor(.05,100);
   assert.equal(a.getHarborState().nearby?.type,'door',b.name+' entry is discoverable');
