@@ -19,7 +19,8 @@ const server = createServer(async (request, response) => {
     return;
   }
   const path = new URL(request.url, 'http://127.0.0.1').pathname;
-  const route = routes.get(path);
+  const regionAsset = /^\/journeys\/[a-z-]+\.(js|css|txt)$/.exec(path);
+  const route = routes.get(path) || (regionAsset ? [path.slice(1), regionAsset[1] === 'css' ? 'text/css; charset=utf-8' : regionAsset[1] === 'js' ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8'] : null);
   if (!route) { response.writeHead(404).end('Not found'); return; }
   try {
     const body = await readFile(resolve(root, route[0]));

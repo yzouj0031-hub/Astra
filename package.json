@@ -9,7 +9,8 @@
   },
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "test": "node tests/online.cjs && node tests/smoke.cjs",
+    "package:game": "node scripts/package-game.mjs",
+    "test": "node tests/online.cjs && node tests/smoke.cjs && node tests/journeys.cjs && node tests/journey-lifecycle.cjs",
     "test:online-browser": "node tests/online-browser.cjs",
     "test:online-live": "node tests/online-live.cjs"
   },

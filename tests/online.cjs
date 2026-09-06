@@ -11,6 +11,7 @@ assert.equal(t.safeName('  <小\u0000明>  '),'小明');
 assert.equal(t.safeMessage('  你好\n  星屿  '),'你好 星屿');
 assert.deepEqual(JSON.parse(JSON.stringify(t.sanitizePose({x:1,y:2,z:3,heading:4,speed:5,kind:'drive',region:'harbor'}))),{x:1,y:2,z:3,heading:4,speed:5,kind:'drive',region:'harbor'});
 assert.equal(t.sanitizePose({x:Infinity,y:2,z:3,heading:0,speed:0}),null);
+for(const region of ['rainport','watertown','temple'])assert.equal(t.sanitizePose({x:12,y:0,z:8,heading:0,speed:3,region}).region,region,'Co-op keeps the journey region ID');
 assert.equal(t.validPeer({id:'short',name:'A',pose:{x:0,y:0,z:0,heading:0,speed:0}}),null);
 assert(t.validPeer({id:'abcdefgh',name:'A',color:7,pose:{x:0,y:0,z:0,heading:0,speed:0}}));
 assert.equal(t.roomUrl('ABCDEFGH').href,'https://yzouj0031-hub.github.io/Astra/?room=ABCDEFGH');

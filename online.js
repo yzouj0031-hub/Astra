@@ -22,7 +22,7 @@ function sanitizePose(value){
  const x=finite(value.x,-2200,2200),y=finite(value.y,-100,500),z=finite(value.z,-2200,2200),heading=finite(value.heading,-Math.PI*8,Math.PI*8),speed=finite(value.speed,0,80);
  if([x,y,z,heading,speed].some(v=>v===null))return null;
  const kinds=new Set(['view','walk','sail','fish','ride','drive']);
- return {x,y,z,heading,speed,kind:kinds.has(value.kind)?value.kind:'walk',region:['island','park','harbor','all'].includes(value.region)?value.region:'island'};
+ return {x,y,z,heading,speed,kind:kinds.has(value.kind)?value.kind:'walk',region:['island','park','harbor','all','rainport','watertown','temple'].includes(value.region)?value.region:'island'};
 }
 function safeMessage(value){return String(value||'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,160);}
 function validPeer(value){
