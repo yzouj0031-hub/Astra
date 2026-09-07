@@ -33,9 +33,11 @@ function init(host){
  <div id="journey-loading" hidden role="status"><b>正在靠岸</b><small>为你点亮下一站的灯。</small></div>
  <section id="journey-hud" hidden aria-label="旅行操作">
   <div class="journey-title"><span class="journey-kicker">ASTRA / SHORE TO SHORE</span><h1 id="journey-title"></h1><p id="journey-description"></p></div>
+  <details id="journey-menu"><summary id="journey-menu-toggle"><span class="journey-menu-show">☰ 菜单</span><span class="journey-menu-hide">× 收起</span></summary><div class="journey-menu-panel"><div class="journey-menu-heading">旅途随手册</div>
   <div class="journey-tools"><button id="journey-map">旅行地图 · M</button><button id="journey-home">返航</button><button id="journey-weather">停雨</button><button id="journey-day">换个时辰</button><button id="journey-view">俯瞰</button><button id="journey-sound">声音</button><button id="journey-photo">明信片</button><button id="journey-online">同游</button></div>
-  <div id="journey-stops" class="journey-guide" aria-label="地区导览"></div>
+  <div class="journey-menu-heading">附近走走</div><div id="journey-stops" class="journey-guide" aria-label="地区导览"></div>
   <canvas id="journey-compass" width="290" height="290" aria-label="当前地区地图、目的地与玩家位置"></canvas>
+  <p class="journey-menu-help">WASD 移动 · Shift 快跑<br>拖动环顾 · V 切换视角 · E 互动<br>M 旅行地图 · Esc 收起菜单</p></div></details>
   <div id="journey-note" role="status" aria-live="polite"></div>
   <div id="journey-joy" role="group" aria-label="拖动摇杆移动"><div id="journey-stick"></div></div><button id="journey-run">按住快跑</button>
   <div class="journey-bottom"><span id="journey-controls">WASD 移动 · 拖动环顾 · V 第一人称</span><button id="journey-action" hidden></button></div>
@@ -43,7 +45,7 @@ function init(host){
   <div id="journey-combat-actions"><button data-combat="attack">轻击 J</button><button data-combat="heavy">重击 K</button><button data-combat="dodge">闪避 ␣</button><button data-combat="bind">定身 Q</button><button data-combat="heal">喝药 R</button></div>
  </section>`;
  document.body.appendChild(ui);
- const $=id=>document.getElementById(id),book=$('journey-dialog'),hud=$('journey-hud');
+ const $=id=>document.getElementById(id),book=$('journey-dialog'),hud=$('journey-hud'),menu=$('journey-menu');
  const button=document.createElement('button');button.id='journey-open';button.textContent='旅行地图 ↗';button.onclick=openMap;document.getElementById('world-regions').appendChild(button);
  hud.classList.toggle('journey-touch',mobile);
  function notify(text,duration=4.5){$('journey-note').textContent=text;$('journey-note').classList.add('show');noteUntil=time+duration;}
@@ -55,7 +57,9 @@ function init(host){
  }
  function stamp(id){if(progress.stamps.includes(id))return;progress.stamps.push(id);C.saveProgress(storage,progress);updateBook();notify('旅行册添了一枚印记：'+{market:'夜市寻灯',tea:'茶馆听雨',boat:'泛舟一程',warden:'山门玉印'}[id]);}
  function clear(){keys.clear();stick.x=stick.z=0;input={x:0,z:0,run:false};joystickId=runId=lookId=null;lastLook=null;$('journey-stick').style.transform='';host.clearInput();}
- function openMap(){clear();updateBook();if(!book.open)book.showModal();updateAudio();}
+ function closeMenu(){menu.open=false;}
+ menu.addEventListener('toggle',()=>{clear();updateAudio();});
+ function openMap(){closeMenu();clear();updateBook();if(!book.open)book.showModal();updateAudio();}
  function savePosition(){if(active&&!active.transport&&!active.fighting){progress.positions[active.id]={x:active.pos.x,z:active.pos.z};C.saveProgress(storage,progress);}}
  function address(id){try{const u=new URL(location.href);if(id)u.searchParams.set('journey',id);else u.searchParams.delete('journey');history.replaceState(null,'',u);}catch{}}
  function detach(){
@@ -68,7 +72,7 @@ function init(host){
  async function travel(id){
   if(!C.REGIONS[id]||busy)return;
   if(active?.id===id){book.close();return;}
-  busy=true;clear();$('journey-loading').hidden=false;book.close();
+  closeMenu();busy=true;clear();$('journey-loading').hidden=false;book.close();
   try{
    if(id==='temple'&&!root.AstraCombat)await loadScript('journeys/combat.js');
    if(!root.AstraRegionFactories[id])await loadScript('journeys/'+id+'.js');
@@ -86,15 +90,15 @@ function init(host){
    $('journey-title').textContent=next.meta.name;$('journey-description').textContent=next.meta.subtitle;
    $('journey-weather').hidden=id==='temple';$('journey-weather').textContent=next.rain?'停雨':'落雨';
    $('journey-stops').textContent='';
-   for(const stop of next.meta.stops){const b=document.createElement('button');b.textContent=stop[1];b.onclick=()=>{clear();active.place(stop);};$('journey-stops').appendChild(b);}
-   if(id==='temple'&&next.world.completed){const b=document.createElement('button');b.textContent='入寺参观';b.onclick=()=>active.place(['temple','静山寺',0,-20]);$('journey-stops').appendChild(b);}
+   for(const stop of next.meta.stops){const b=document.createElement('button');b.textContent=stop[1];b.onclick=()=>{clear();active.place(stop);closeMenu();};$('journey-stops').appendChild(b);}
+   if(id==='temple'&&next.world.completed){const b=document.createElement('button');b.textContent='入寺参观';b.onclick=()=>{active.place(['temple','静山寺',0,-20]);closeMenu();};$('journey-stops').appendChild(b);}
    active.yaw=id==='watertown'?Math.PI/2:0;resize();updateCamera(1);updateBook();updateAudio();
    notify(id==='temple'?'庭院里的石玉守卫正等着你。走近它按 E 开始试炼。':id==='watertown'?'你到了烟雨渡。乌篷船停在渡口，茶馆在东边的广场。':'你到了雨港。沿河走向夜市，或到电车站乘车。',6);
   }catch(error){console.error('[Astra journeys]',error);$('journey-map-status').textContent=error.message||'这趟航程暂时没有完成，请重试。';openMap();}
   finally{busy=false;$('journey-loading').hidden=true;}
  }
  function home(where){
-  if(busy)return;clear();book.close();detach();delete document.body.dataset.journey;hud.hidden=true;hud.classList.remove('journey-fighting');
+  if(busy)return;closeMenu();clear();book.close();detach();delete document.body.dataset.journey;hud.hidden=true;hud.classList.remove('journey-fighting');
   if(savedRender){const {shadow,shadowType,pixelRatio,...settings}=savedRender;Object.assign(renderer,settings);renderer.shadowMap.enabled=shadow;renderer.shadowMap.type=shadowType;renderer.setPixelRatio(pixelRatio);renderer.setSize(innerWidth,innerHeight);savedRender=null;}
   if(returnState){host.restore(returnState);returnState=null;}
   if(where)host.goHome(where);address(null);updateAudio();
@@ -149,7 +153,7 @@ function init(host){
  function frame(dt){
   if(busy){if(active)renderer.render(active.scene,active.camera);else host.renderMain();return true;}
   if(!active)return false;time+=dt;
-  if(!document.querySelector('dialog[open]')){
+  if(!menu.open&&!document.querySelector('dialog[open]')){
    input.x=stick.x+(keys.has('KeyD')||keys.has('ArrowRight')?1:0)-(keys.has('KeyA')||keys.has('ArrowLeft')?1:0);
    input.z=stick.z+(keys.has('KeyS')||keys.has('ArrowDown')?1:0)-(keys.has('KeyW')||keys.has('ArrowUp')?1:0);
    const length=Math.hypot(input.x,input.z);if(length>1){input.x/=length;input.z/=length;}input.run=runId!==null||keys.has('ShiftLeft')||keys.has('ShiftRight');
@@ -176,7 +180,7 @@ function init(host){
   if(frameTime>2){if(frameCount/frameTime<27)lowFrames++;else lowFrames=0;if(lowFrames>=2&&quality){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
   renderer.render(active.scene,active.camera);return true;
  }
- function updateAudio(){if(ambient)ambient.gain.setTargetAtTime(soundOn&&active&&!book.open? .045:0,audio.currentTime,.3);}
+ function updateAudio(){if(ambient)ambient.gain.setTargetAtTime(soundOn&&active&&!book.open&&!menu.open? .045:0,audio.currentTime,.3);}
  function sound(){
   soundOn=!soundOn;$('journey-sound').textContent=soundOn?'静音':'声音';
   if(soundOn&&!audio){try{audio=new (window.AudioContext||window.webkitAudioContext)();ambient=audio.createGain();ambient.gain.value=0;ambient.connect(audio.destination);const length=audio.sampleRate*2,buffer=audio.createBuffer(1,length,audio.sampleRate),data=buffer.getChannelData(0);for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*.5;const source=audio.createBufferSource();source.buffer=buffer;source.loop=true;const filter=audio.createBiquadFilter();filter.type='lowpass';filter.frequency.value=550;source.connect(filter).connect(ambient);source.start();}catch{soundOn=false;notify('这个浏览器暂时无法播放环境声。');}}
@@ -191,15 +195,16 @@ function init(host){
  $('journey-map').onclick=openMap;$('journey-home').onclick=()=>home();$('journey-return').onclick=()=>home();
  for(const b of ui.querySelectorAll('[data-place]'))b.onclick=()=>travel(b.dataset.place);
  for(const b of ui.querySelectorAll('[data-home]'))b.onclick=()=>home(b.dataset.home);
- $('journey-action').onclick=()=>{clear();active?.context()?.run();};
+ $('journey-action').onclick=()=>{closeMenu();clear();active?.context()?.run();};
  $('journey-weather').onclick=()=>{active?.setRain();$('journey-weather').textContent=active?.rain?'停雨':'落雨';};
  $('journey-day').onclick=()=>active?.setDay();$('journey-view').onclick=()=>{if(active&&!active.fighting){clear();active.overview=!active.overview;active.cameraReady=false;}};
- $('journey-photo').onclick=photo;$('journey-sound').onclick=sound;$('journey-online').onclick=()=>{clear();document.getElementById('online-button')?.click();};
+ $('journey-photo').onclick=photo;$('journey-sound').onclick=sound;$('journey-online').onclick=()=>{closeMenu();clear();document.getElementById('online-button')?.click();};
  for(const b of ui.querySelectorAll('[data-combat]'))b.onclick=()=>active?.combat(b.dataset.combat,input);
  const combatKeys={KeyJ:'attack',KeyK:'heavy',Space:'dodge',KeyQ:'bind',KeyR:'heal'};
  window.addEventListener('keydown',e=>{
   if(!active||document.querySelector('dialog[open]')||e.ctrlKey||e.metaKey||e.altKey||e.target.closest('input,textarea,select'))return;
-  if(e.code==='Tab'||e.code==='Enter')return;
+  if(menu.open){if(e.code==='Escape'){e.preventDefault();e.stopImmediatePropagation();closeMenu();$('journey-menu-toggle').focus();}else if(e.code==='KeyM'){e.preventDefault();e.stopImmediatePropagation();openMap();}return;}
+  if(e.code==='Tab'||e.code==='Enter'||(e.code==='Space'&&e.target.closest('summary,button')))return;
   e.preventDefault();e.stopImmediatePropagation();keys.add(e.code);if(e.repeat)return;
   if(e.code==='KeyM'||e.code==='Escape')openMap();
   else if(e.code==='KeyE')active.context()?.run();
@@ -210,7 +215,7 @@ function init(host){
  window.addEventListener('blur',()=>{clear();if(active&&!book.open)openMap();});
  document.addEventListener('visibilitychange',()=>{clear();if(document.hidden&&active&&!book.open)openMap();});
  window.addEventListener('resize',()=>{clear();resize();});
- function lookDown(e){if(!active||document.querySelector('dialog[open]'))return;e.preventDefault();e.stopImmediatePropagation();if(lookId!==null)return;lookId=e.pointerId;lastLook={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);}
+ function lookDown(e){if(!active||document.querySelector('dialog[open]'))return;closeMenu();e.preventDefault();e.stopImmediatePropagation();if(lookId!==null)return;lookId=e.pointerId;lastLook={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);}
  canvas.addEventListener('pointerdown',lookDown,true);
  canvas.addEventListener('pointermove',e=>{if(!active)return;e.stopImmediatePropagation();if(lookId!==e.pointerId||!lastLook)return;active.yaw-=(e.clientX-lastLook.x)*.006;active.pitch=C.clamp(active.pitch+(e.clientY-lastLook.y)*.004,-.1,1.1);lastLook={x:e.clientX,y:e.clientY};},true);
  function lookUp(e){if(!active)return;e.stopImmediatePropagation();if(lookId===e.pointerId){lookId=null;lastLook=null;}}

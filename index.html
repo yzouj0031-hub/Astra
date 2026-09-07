@@ -261,7 +261,7 @@ body[data-region=park] #intro,body[data-region=all] #intro{opacity:0}body.chrome
 #world-regions{max-width:calc(100vw - 70px);flex-wrap:wrap}#world-regions button{font-size:13px;padding:9px 13px}
 #harbor-panel{position:fixed;left:34px;top:195px;z-index:24;width:310px;padding:23px;border:1px solid #d9ba763f;border-radius:15px;background:#1c353deb;backdrop-filter:blur(18px);color:#eaddbd}
 .harbor-heading{font:28px/1.3 "SimSun",serif;letter-spacing:.08em}.harbor-heading span{display:block;font:10px/1.8 sans-serif;letter-spacing:.13em;margin-top:8px;color:#cab084}.harbor-caption{font-size:13px;line-height:1.8;color:#c4c5ae;margin:14px 0 18px}#harbor-panel label{display:block;font-size:14px;margin-bottom:9px}#harbor-building{width:100%;background:#18343a;border:1px solid #cbb68166;color:#efe0bb;padding:12px;border-radius:7px;font-size:14px}.harbor-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.harbor-actions button,#harbor-exit{padding:12px 6px;border:0;border-radius:7px;background:#dfc38c;color:#233b3c;font-size:14px;flex:1}.harbor-actions button:first-child{flex-basis:100%}#harbor-room{font-size:13px;line-height:1.8;color:#bcc5b6;margin-top:15px}#harbor-exit{width:100%;margin-top:12px}#harbor-panel small{display:block;font-size:11px;color:#a8b09d;margin-top:15px}#harbor-interact{position:fixed;left:50%;bottom:178px;transform:translateX(-50%);z-index:28;background:#e9ce98;color:#243b3d;padding:14px 23px;font-size:15px;border:1px solid #fff2cd6b;border-radius:30px;box-shadow:0 7px 24px #081a2555;max-width:90vw}
-body[data-region=harbor] #intro{opacity:0}body.chrome-off #harbor-panel,body.chrome-off #harbor-interact{opacity:0;pointer-events:none}body.inside-harbor #harbor-panel .harbor-caption,body.inside-harbor #harbor-panel label,body.inside-harbor #harbor-building,body.inside-harbor #harbor-panel .harbor-actions{display:none}
+body[data-region=harbor] #intro{opacity:0}body.chrome-off #harbor-panel{opacity:0;pointer-events:none}body.inside-harbor #harbor-panel .harbor-caption,body.inside-harbor #harbor-panel label,body.inside-harbor #harbor-building,body.inside-harbor #harbor-panel .harbor-actions{display:none}
 @media(max-width:850px){#world-regions{left:24px;top:110px}#harbor-panel{left:24px;top:180px;width:275px;padding:18px}.harbor-heading{font-size:23px}}
 @media(max-width:560px){#world-regions{top:89px;left:15px;max-width:calc(100vw - 112px);border-radius:16px;gap:0}#world-regions button{font-size:11px;padding:8px 10px}#harbor-panel{top:177px;left:15px;width:calc(100vw - 117px);padding:14px}.harbor-heading{font-size:21px}.harbor-heading span,.harbor-caption,#harbor-panel small{display:none}#harbor-panel label{font-size:12px;margin-top:12px}#harbor-building{font-size:12px;padding:9px}.harbor-actions button{font-size:12px;padding:10px 5px}#harbor-room{font-size:12px}#harbor-interact{bottom:175px;font-size:13px;white-space:nowrap}.harbor-actions{gap:6px}#park-panel{top:177px}#intro{top:37%}body.inside-harbor #harbor-panel{top:177px}}
 @media(max-height:600px){#harbor-panel{top:160px;max-height:calc(100vh - 320px);overflow:auto;touch-action:pan-y}.harbor-caption,#harbor-panel small{display:none}}
@@ -317,12 +317,7 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 </div>
 <div id="castbtn" role="button" tabindex="0">抛竿</div>
 
-<div id="uitoggle" role="button" tabindex="0">
-  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
-       stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="6 9 12 15 18 9"></polyline>
-  </svg>
-</div>
+<div id="uitoggle" role="button" tabindex="0" aria-controls="toolbar world-regions dock" aria-expanded="false">☰ 菜单</div>
 
 <div id="dock">
   <div id="telemetry">
@@ -1173,7 +1168,7 @@ addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 const joyEl=$("joy"), joyKnob=$("joy-knob");
 const dockEl=$("dock");
 const joy={id:null,dx:0,dy:0,active:false,cx:0,cy:0,R:56};
-let chromeOff=false;
+let chromeOff=true;document.body.classList.add("chrome-off");
 function dockH(){ return chromeOff?0:(dockEl?dockEl.getBoundingClientRect().height:120); }
 function joyHome(){ return {x:84, y:innerHeight-dockH()-76}; }
 function placeJoy(x,y){ joy.cx=x; joy.cy=y; joyEl.style.left=x+"px"; joyEl.style.top=y+"px"; }
@@ -1673,10 +1668,11 @@ Object.keys(modeBtns).forEach(k=>{
 // 收起界面
 const uiToggle=$("uitoggle");
 function placeToggle(){ uiToggle.style.bottom = (chromeOff?24:dockH()+46)+"px"; }
-uiToggle.setAttribute("aria-label","收起或展开界面");
+uiToggle.setAttribute("aria-label","展开菜单");
 uiToggle.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();uiToggle.click();}});
 uiToggle.addEventListener("click", ()=>{
   chromeOff=!chromeOff;
+  uiToggle.textContent=chromeOff?"☰ 菜单":"× 收起";uiToggle.setAttribute("aria-label",chromeOff?"展开菜单":"收起菜单");uiToggle.setAttribute("aria-expanded",String(!chromeOff));
   document.body.classList.toggle("chrome-off", chromeOff);
   setTimeout(()=>{ placeToggle(); if(!joy.active) joyRelease(); }, 340);
   placeToggle();
@@ -2311,9 +2307,9 @@ function updateResidents(dt,t){
   if(n.lamp)n.lamp.material.emissiveIntensity=periodIndex===2?1.8:.3;
   if(residentCanGreet(n)){const d=Math.hypot(walk.x-p.x,walk.z-p.z);if(d<nearDist){nearDist=d;nearestResident=n;}}
  }
- greetButton.hidden=!nearestResident||chromeOff;
+ greetButton.hidden=!nearestResident;
  if(nearestResident)greetButton.textContent='和'+nearestResident.name+'打招呼'+(innerWidth>700?' · E':'');
- if(t>speechUntil||mode!==MODE.WALK||chromeOff)speech.hidden=true;
+ if(t>speechUntil||mode!==MODE.WALK)speech.hidden=true;
 }
 
 const parkModule=(()=>{
@@ -5232,7 +5228,7 @@ function updateHarbor(dt,t){
   const b=activeHarborBuilding;$('harbor-room').textContent=b.name+' / '+b.rooms[harborFloor];
   for(const e of b.exhibitPoints)if(e.floor===harborFloor&&Math.hypot(walk.x-e.x,walk.z-e.z)<7)harborNearby={type:'exhibit',text:e.text};
  }
- const button=$('harbor-interact');button.hidden=!harborNearby||chromeOff;
+ const button=$('harbor-interact');button.hidden=!harborNearby;
  if(harborNearby)button.textContent='阅读展牌'+(innerWidth>700?' · E':'');
  if(mode!==MODE.WALK&&activeHarborBuilding)endHarborInterior();
  if(mode===MODE.SAIL&&Math.hypot(ship.x-638,ship.z+15)<35)$('travel-action').textContent='靠岸 · 维多利亚港';
@@ -5530,7 +5526,7 @@ function updateActors(dt,t){
  }
  const parkedBounds=vehicleHalfExtents(car.yaw);
  vehicleNear=mode===MODE.WALK&&!activeHarborBuilding&&Math.hypot(Math.max(0,Math.abs(walk.x-car.x)-parkedBounds.x),Math.max(0,Math.abs(walk.z-car.z)-parkedBounds.z))<2.2;
- const show = (vehicleNear || mode===MODE.DRIVE) && !chromeOff && !document.querySelector('dialog[open]');
+ const show = (vehicleNear || mode===MODE.DRIVE) && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
  if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':'上车 · 老爷车')+(innerWidth>700?' · F':'');
 }
