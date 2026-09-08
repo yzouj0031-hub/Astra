@@ -253,7 +253,7 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 
 #world-regions{position:fixed;z-index:23;top:124px;left:44px;display:flex;gap:5px;background:#13394188;padding:5px;border:1px solid #fff2d529;border-radius:24px;backdrop-filter:blur(12px)}
 #world-regions button{background:none;color:#f2e8d6b0;border:0;padding:9px 15px;border-radius:18px;font-size:13px}#world-regions button[aria-pressed=true]{background:#eee3c9;color:#294e53}
-#park-panel{position:fixed;left:34px;top:200px;z-index:24;width:300px;background:#172e42dd;color:#f8eacb;border:1px solid #ffe5b836;border-radius:20px;padding:22px;backdrop-filter:blur(18px)}.park-heading{font:22px "SimSun",serif;margin-bottom:22px}.park-heading span{display:block;font:12px sans-serif;color:#d5c1a3;margin-top:9px}#park-panel label{display:block;font-size:13px;margin-bottom:8px}#attraction-select{width:100%;padding:12px;border-radius:10px;border:1px solid #ffe6b64d;background:#203949;color:#f8eacb;font-size:14px}.park-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.park-actions button{flex:1;padding:11px 8px;background:#e8c579;color:#283b41;border:0;border-radius:10px;font-size:13px}.park-actions button:first-child{flex-basis:100%}#park-panel p{font-size:12px;line-height:1.8;color:#d8c5a799;margin-top:14px}#travel-action{position:fixed;z-index:26;left:50%;transform:translateX(-50%);bottom:180px}
+#park-panel{position:fixed;left:34px;top:200px;z-index:24;width:300px;background:#172e42dd;color:#f8eacb;border:1px solid #ffe5b836;border-radius:20px;padding:22px;backdrop-filter:blur(18px)}.park-heading{font:22px "SimSun",serif;margin-bottom:22px}.park-heading span{display:block;font:12px sans-serif;color:#d5c1a3;margin-top:9px}#park-panel label{display:block;font-size:13px;margin-bottom:8px}#attraction-select{width:100%;padding:12px;border-radius:10px;border:1px solid #ffe6b64d;background:#203949;color:#f8eacb;font-size:14px}.park-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:13px}.park-actions button{flex:1;padding:11px 8px;background:#e8c579;color:#283b41;border:0;border-radius:10px;font-size:13px}.park-actions button:first-child{flex-basis:100%}#park-panel p{font-size:12px;line-height:1.8;color:#d8c5a799;margin-top:14px}#travel-action{position:fixed;z-index:26;left:50%;transform:translateX(-50%);bottom:180px}#travel-action:disabled{opacity:.55;cursor:default}
 body[data-region=park] #intro,body[data-region=all] #intro{opacity:0}body.chrome-off #world-regions,body.chrome-off #park-panel{opacity:0;pointer-events:none}
 @media(max-width:850px){#world-regions{left:24px;top:110px}#park-panel{left:24px;top:176px;width:260px}}
 @media(max-width:560px){#world-regions{top:93px;left:18px;max-width:calc(100vw - 112px);padding:3px}#world-regions button{font-size:11px;padding:8px}#park-panel{top:146px;left:18px;width:min(250px,calc(100vw - 116px));padding:15px}.park-heading{font-size:19px;margin-bottom:14px}.park-heading span,#park-panel p{display:none}.park-actions button{font-size:12px;padding:10px 4px}#attraction-select{font-size:13px;padding:9px}#intro{top:32%}body[data-mode=ride] #park-panel{top:146px}#travel-action{bottom:174px;white-space:nowrap}}
@@ -289,7 +289,7 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
-<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；乐园东侧码头可出海和靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
+<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。<br>帆船开到哪里就停在哪里：靠近沙滩或码头按 F 靠岸下船，走近船身按 F 再上船。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；帆船可以在乐园东侧码头、维多利亚港码头或任何一片沙滩靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车、上下船 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
 <dialog id="online-dialog"><button class="dialog-close" id="online-close" aria-label="关闭联机面板">×</button><span class="dialog-kicker">WANDER TOGETHER</span><h2>和朋友一起逛星屿。</h2><section id="online-setup"><div class="online-fields"><input id="online-name" maxlength="18" autocomplete="nickname" placeholder="你的名字"><input id="online-room-code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="房间码"></div><div class="online-actions"><button id="online-create">创建新房间</button><button id="online-join" class="secondary">加入房间</button></div><p id="online-status">联机是可选功能；没有网络时仍可正常单机游玩。</p></section><section id="online-room" hidden><div class="online-room-head"><div><span>当前房间</span><br><strong id="online-current-code">--------</strong></div><span id="online-count">1 人在线</span></div><div id="online-peer-list" aria-label="在线玩家"></div><div id="online-chat-log" aria-live="polite" aria-label="房间聊天"></div><div class="online-chat-send"><input id="online-chat-input" maxlength="160" placeholder="说点什么……"><button id="online-chat-send">发送</button></div><div class="online-actions" style="margin-top:12px"><button id="online-copy" class="secondary">复制邀请链接</button><button id="online-leave" class="secondary">离开房间</button></div><p class="online-note">房间通过随机代码临时建立，不保存聊天。请只把邀请链接发给认识的人；本版本同步位置、朝向和在线状态，不同步碰撞、车辆归属或游乐设施进度。</p></section></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
@@ -1153,7 +1153,10 @@ const car = {x:650, z:-148, yaw:-Math.PI/2, spd:0, steer:0, wheel:0, spin:0,
              camYaw:0, camPitch:0.10, camDist:11.5, camFree:0, y:4.15, hop:0};
 
 /* ---------- 航行 ---------- */
-const ship = {x:dockEndPt.x+12, z:dockEndPt.z-10, yaw:Math.PI/2-DOCK_ANG, spd:0, turn:0, heel:0, camYaw:0, camPitch:0, camDist:17};
+// 帆船是一艘停在世界里的船：开到哪里、在哪里靠岸，它就留在哪里；走近船身再上船
+const SHIP_HALF_LENGTH=5.5, SHIP_HALF_WIDTH=1.8;
+const ship = {x:DOCK_DIR.x*(DOCK_SHORE+6)+Math.cos(DOCK_ANG+Math.PI/2)*10, z:DOCK_DIR.y*(DOCK_SHORE+6)+Math.sin(DOCK_ANG+Math.PI/2)*10,
+              yaw:Math.PI/2-DOCK_ANG, spd:0, turn:0, heel:0, camYaw:0, camPitch:0.16, camDist:17, moor:null};
 
 /* ---------- 输入 ---------- */
 const keys = {};
@@ -1588,7 +1591,7 @@ const MODE_INFO = {
   ride:{n:"游乐设施乘坐",s:"拖动环顾 · 结束乘坐回到地面"},
   view:{n:"环岛俯瞰", s:innerWidth<700?"拖动环岛 · 双指缩放":"拖动环岛 · 滚轮缩放 · R 自动环绕"},
   walk:{n:"岛上漫步", s:innerWidth<700?"左侧摇杆移动 · 右侧拖动转镜头":"WASD 移动 · 拖动转镜头 · Shift 奔跑 · V 切视角"},
-  sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 右侧调整视角":"W / S 前进后退 · A / D 转舵 · 拖动环顾"},
+  sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 靠近沙滩或码头点「靠岸」":"W / S 前进后退 · A / D 转舵 · 靠近沙滩或码头按 F 靠岸"},
   fish:{n:"码头垂钓", s:"抛竿 → 咬钩提竿 → 按住收线"},
   drive:{n:"开车兜风", s:innerWidth<700?"左侧摇杆油门转向 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"}
 };
@@ -1598,7 +1601,7 @@ function setMode(m){
   mode = m;
   if(m!==MODE.RIDE)parkRide=null;
   camera.near=.08;
-  $("travel-action").hidden=m!==MODE.SAIL;
+  $("travel-action").hidden=true;
   document.body.classList.toggle("exploring",m!==MODE.VIEW);
   document.body.dataset.mode=m;
   camera.clearViewOffset();
@@ -1628,13 +1631,12 @@ function setMode(m){
     showHint("在岛上随便走走");
   }else if(m===MODE.SAIL){
     if(prev!==MODE.SAIL){
-      const r = DOCK_SHORE + 16;
-      ship.x = DOCK_DIR.x*r; ship.z = DOCK_DIR.y*r;
-      ship.yaw = Math.PI/2 - DOCK_ANG; ship.spd = 0;
+      // 船停在哪里就从哪里出发
+      ship.spd = 0; ship.turn = 0; ship.moor = null;
       ship.camYaw = 0; ship.camPitch = 0.16;
-      if(region==='harbor'){ship.x=658;ship.z=-10;ship.yaw=0;}
+      region = regionAt(ship.x, ship.z);
     }
-    showHint(innerWidth<700?"推摇杆前进 · 左右转舵":"W 前进 · S 后退 · A / D 转舵");
+    showHint(innerWidth<700?"推摇杆前进 · 左右转舵 · 靠近岸边点「靠岸」":"W 前进 · S 后退 · A / D 转舵 · 靠近岸边按 F 靠岸");
   }else if(m===MODE.FISH){
     fish.yaw = -Math.PI/2 - DOCK_ANG; fish.pitch = -0.24;
     resetFishing();
@@ -1658,6 +1660,7 @@ function setMode(m){
 // 车停在维多利亚港，从码头栏点「开车兜风」要先把镜头带过去
 function pickMode(k){
   if(k===MODE.DRIVE){ closeHarborInterior(); region='harbor'; setMode(MODE.DRIVE); updateRegionUi(); return; }
+  if(k===MODE.SAIL){ boardShip(); return; }
   setMode(k);
 }
 Object.keys(modeBtns).forEach(k=>{
@@ -1739,6 +1742,11 @@ function updateWalk(dt, t){
     if(Math.abs(blocked.x-nx)>.001) walk.vx=0;
     if(Math.abs(blocked.z-nz)>.001) walk.vz=0;
     nx=blocked.x; nz=blocked.z;
+  }
+  // 停着的帆船也挡人
+  if(Math.abs(nx-ship.x)<SHIP_HALF_LENGTH+3 && Math.abs(nz-ship.z)<SHIP_HALF_LENGTH+3){
+    const pushed=pushOutOfHull(nx,nz,BODY_R*0.75);
+    if(pushed){ nx=pushed.x; nz=pushed.z; walk.vx*=0.5; walk.vz*=0.5; }
   }
   const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz);if(Math.abs(harborAdjusted.x-nx)>.001)walk.vx=0;if(Math.abs(harborAdjusted.z-nz)>.001)walk.vz=0;nx=harborAdjusted.x;nz=harborAdjusted.z;
   walk.x=nx; walk.z=nz;
@@ -1944,10 +1952,6 @@ function tick(){
     ctrl.dist  += (ctrl.tDist-ctrl.dist)*0.08;
     ctrl.target.lerp(ctrl.tTarget, 0.07);
     applyOrbit();
-    // 俯瞰时船慢慢漂
-    const h = waveHeight(ship.x, ship.z, t);
-    boat.g.position.set(ship.x, h+0.4, ship.z);
-    boat.g.rotation.set(0, ship.yaw-Math.PI/2, Math.sin(t*0.7)*0.05);
   }
 
   seaUniforms.uCam.value.copy(camera.position);
@@ -2150,6 +2154,7 @@ function drawMap(){
  c.fillStyle='#c6b18066';c.fillRect(...point(330,-520),620*scale,430*scale);c.strokeRect(...point(330,-520),620*scale,430*scale);
  c.font='14px sans-serif';c.textAlign='center';c.fillStyle='#f3e8cf';c.fillText('星辉乐园',cx,cy-510*scale);c.fillText('静屿',cx,cy+4);c.fillText('维多利亚港',cx+640*scale,cy-300*scale);
  const x=mode===MODE.SAIL?ship.x:mode===MODE.WALK?walk.x:camera.position.x,z=mode===MODE.SAIL?ship.z:mode===MODE.WALK?walk.z:camera.position.z;
+ if(mode!==MODE.SAIL){const b=point(ship.x,ship.z);c.beginPath();c.arc(Math.max(5,Math.min(283,b[0])),Math.max(5,Math.min(243,b[1])),3,0,Math.PI*2);c.strokeStyle='#f3e8cf';c.lineWidth=1.5;c.stroke();}
  if(mode!==MODE.VIEW){const p=point(x,z);c.beginPath();c.arc(Math.max(5,Math.min(283,p[0])),Math.max(5,Math.min(243,p[1])),4,0,Math.PI*2);c.fillStyle='#fff3c8';c.fill();}
 }
 
@@ -4443,6 +4448,7 @@ return {root:scene,state:PARK,rides,obstacles,walkers,idlers,makePerson,glows:gl
 const resortOrigin=new THREE.Vector3(0,5,-510),resortScale=.65;
 const resortWorldPoint=(x,y,z)=>new THREE.Vector3(x*resortScale,5+y*resortScale,-510+z*resortScale);
 let region='island',parkRide=null,rideLook={yaw:0,pitch:0},rideReturn=null;
+function regionAt(x,z){return x>320?'harbor':z<-280?'park':'island';}
 const parkSeatPosition=new THREE.Vector3(),parkSeatQuaternion=new THREE.Quaternion(),parkLookQuaternion=new THREE.Quaternion(),parkLookEuler=new THREE.Euler(0,0,0,'YXZ');
 
 // Raised boardwalk joins the north beach to the amusement island gate.
@@ -4533,7 +4539,6 @@ function updateRegionUi(){
  $('region-harbor').setAttribute('aria-pressed',String(region==='harbor'));
  $('harbor-panel').hidden=region!=='harbor';
  $('park-panel').hidden=region!=='park'&&mode!==MODE.RIDE;
- $('travel-action').hidden=mode!==MODE.SAIL;
  $('ride-action').textContent=parkRide?'结束乘坐':(selectedAttraction().pov?'乘坐这个项目':'走到这里');
 }
 function focusRegion(next){
@@ -4580,8 +4585,7 @@ function animateResort(dt,t){
  const nightAmount=periodIndex===2?1:periodIndex===1?.35:0;
  parkLight+=(nightAmount-parkLight)*Math.min(1,dt*2);
  parkModule.glows.forEach(m=>m.emissiveIntensity=Math.max(0,parkLight)*m.userData.nightIntensity);
- if(mode===MODE.WALK){const next=walk.x>320?'harbor':walk.z<-280?'park':'island';if(next!==region){region=next;updateRegionUi();}}
- if(mode===MODE.SAIL){$('travel-action').hidden=false;const near=Math.hypot(ship.x-222,ship.z+475)<28;$('travel-action').textContent=near?'靠岸 · 登上游乐岛':'返航 · 回静屿码头';}
+ if(mode===MODE.WALK){const next=regionAt(walk.x,walk.z);if(next!==region){region=next;updateRegionUi();}}
  const localCam=parkSeatPosition.copy(camera.position).sub(resortOrigin).multiplyScalar(1/resortScale);
  parkModule.sound.update(localCam);
 }
@@ -4589,8 +4593,9 @@ function toggleResortAudio(){const on=Snd.isOn();if(parkModule.sound.isOn()!==on
 $('region-island').onclick=()=>focusRegion('island');$('region-park').onclick=()=>focusRegion('park');$('region-all').onclick=()=>focusRegion('all');
 $('park-enter').onclick=parkEntry;$('attraction-select').addEventListener('change',focusAttraction);$('ride-action').onclick=rideAttraction;
 $('brand').addEventListener('click',toggleResortAudio);
-$('travel-action').onclick=()=>{if(Math.hypot(ship.x-638,ship.z+15)<35){visitHarbor();return;}if(Math.hypot(ship.x-222,ship.z+475)<28){region='park';setMode(MODE.WALK);walk.x=212;walk.z=-475;walk.yaw=Math.PI/2;faceAway();updateRegionUi();}else{region='island';setMode(MODE.WALK);updateRegionUi();}};
-$('park-sail').onclick=()=>{setMode(MODE.SAIL);region='park';ship.x=224;ship.z=-475;ship.yaw=Math.PI/2;ship.spd=0;updateRegionUi();};
+$('travel-action').onclick=()=>landShip();
+// 面板上的「码头出海」是把船叫到这个码头来；平时船停在你上次靠岸的地方
+$('park-sail').onclick=()=>summonShip(224,-475,Math.PI/2,'park');
 updateRegionUi();
 
 // Victoria Harbour inspired district. Fictional layouts, circa 1900–1920 mood.
@@ -5231,10 +5236,9 @@ function updateHarbor(dt,t){
  const button=$('harbor-interact');button.hidden=!harborNearby;
  if(harborNearby)button.textContent='阅读展牌'+(innerWidth>700?' · E':'');
  if(mode!==MODE.WALK&&activeHarborBuilding)endHarborInterior();
- if(mode===MODE.SAIL&&Math.hypot(ship.x-638,ship.z+15)<35)$('travel-action').textContent='靠岸 · 维多利亚港';
 }
 $('region-harbor').onclick=focusHarbor;$('harbor-walk').onclick=strollHarbor;$('harbor-go').onclick=goHarborBuilding;$('harbor-exit').onclick=exitHarborBuilding;$('harbor-interact').onclick=harborInteract;
-$('harbor-sail').onclick=()=>{closeHarborInterior();region='harbor';setMode(MODE.SAIL);ship.x=658;ship.z=-10;ship.yaw=0;ship.spd=0;updateRegionUi();};
+$('harbor-sail').onclick=()=>summonShip(659,-45,0,'harbor');
 addEventListener('keydown',e=>{if(e.key.toLowerCase()==='e'&&!e.repeat&&!e.ctrlKey&&!e.metaKey&&!e.altKey){if(e.target?.closest?.('input,textarea,select'))return;harborInteract();}});
 
 /* ============================================================
@@ -5509,7 +5513,128 @@ function exitCar(){
  updateRegionUi();
  showHint('下车 · 走近车身按 F 再上车');
 }
-function toggleVehicle(){ mode===MODE.DRIVE?exitCar():enterCar(); }
+function toggleVehicle(){
+ if(mode===MODE.DRIVE)exitCar();
+ else if(mode===MODE.SAIL)landShip();
+ else if(mode===MODE.WALK&&shipNear&&!vehicleNear)boardShip();
+ else enterCar();
+}
+
+/* ---------- 靠岸与上船 ---------- */
+// 船身当作一根胶囊：中心线沿航向，长 11、宽 3.6
+const SHIP_PLACE={island:'静屿沙滩',park:'星辉游乐岛',harbor:'维多利亚港'};
+let shipNear=false, shipLanding=null, landingAcc=1;
+function hullDistanceFrom(cx,cz,yaw,x,z){
+ const sn=Math.sin(yaw),cs=Math.cos(yaw),dx=x-cx,dz=z-cz;
+ const along=Math.max(-SHIP_HALF_LENGTH,Math.min(SHIP_HALF_LENGTH,dx*sn+dz*cs));
+ return Math.hypot(dx-sn*along,dz-cs*along)-SHIP_HALF_WIDTH;
+}
+function shipHullDistance(x,z){ return hullDistanceFrom(ship.x,ship.z,ship.yaw,x,z); }
+function pushOutOfHull(x,z,radius){
+ const sn=Math.sin(ship.yaw),cs=Math.cos(ship.yaw),dx=x-ship.x,dz=z-ship.z;
+ const along=Math.max(-SHIP_HALF_LENGTH,Math.min(SHIP_HALF_LENGTH,dx*sn+dz*cs));
+ const px=dx-sn*along,pz=dz-cs*along,d=Math.hypot(px,pz),want=SHIP_HALF_WIDTH+radius;
+ if(d>=want)return null;
+ if(d<1e-4)return {x:x+cs*want,z:z-sn*want};
+ return {x:x+px/d*(want-d),z:z+pz/d*(want-d)};
+}
+// 能站人的干地：沙滩、栈桥或码头。港区只认平台，不把人丢在海堤外的斜坡上
+function landingClear(x,z,minHeight){
+ if(worldWalkHeight(x,z)<minHeight)return false;
+ if(harborBuildingAt(x,z))return false;
+ if(Math.abs(x-car.x)<CAR_R+BODY_R&&Math.abs(z-car.z)<CAR_R+BODY_R)return false;
+ for(const o of obstacles)if(Math.hypot(x-o.x,z-o.z)<o.r+BODY_R)return false;
+ if(shipHullDistance(x,z)<BODY_R)return false;
+ const p=resolveHarborWalk(x,z,x,z,false);
+ return Math.hypot(p.x-x,p.z-z)<.05;
+}
+function shipLandingSpot(){
+ for(const minHeight of [3.5,0.05]){
+  for(let r=SHIP_HALF_WIDTH+1.6;r<=22;r+=2){
+   for(let i=0;i<36;i++){
+    // 从船头方向开始，左右交替绕船找
+    const a=ship.yaw+(i%2?-1:1)*Math.ceil(i/2)*Math.PI/18;
+    const x=ship.x+Math.sin(a)*r,z=ship.z+Math.cos(a)*r;
+    if(minHeight<3&&x>320)continue;
+    if(landingClear(x,z,minHeight))return {x,z,region:regionAt(x,z)};
+   }
+  }
+ }
+ return null;
+}
+const PARK_PIER={x:199,z:-475,w:39,d:7};
+function mooringClear(x,z,spot){
+ if(hullDistanceFrom(x,z,ship.yaw,spot.x,spot.z)<BODY_R+1.2)return false;
+ const sn=Math.sin(ship.yaw),cs=Math.cos(ship.yaw);
+ for(const k of [-3.5,0,3.5])if(terrainH(x+sn*k,z+cs*k)>-1.2)return false;
+ if(harborRectContains({x,z},PARK_PIER,SHIP_HALF_WIDTH+.3))return false;
+ if(x>320)for(const r of harborCollisionWorld)if(harborRectContains({x,z},r,SHIP_HALF_WIDTH+.3))return false;
+ // 静屿码头：船身离栈桥轴线远一点
+ const along=x*DOCK_DIR.x+z*DOCK_DIR.y,across=Math.abs(-x*DOCK_DIR.y+z*DOCK_DIR.x);
+ if(along>DOCK_SHORE-12&&along<DOCK_END+SHIP_HALF_LENGTH&&across<SHIP_HALF_WIDTH+3.8)return false;
+ return true;
+}
+// 靠岸后船慢慢往岸边系上，停到离下船点最近的深水处
+function moorShipNear(spot){
+ const dx=ship.x-spot.x,dz=ship.z-spot.z,d=Math.hypot(dx,dz);
+ let best=null;
+ for(let s=d-.5;s>=SHIP_HALF_WIDTH+1.5;s-=.5){
+  const x=spot.x+dx/d*s,z=spot.z+dz/d*s;
+  if(!mooringClear(x,z,spot))break;
+  best={x,z};
+ }
+ ship.moor=best;
+}
+function landShip(){
+ if(mode!==MODE.SAIL)return;
+ const spot=shipLandingSpot();
+ if(!spot){showHint('这里离岸太远 · 靠近沙滩或码头再靠岸');return;}
+ ship.spd=0; ship.turn=0;
+ setMode(MODE.WALK);
+ region=spot.region;
+ walk.x=spot.x; walk.z=spot.z; walk.vx=walk.vz=0;
+ // 镜头朝向陆地，背对船
+ walk.yaw=Math.atan2(ship.x-spot.x,ship.z-spot.z); faceAway();
+ walk.pitch=-0.05; walk.groundY=worldWalkHeight(walk.x,walk.z);
+ moorShipNear(spot);
+ updateRegionUi();
+ showHint('靠岸 · '+SHIP_PLACE[spot.region]+' · 船就停在这里，走近船身按 F 再上船');
+}
+function boardShip(){
+ if(mode===MODE.SAIL)return;
+ const near=mode===MODE.WALK&&shipNear;
+ closeHarborInterior();
+ setMode(MODE.SAIL);
+ updateRegionUi();
+ showHint(near?'上船了 · W 前进，A / D 转舵，靠近岸边按 F 靠岸':'回到停船处 · 船停在'+SHIP_PLACE[region]+'附近');
+}
+// 把船叫到某个码头：面板上的「码头出海」「港口出海」
+function summonShip(x,z,yaw,where){
+ closeHarborInterior();
+ ship.x=x; ship.z=z; ship.yaw=yaw; ship.spd=0; ship.moor=null;
+ setMode(MODE.SAIL); region=where; updateRegionUi();
+}
+function updateMooredShip(dt,t){
+ if(ship.moor){
+  const dx=ship.moor.x-ship.x,dz=ship.moor.z-ship.z,remaining=Math.hypot(dx,dz);
+  const step=Math.min(remaining,dt*Math.max(2.5,remaining*1.6));
+  if(remaining<=step+1e-6){ship.x=ship.moor.x;ship.z=ship.moor.z;ship.moor=null;}
+  else{ship.x+=dx/remaining*step;ship.z+=dz/remaining*step;}
+ }
+ const h=waveHeight(ship.x,ship.z,t);
+ boat.g.position.set(ship.x,h+0.4,ship.z);
+ boat.g.rotation.order="YXZ";
+ boat.g.rotation.set(0,ship.yaw-Math.PI/2,Math.sin(t*0.7)*0.05);
+}
+function updateVoyage(dt){
+ const btn=$('travel-action');
+ if(mode!==MODE.SAIL){shipLanding=null;btn.hidden=true;landingAcc=1;return;}
+ landingAcc+=dt;
+ if(landingAcc>=0.15){landingAcc=0;shipLanding=shipLandingSpot();}
+ btn.hidden=!!document.querySelector('dialog[open]');
+ btn.disabled=!shipLanding;
+ btn.textContent=shipLanding?'靠岸 · '+SHIP_PLACE[shipLanding.region]+(innerWidth>700?' · F':''):'靠近沙滩或码头再靠岸';
+}
 function toggleCameraView(){
  if(mode!==MODE.WALK)return;
  walk.tps=!walk.tps;
@@ -5524,11 +5649,14 @@ function updateActors(dt,t){
   roadster.g.rotation.set(0,car.yaw,0);
   roadster.lamp.intensity=periodIndex===2?1.2:0;
  }
+ if(mode!==MODE.SAIL)updateMooredShip(dt,t);
+ updateVoyage(dt);
  const parkedBounds=vehicleHalfExtents(car.yaw);
  vehicleNear=mode===MODE.WALK&&!activeHarborBuilding&&Math.hypot(Math.max(0,Math.abs(walk.x-car.x)-parkedBounds.x),Math.max(0,Math.abs(walk.z-car.z)-parkedBounds.z))<2.2;
- const show = (vehicleNear || mode===MODE.DRIVE) && !document.querySelector('dialog[open]');
+ shipNear=mode===MODE.WALK&&!activeHarborBuilding&&shipHullDistance(walk.x,walk.z)<3.6;
+ const show = (vehicleNear || shipNear || mode===MODE.DRIVE) && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
- if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':'上车 · 老爷车')+(innerWidth>700?' · F':'');
+ if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':vehicleNear?'上车 · 老爷车':'上船 · 帆船')+(innerWidth>700?' · F':'');
 }
 
 vehicleBtn.onclick=toggleVehicle;
