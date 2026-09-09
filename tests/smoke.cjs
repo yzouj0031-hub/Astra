@@ -30,7 +30,7 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipLandingSpot,landShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -39,9 +39,63 @@ function test(width,height){
  a.castPress();assert.equal(a.fish.state,'cast');for(let i=0;i<80;i++)a.updateFishing(.016,i*.016);assert.equal(a.fish.state,'wait');
  a.fish.state='bite';a.castPress();assert.equal(a.fish.state,'fight');a.castPress();assert(a.fish.pulling);a.castRelease();assert(!a.fish.pulling);
  assert(a.terrainH(a.ship.x,a.ship.z)<-1.6,'Sailboat is moored in navigable water');
- a.setMode('sail');assert(Math.sin(a.ship.yaw)*a.DOCK_DIR.x+Math.cos(a.ship.yaw)*a.DOCK_DIR.y>.999,'Boat points out to sea');assert(a.shipLandingSpot(),'Beach beside the dock is within landing reach');
+ a.setMode('sail');assert(Math.sin(a.ship.yaw)*a.DOCK_DIR.x+Math.cos(a.ship.yaw)*a.DOCK_DIR.y>.999,'Boat points out to sea');assert(a.shipStepOff(),'There is always a side to step off onto');
  a.keys.w=true;const sx=a.ship.x,sz=a.ship.z;for(let i=0;i<180;i++)a.updateSail(.016,i*.016);assert(Math.hypot(a.ship.x-sx,a.ship.z-sz)>10,'Boat can leave harbor');
  a.clearInput();assert(!a.keys.w);a.setMode('walk');a.keys.w=true;for(let i=0;i<60;i++)a.updateWalk(.016,i*.016);assert(Number.isFinite(a.camera.position.y));a.clearInput();
+ // Walking off the beach wades into the sea and starts a swim instead of hitting an invisible wall.
+ // Islanders are parked inland so a wandering body cannot block the walk to the water.
+ // Pick a stretch of beach with no rocks or palms in the way; scenery placement is random per run.
+ let beach=null;
+ for(let i=0;i<48&&beach===null;i++){
+  const ang=a.DOCK_ANG+.3+i*.13, R=a.shoreRadius(ang);
+  let open=true;
+  for(let r=R-22;r<=R+8&&open;r+=1.2){
+   const x=Math.cos(ang)*r,z=Math.sin(ang)*r;
+   if(a.obstacles.some(o=>Math.hypot(x-o.x,z-o.z)<o.r+1.7)) open=false;
+  }
+  if(open) beach=ang;
+ }
+ assert(beach!==null,'Found an unobstructed stretch of beach');
+ {const parked=a.residents.map(n=>({n,x:n.g.position.x,z:n.g.position.z}));
+  a.residents.forEach(n=>{n.g.position.x=0;n.g.position.z=0;});
+  a.setMode('walk');a.walk.x=Math.cos(beach)*(a.shoreRadius(beach)-20);a.walk.z=Math.sin(beach)*(a.shoreRadius(beach)-20);
+  a.walk.y=a.worldWalkHeight(a.walk.x,a.walk.z);a.walk.vx=a.walk.vz=0;a.walk.swim=false;a.walk.air=false;a.walk.climb=null;
+  assert(a.terrainH(a.walk.x,a.walk.z)>0,'The swim starts from dry sand');
+  const seaward=()=>{a.walk.yaw=Math.atan2(-a.walk.x,-a.walk.z);},inland=()=>{a.walk.yaw=Math.atan2(a.walk.x,a.walk.z);};
+  a.keys.w=true;
+  for(let i=0;i<200&&!a.walk.swim;i++){seaward();a.updateWalk(.05,i*.05);}
+  a.clearInput();
+  assert(a.walk.swim,`Walking into the sea starts a swim (ground=${a.worldWalkHeight(a.walk.x,a.walk.z).toFixed(2)})`);
+  assert(Math.abs(a.walk.y-a.seaAt(a.walk.x,a.walk.z))<.6,'A swimmer floats at the surface, not on the seabed');
+  assert(a.camera.position.y>a.seaAt(a.camera.position.x,a.camera.position.z),'The chase camera stays above water while swimming');
+  assert(a.localOnlinePose().kind==='swim','Swimming is published to co-op peers');
+  a.keys.w=true;
+  for(let i=0;i<300&&a.walk.swim;i++){inland();a.updateWalk(.05,i*.05);}
+  assert(!a.walk.swim,'Swimming back to the beach ends the swim');
+  for(let i=0;i<80;i++){inland();a.updateWalk(.05,i*.05);}
+  a.clearInput();
+  assert(a.terrainH(a.walk.x,a.walk.z)>0,`Waded out onto dry sand (${a.terrainH(a.walk.x,a.walk.z).toFixed(2)})`);
+  assert(!a.walk.climb,'A gentle beach needs no climbing');
+  parked.forEach(p=>{p.n.g.position.x=p.x;p.n.g.position.z=p.z;});}
+ // Jumping: off the ground, through the air, and a dive that ends in the water.
+ {a.setMode('walk');a.walk.x=Math.cos(beach)*(a.shoreRadius(beach)-20);a.walk.z=Math.sin(beach)*(a.shoreRadius(beach)-20);
+  a.walk.swim=false;a.walk.air=false;a.walk.climb=null;a.walk.vy=0;
+  a.walk.y=a.worldWalkHeight(a.walk.x,a.walk.z);a.walk.vx=a.walk.vz=0;
+  assert(a.terrainH(a.walk.x,a.walk.z)>0.5,'The jump starts from dry sand');
+  const stand=a.walk.y;a.playerJump();assert(a.walk.air,'Space leaves the ground');
+  let peak=stand;for(let i=0;i<80&&a.walk.air;i++){a.updateWalk(.02,i*.02);peak=Math.max(peak,a.walk.y);}
+  assert(peak>stand+0.8,`The jump clears the ground (${(peak-stand).toFixed(2)}m from ${stand.toFixed(2)}, swim=${a.walk.swim})`);
+  assert(!a.walk.air&&Math.abs(a.walk.y-a.worldWalkHeight(a.walk.x,a.walk.z))<.05,`Gravity brings the jump back down onto the ground (air=${a.walk.air} y=${a.walk.y.toFixed(3)})`);
+  // Step off the raised boardwalk and fall into the sea below.
+  a.walk.x=0;a.walk.z=-200;a.walk.y=a.worldWalkHeight(0,-200);a.walk.vx=a.walk.vz=0;
+  assert(a.walk.y>4,'Standing on the bridge deck');
+  a.walk.yaw=Math.PI/2;a.keys.w=true;
+  for(let i=0;i<40;i++)a.updateWalk(.02,i*.02);
+  assert(Math.abs(a.walk.x)>3.1&&!a.walk.air,'Walking into the bridge rail stops at the edge');
+  a.playerJump();
+  for(let i=0;i<160&&!a.walk.swim;i++)a.updateWalk(.02,i*.02);
+  a.clearInput();assert(a.walk.swim,'Jumping over the rail drops you into the sea');
+  assert(Math.abs(a.walk.x)>3.7,'The jump cleared the rail that blocks walking');}
  for(let p=0;p<3;p++){a.selectPeriod(p);for(let j=0;j<240;j++)a.updateAtmosphere(.016,j*.016);assert(Number.isFinite(a.seaUniforms.uMood.value.r));a.drawMap();}
  assert.equal(a.residents.length,7,'Seven residents are created');
  assert.equal(new Set(a.residents.map(n=>n.name)).size,7,'Residents have unique names');
@@ -75,20 +129,38 @@ function test(width,height){
   a.leaveParkRide();assert.equal(body.dataset.mode,'walk');assert(a.walk.z<-280);count++;
  }
  a.setMode('walk');nodes.get('park-sail').onclick();assert.equal(body.dataset.mode,'sail');assert.equal(a.ship.x,224);assert.equal(body.dataset.region,'park');
- a.animateResort(.05,50);a.updateActors(.2,50);assert(!nodes.get('travel-action').hidden&&!nodes.get('travel-action').disabled,'Landing is offered beside the pier');
+ a.animateResort(.05,50);a.updateActors(.2,50);assert(!nodes.get('travel-action').hidden&&!nodes.get('travel-action').disabled,'Stepping off is always offered');
+ // Off the pier's end there is only water beside the hull, so stepping off is a jump into the sea.
  nodes.get('travel-action').onclick();assert.equal(body.dataset.mode,'walk');assert.equal(body.dataset.region,'park');
- assert(a.worldWalkHeight(a.walk.x,a.walk.z)>5,'Landed on the pier deck');assert(a.shipHullDistance(a.walk.x,a.walk.z)>0,'Landing spot is outside the hull');
- assert.equal(a.ship.x,224,'The boat stays where it was left');
- for(let i=0;i<40;i++)a.updateActors(.05,i*.05);assert(a.getShipNear(),'Moored boat is within boarding reach');assert(!nodes.get('vehicle-interact').hidden&&nodes.get('vehicle-interact').textContent.includes('上船'));
+ assert(a.walk.swim,'Stepping off over deep water starts a swim');
+ assert(a.shipHullDistance(a.walk.x,a.walk.z)>0,'The step-off point is outside the hull');
+ assert(Math.hypot(a.walk.x-a.ship.x,a.walk.z-a.ship.z)<7,'Stepping off lands beside the boat, not across the bay');
+ assert.equal(a.ship.x,224,'The boat stays exactly where it was left');
+ // Swim west to the pier and climb out onto its deck.
+ a.walk.yaw=Math.PI/2;a.keys.w=true;
+ for(let i=0;i<200&&!a.walk.climb&&a.walk.swim;i++)a.updateWalk(.05,i*.05);
+ a.clearInput();assert(a.walk.climb,'Swimming into the pier starts a climb out of the water');
+ for(let i=0;i<20;i++)a.updateWalk(.05,i*.05);
+ assert(!a.walk.swim&&!a.walk.climb,'The climb finishes on land');
+ assert(a.worldWalkHeight(a.walk.x,a.walk.z)>5&&Math.abs(a.walk.y-a.worldWalkHeight(a.walk.x,a.walk.z))<.05,'Climbed onto the pier deck');
+ // Walk back along the pier to the hull and board again.
+ a.walk.x=a.ship.x-a.shipHullDistance(a.ship.x-3,a.ship.z)*0;a.walk.x=221;a.walk.z=-475;a.walk.y=5.15;
+ for(let i=0;i<10;i++)a.updateActors(.05,i*.05);
+ assert(a.getShipNear(),'The boat is within boarding reach from the pier');assert(!nodes.get('vehicle-interact').hidden&&nodes.get('vehicle-interact').textContent.includes('上船'));
  a.toggleVehicle();assert.equal(body.dataset.mode,'sail');assert(Math.abs(a.ship.x-224)<6&&Math.abs(a.ship.z+475)<6,'Boarding resumes from the moored boat');
- a.updateActors(.2,60);a.landShip();assert.equal(body.dataset.mode,'walk');
  // Walk away, then the dock-bar button returns to wherever the boat is.
- a.walk.x=0;a.walk.z=-437;a.updateActors(.05,61);assert(!a.getShipNear());a.pickMode('sail');assert.equal(body.dataset.mode,'sail');assert(Math.abs(a.ship.x-224)<6,'Sail button rejoins the moored boat instead of respawning it');
- // Beach landing on the main island: the boat is left at the shoreline, the walker on dry sand, and the hull blocks walking.
- {const ang=a.DOCK_ANG+1.5,r=a.shoreRadius(ang)+4;a.ship.x=Math.cos(ang)*r;a.ship.z=Math.sin(ang)*r;a.ship.yaw=Math.atan2(-a.ship.x,-a.ship.z);
-  assert(a.terrainH(a.ship.x,a.ship.z)<-1.6,'Test boat sits in water');a.landShip();assert.equal(body.dataset.mode,'walk');assert.equal(body.dataset.region,'island');
-  assert(a.terrainH(a.walk.x,a.walk.z)>0,'Beach landing puts the walker on dry sand');assert(a.terrainH(a.ship.x,a.ship.z)<-1,'Boat stays afloat');
-  for(let i=0;i<60;i++)a.updateActors(.05,i*.05);assert(a.ship.moor===null,'Boat finishes mooring');assert(a.terrainH(a.ship.x,a.ship.z)<-1.1,'Moored boat is still afloat');
+ a.leaveShip();a.walk.x=0;a.walk.z=-437;a.walk.swim=false;a.walk.y=a.worldWalkHeight(0,-437);a.updateActors(.05,61);
+ assert(!a.getShipNear());a.pickMode('sail');assert.equal(body.dataset.mode,'sail');assert(Math.abs(a.ship.x-224)<6,'Sail button rejoins the moored boat instead of respawning it');
+ // Beach landing on the main island: run the boat aground-adjacent and step straight onto dry sand.
+ {const ang=beach,r=a.shoreRadius(ang);a.ship.x=Math.cos(ang)*r;a.ship.z=Math.sin(ang)*r;a.ship.yaw=Math.atan2(-a.ship.x,-a.ship.z);
+  a.leaveShip();assert.equal(body.dataset.mode,'walk');assert.equal(body.dataset.region,'island');
+  assert(Math.hypot(a.walk.x-a.ship.x,a.walk.z-a.ship.z)<6,'You step off the side, not across the bay');
+  assert(a.terrainH(a.ship.x,a.ship.z)<0,'The boat is left floating where it stopped');
+  // Beached bow-in: step off into the shallows and walk straight up the sand, no climb.
+  a.keys.w=true;   // head inland every frame: forward is -(sin yaw, cos yaw), so aim at the island centre
+  for(let i=0;i<220;i++){a.walk.yaw=Math.atan2(a.walk.x,a.walk.z);a.updateWalk(.05,i*.05);}
+  a.clearInput();assert(!a.walk.swim&&!a.walk.climb,'The gentle beach needs no climbing');
+  assert(a.terrainH(a.walk.x,a.walk.z)>0,'Waded ashore from the boat');
   a.walk.x=a.ship.x;a.walk.z=a.ship.z;a.updateWalk(.05,0);assert(a.shipHullDistance(a.walk.x,a.walk.z)>0.3,'Walker is pushed out of the hull');}
  console.log(`Merged world: bridge crossed both ways, ${count} ride seats checked, ride exit and boat landing passed. ${a.resortInstances.batches.length} instanced park batches.`);
 
@@ -215,9 +287,30 @@ function test(width,height){
  a.visitHarbor();assert(a.worldWalkHeight(a.walk.x,a.walk.z)>4,'Harbour arrival is on its dock');
  nodes.get('harbor-sail').onclick();assert.equal(body.dataset.mode,'sail');assert(a.terrainH(a.ship.x,a.ship.z)<-1.6,'Harbour boat spawns in navigable water');
  a.updateHarbor(.05,140);nodes.get('travel-action').onclick();assert.equal(body.dataset.region,'harbor');assert.equal(body.dataset.mode,'walk');
- assert(a.walk.x>626.5&&a.walk.x<649.5&&a.walk.z>-90&&a.walk.z<-22&&a.worldWalkHeight(a.walk.x,a.walk.z)>4,`Landed on the harbour pier deck (${a.walk.x.toFixed(1)}, ${a.walk.z.toFixed(1)})`);
- for(let i=0;i<60;i++)a.updateActors(.05,i*.05);assert(a.getShipNear(),'Harbour boat moors alongside the pier');assert(a.harborCollisionWorld.every(r=>!a.harborRectContains({x:a.ship.x,z:a.ship.z},r,1.5)),'Moored hull clears the pier walls');
- a.toggleVehicle();assert.equal(body.dataset.mode,'sail');
+ assert(a.walk.swim,'Stepping off in the harbour drops you in the water');
+ a.walk.yaw=Math.PI/2;a.keys.w=true;
+ for(let i=0;i<200&&!a.walk.climb&&a.walk.swim;i++)a.updateWalk(.05,i*.05);
+ a.clearInput();assert(a.walk.climb,'Swimming into the timber pier starts a climb');
+ for(let i=0;i<20;i++)a.updateWalk(.05,i*.05);
+ assert(!a.walk.swim,'The harbour climb finishes on the pier');
+ assert(a.worldWalkHeight(a.walk.x,a.walk.z)>4,`Standing on the harbour pier deck (${a.walk.x.toFixed(1)}, ${a.walk.z.toFixed(1)})`);
+ assert(a.harborCollisionWorld.every(r=>!a.harborRectContains({x:a.walk.x,z:a.walk.z},r)),'The climb ends clear of the pier edge, not straddling it');
+ a.setMode('sail');
+ // Jumping off the stone quay is allowed, and the swimmer can always climb back out.
+ a.setMode('walk');a.walk.x=580;a.walk.z=-92;a.walk.y=a.worldWalkHeight(580,-92);a.walk.vx=a.walk.vz=0;
+ assert(a.walk.y>4,'Standing on the stone quay');
+ a.walk.yaw=Math.PI;a.keys.w=true;
+ for(let i=0;i<40;i++)a.updateWalk(.02,i*.02);
+ assert(!a.walk.swim&&a.walk.z<-90.7,'Walking cannot cross the quay edge');
+ a.playerJump();
+ for(let i=0;i<160&&!a.walk.swim;i++)a.updateWalk(.02,i*.02);
+ a.clearInput();assert(a.walk.swim,'Jumping over the quay edge drops you into the harbour');
+ a.walk.yaw=0;a.keys.w=true;
+ for(let i=0;i<300&&!a.walk.climb&&a.walk.swim;i++)a.updateWalk(.05,i*.05);
+ a.clearInput();assert(a.walk.climb,'Swimming back to the quay finds a way up');
+ for(let i=0;i<20;i++)a.updateWalk(.05,i*.05);
+ assert(!a.walk.swim&&a.worldWalkHeight(a.walk.x,a.walk.z)>4,`Climbed back onto the quay (${a.walk.z.toFixed(1)})`);
+ assert(a.harborCollisionWorld.every(r=>!a.harborRectContains({x:a.walk.x,z:a.walk.z},r)),'Standing clear of the quay edge after climbing');
  a.setMode('sail');a.ship.x=309;a.ship.z=-200;a.ship.yaw=Math.PI/2;a.ship.spd=0;a.keys.w=true;
  for(let i=0;i<240;i++){a.updateSail(.05,i*.05);assert(a.terrainH(a.ship.x,a.ship.z)<-1.5,'Seawall collision pushes the boat toward water');}a.clearInput();
  console.log(`Victoria Harbour: ${landmarks.length} interiors, ${a.harborFacadeCount} street buildings, 7 ships, ${a.harborVisitors.length} pedestrians; walked in and out through the doorways, stairs up/down, exhibits, facade/side/back walls still solid, furniture collisions, mode cleanup and dock landing passed.`);

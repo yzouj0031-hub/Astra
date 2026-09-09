@@ -245,6 +245,9 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 @media(max-width:560px){.online-fields{grid-template-columns:1fr}.online-chat-send button{padding:0 14px}#online-dialog{padding:25px 22px}}
 
 #vehicle-interact{position:fixed;bottom:226px;left:50%;transform:translateX(-50%);z-index:28;padding:12px 21px;border:1px solid #ffe6b866;border-radius:30px;background:#2c3f4b;color:#f6ecd6;box-shadow:0 5px 24px #052e3455;font-size:14px;white-space:nowrap}
+#jump-button{position:fixed;right:26px;bottom:206px;z-index:27;width:78px;height:78px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:13px;display:none;box-shadow:0 5px 24px #052e3455}
+@media(max-width:900px){body[data-mode=walk] #jump-button{display:block}}
+@media(max-width:560px){#jump-button{width:66px;height:66px;right:18px;bottom:198px;font-size:12px}}
 #greet-person{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:28;padding:13px 22px;border:1px solid #fff0cd66;border-radius:30px;background:#f1e8d2;color:#285056;box-shadow:0 5px 24px #052e3440;font-size:14px;white-space:nowrap}
 #resident-speech{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:27;width:min(390px,calc(100vw - 40px));padding:20px 24px;background:#f1e8d2f5;color:#285056;border-radius:18px;box-shadow:0 12px 36px #092d3c30;pointer-events:none}
 #resident-speech b{font-size:13px;font-weight:500;color:#64786e}#resident-speech p{font:16px/1.9 "Microsoft YaHei",sans-serif;margin-top:9px}
@@ -289,11 +292,12 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
-<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。<br>帆船开到哪里就停在哪里：靠近沙滩或码头按 F 靠岸下船，走近船身按 F 再上船。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；帆船可以在乐园东侧码头、维多利亚港码头或任何一片沙滩靠岸。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · V 切视角 · F 上下车、上下船 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
+<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。<br><b>空格跳跃</b>；走进海里就开始游泳，从栈桥或岸沿跳下去会溅起水花。<br>游到岸边、码头或栈桥旁按空格翻上岸。</p></div><div class="guide-row"><b>02.5 / 游泳与跳水</b><p>海不再是墙：从沙滩直接走进水里，深了就自动开始游。<br>W / S 划水，Shift 加速，游回浅滩自己站起来走上岸。<br>站在栈桥、石砌岸沿或船上按空格跳下去，落水会有水花。<br>贴着码头或岸沿时按空格翻上去，手机点右下角「上岸」。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；帆船停在哪就从哪下船，旁边是码头就翻上去，是水就跳下去游。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—5 切换玩法 · 空格 跳跃 / 上岸 · V 切视角 · F 上下车、上下船 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
 <dialog id="online-dialog"><button class="dialog-close" id="online-close" aria-label="关闭联机面板">×</button><span class="dialog-kicker">WANDER TOGETHER</span><h2>和朋友一起逛星屿。</h2><section id="online-setup"><div class="online-fields"><input id="online-name" maxlength="18" autocomplete="nickname" placeholder="你的名字"><input id="online-room-code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="房间码"></div><div class="online-actions"><button id="online-create">创建新房间</button><button id="online-join" class="secondary">加入房间</button></div><p id="online-status">联机是可选功能；没有网络时仍可正常单机游玩。</p></section><section id="online-room" hidden><div class="online-room-head"><div><span>当前房间</span><br><strong id="online-current-code">--------</strong></div><span id="online-count">1 人在线</span></div><div id="online-peer-list" aria-label="在线玩家"></div><div id="online-chat-log" aria-live="polite" aria-label="房间聊天"></div><div class="online-chat-send"><input id="online-chat-input" maxlength="160" placeholder="说点什么……"><button id="online-chat-send">发送</button></div><div class="online-actions" style="margin-top:12px"><button id="online-copy" class="secondary">复制邀请链接</button><button id="online-leave" class="secondary">离开房间</button></div><p class="online-note">房间通过随机代码临时建立，不保存聊天。请只把邀请链接发给认识的人；本版本同步位置、朝向和在线状态，不同步碰撞、车辆归属或游乐设施进度。</p></section></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
 <button id="vehicle-interact" hidden>上车 · F</button>
+<button id="jump-button" aria-label="跳跃或上岸">跳</button>
 <aside id="resident-speech" hidden role="status" aria-live="polite"><b id="resident-name"></b><p id="resident-words"></p></aside>
 <nav id="world-regions" aria-label="群岛区域"><button id="region-island" aria-pressed="true">静屿</button><button id="region-park" aria-pressed="false">星辉乐园</button><button id="region-harbor" aria-pressed="false">维多利亚港</button><button id="region-all" aria-pressed="false">群岛全景</button></nav>
 <section id="park-panel" hidden aria-label="游乐园项目"><div class="park-heading">星辉游乐岛 <span>听海，也听欢笑</span></div><label for="attraction-select">选择项目</label><select id="attraction-select"></select><div class="park-actions"><button id="ride-action">乘坐这个项目</button><button id="park-enter">入园漫步</button><button id="park-sail">码头出海</button></div><p>两岛由跨海栈桥相连 · 夜场随星夜亮灯</p></section>
@@ -644,7 +648,8 @@ function islandTerrainH(x, z){
 function parkGroundH(x,z){const r=Math.hypot(x,z+510);if(r<195)return 5;return Math.max(-14,5-(r-195)*.55);}
 function harborGroundH(x,z){
  const dx=Math.max(330-x,0,x-950),dz=Math.max(-520-z,0,z+90),outside=Math.hypot(dx,dz);
- return Math.max(-14,4.15-outside*.65);
+ // 港区四面是垂直的石砌岸壁，不是缓坡：出了岸沿一步就是深水，游泳和行船都靠得上来
+ return Math.max(-14,4.15-outside*6);
 }
 function terrainH(x,z){return Math.max(islandTerrainH(x,z),parkGroundH(x,z),harborGroundH(x,z));}
 const TERR_HALF = 190, TERR_SEG = isSmall ? 130 : 190;
@@ -1139,8 +1144,12 @@ function applyOrbit(){
 
 /* ---------- 行走 ---------- */
 const walk = {x:0, z:0, yaw:0, pitch:-0.03, vx:0, vz:0, bob:0, speed:0,
-              heading:0, camDist:5.4, groundY:0, tps:true};
+              heading:0, camDist:5.4, groundY:0, tps:true,
+              // 真实一点：脚下高度、垂直速度、跳跃/游泳/爬上岸的状态
+              y:0, vy:0, air:false, swim:false, dive:false, fall:0, stroke:0, climb:null};
 const EYE = 1.72, BODY_R = 0.8, WALK_SPD = 8.5, SPRINT = 1.95;
+// 跳跃与游泳
+const GRAVITY = 23, JUMP_V = 7.6, SWIM_SPD = 4.6, WADE = 1.15, CLIMB_MAX = 5.6, SWIM_LIMIT = 1500, SEA_LEVEL = 0;
 // 传送/换场后让角色背对镜头站好，转镜头时身体不跟着转
 function faceAway(){ walk.heading = walk.yaw + Math.PI; }
 
@@ -1156,7 +1165,7 @@ const car = {x:650, z:-148, yaw:-Math.PI/2, spd:0, steer:0, wheel:0, spin:0,
 // 帆船是一艘停在世界里的船：开到哪里、在哪里靠岸，它就留在哪里；走近船身再上船
 const SHIP_HALF_LENGTH=5.5, SHIP_HALF_WIDTH=1.8;
 const ship = {x:DOCK_DIR.x*(DOCK_SHORE+6)+Math.cos(DOCK_ANG+Math.PI/2)*10, z:DOCK_DIR.y*(DOCK_SHORE+6)+Math.sin(DOCK_ANG+Math.PI/2)*10,
-              yaw:Math.PI/2-DOCK_ANG, spd:0, turn:0, heel:0, camYaw:0, camPitch:0.16, camDist:17, moor:null};
+              yaw:Math.PI/2-DOCK_ANG, spd:0, turn:0, heel:0, camYaw:0, camPitch:0.16, camDist:17};
 
 /* ---------- 输入 ---------- */
 const keys = {};
@@ -1546,6 +1555,13 @@ const Snd = (function(){
       [0,3,7,12].forEach((n,i)=>blip(midi(72+n),t+i*0.075,0.3,"triangle",0.12)); },
     snap(){ if(!ready||!on) return; const t=ctx.currentTime;
       blip(240,t,0.16,"square",0.14); blip(150,t+0.06,0.2,"square",0.10); },
+    splash(power){ if(!ready||!on) return; const t=ctx.currentTime, v=Math.max(.4,Math.min(2,power||1));
+      const s=ctx.createBufferSource(); s.buffer=nbuf; s.loop=false;
+      const bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.Q.value=0.8;
+      bp.frequency.setValueAtTime(2300,t); bp.frequency.exponentialRampToValueAtTime(430,t+0.42);
+      const g=ctx.createGain(); g.gain.setValueAtTime(0.0001,t);
+      g.gain.linearRampToValueAtTime(0.3*v,t+0.02); g.gain.exponentialRampToValueAtTime(0.0006,t+0.6);
+      s.connect(bp); bp.connect(g); g.connect(master); s.start(t); s.stop(t+0.7); },
     update(dt, camPos, t){
       if(!ready||!on) return;
       // 靠近篝火才听得见
@@ -1590,8 +1606,8 @@ const modeBtns = {
 const MODE_INFO = {
   ride:{n:"游乐设施乘坐",s:"拖动环顾 · 结束乘坐回到地面"},
   view:{n:"环岛俯瞰", s:innerWidth<700?"拖动环岛 · 双指缩放":"拖动环岛 · 滚轮缩放 · R 自动环绕"},
-  walk:{n:"岛上漫步", s:innerWidth<700?"左侧摇杆移动 · 右侧拖动转镜头":"WASD 移动 · 拖动转镜头 · Shift 奔跑 · V 切视角"},
-  sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 靠近沙滩或码头点「靠岸」":"W / S 前进后退 · A / D 转舵 · 靠近沙滩或码头按 F 靠岸"},
+  walk:{n:"岛上漫步", s:innerWidth<700?"左侧摇杆移动 · 「跳」跳跃与上岸":"WASD 移动 · 空格跳跃 · 走进海里就游泳 · Shift 奔跑 · V 切视角"},
+  sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 停在哪里就在哪里下船":"W / S 前进后退 · A / D 转舵 · F 下船，停在哪下在哪"},
   fish:{n:"码头垂钓", s:"抛竿 → 咬钩提竿 → 按住收线"},
   drive:{n:"开车兜风", s:innerWidth<700?"左侧摇杆油门转向 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"}
 };
@@ -1627,16 +1643,17 @@ function setMode(m){
       walk.vx = walk.vz = 0;
       if(region==='harbor'){walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=0;}
       faceAway();
+      groundPlayer();
     }
     showHint("在岛上随便走走");
   }else if(m===MODE.SAIL){
     if(prev!==MODE.SAIL){
       // 船停在哪里就从哪里出发
-      ship.spd = 0; ship.turn = 0; ship.moor = null;
+      ship.spd = 0; ship.turn = 0;
       ship.camYaw = 0; ship.camPitch = 0.16;
       region = regionAt(ship.x, ship.z);
     }
-    showHint(innerWidth<700?"推摇杆前进 · 左右转舵 · 靠近岸边点「靠岸」":"W 前进 · S 后退 · A / D 转舵 · 靠近岸边按 F 靠岸");
+    showHint(innerWidth<700?"推摇杆前进 · 左右转舵 · 点「下船」上岸":"W 前进 · S 后退 · A / D 转舵 · 按 F 下船");
   }else if(m===MODE.FISH){
     fish.yaw = -Math.PI/2 - DOCK_ANG; fish.pitch = -0.24;
     resetFishing();
@@ -1699,7 +1716,69 @@ let elapsed = 0, fAcc = 0, fCnt = 0;
 const _n = new THREE.Vector3();
 const _camT = new THREE.Vector3();
 
+// 海面高度与水深：地面比海面低多少
+function seaAt(x,z){ return waveHeight(x,z,elapsed); }
+function waterDepth(x,z){ return seaAt(x,z)-worldWalkHeight(x,z); }
+// 这一点能不能站人（不在墙里、不在障碍里）
+function standingSpot(x,z){
+  if(harborBuildingAt(x,z)) return false;
+  if(x>320){ const p=resolveHarborWalk(x,z,x,z,false); if(Math.hypot(p.x-x,p.z-z)>.05) return false; }
+  else for(const o of obstacles) if(Math.hypot(x-o.x,z-o.z)<o.r+BODY_R) return false;
+  return true;
+}
+// 落地/落水后回到站姿
+function groundPlayer(){
+  walk.climb=null; walk.air=false; walk.swim=false; walk.dive=false;
+  walk.vy=0; walk.fall=0; walk.y=worldWalkHeight(walk.x,walk.z); walk.groundY=walk.y;
+}
+function playerJump(){
+  if(mode!==MODE.WALK||walk.air||walk.climb||walk.swim) return;
+  walk.vy=JUMP_V; walk.air=true; walk.fall=0;
+}
+let swamOnce=false;
+function enterWater(sea){
+  const hard=walk.fall;
+  walk.swim=true; walk.air=false; walk.vy=0; walk.y=sea-.02; walk.stroke=0;
+  walk.dive=hard>5.2; walk.vx*=.4; walk.vz*=.4;
+  if(hard>1.6) startSplash(walk.x,sea,walk.z,.6+hard/8);
+  walk.fall=0;
+  if(!swamOnce){ swamOnce=true; showHint("游泳中 · 游向岸边就能上岸，靠近船按 F 上船"); }
+}
+// 从水里翻上岸：够得着的矮岸、码头、栈桥都能爬
+function tryClimbOut(force){
+  if(!force&&walk.speed<.8) return;
+  const dir=walk.speed>.4?Math.atan2(walk.vx,walk.vz):walk.heading, here=worldWalkHeight(walk.x,walk.z);
+  for(const d of [1.05,1.75,2.5,3.3]){
+    const x=walk.x+Math.sin(dir)*d, z=walk.z+Math.cos(dir)*d, g=worldWalkHeight(x,z);
+    if(g<SEA_LEVEL+.9||g>SEA_LEVEL+CLIMB_MAX) continue;   // 缓坡自己走上去，太高的崖爬不动
+    if(g-here<.9) continue;
+    if(!standingSpot(x,z)) continue;
+    walk.climb={x0:walk.x,z0:walk.z,y0:walk.y,x1:x,z1:z,y1:g,t:0,dur:.5};
+    return;
+  }
+}
+function placeWalkCamera(bob,sway){
+  camera.rotation.order="YXZ";
+  if(walk.tps) placeChaseCamera(walk.y, bob);
+  else{
+    const eye=walk.swim?.52:EYE;
+    camera.position.set(walk.x, walk.y+eye+bob, walk.z);
+    camera.rotation.set(walk.pitch, walk.yaw, sway);
+  }
+}
+
 function updateWalk(dt, t){
+  // 爬上岸：一段短促的动作，期间不接受移动输入
+  if(walk.climb){
+    const c=walk.climb; c.t+=dt;
+    const k=Math.min(1,c.t/c.dur), e=k*k*(3-2*k);
+    walk.x=c.x0+(c.x1-c.x0)*e; walk.z=c.z0+(c.z1-c.z0)*e;
+    walk.y=c.y0+(c.y1-c.y0)*Math.min(1,e*1.3);
+    walk.vx=walk.vz=0; walk.speed=0; walk.groundY=walk.y;
+    if(k>=1) groundPlayer();
+    placeWalkCamera(0,0);
+    return;
+  }
   let ix=0, iz=0;
   if(joy.active){
     const m = Math.hypot(joy.dx, joy.dy);
@@ -1712,14 +1791,16 @@ function updateWalk(dt, t){
   const mg = Math.hypot(ix,iz); if(mg>1){ ix/=mg; iz/=mg; }
 
   const sy=Math.sin(walk.yaw), cy=Math.cos(walk.yaw);
-  const run = keys["shift"] ? SPRINT : 1;
-  const tx = (-sy*(-iz) + cy*ix) * WALK_SPD * run;
-  const tz = (-cy*(-iz) - sy*ix) * WALK_SPD * run;
-  const k = Math.min(1, dt*15);
+  const run = keys["shift"] ? (walk.swim?1.32:SPRINT) : 1;
+  const top = (walk.swim?SWIM_SPD:WALK_SPD) * run;
+  const tx = (-sy*(-iz) + cy*ix) * top;
+  const tz = (-cy*(-iz) - sy*ix) * top;
+  // 空中只有一点点操控余地，水里划得慢
+  const k = Math.min(1, dt*(walk.air?2.4:walk.swim?3.4:15));
   walk.vx += (tx-walk.vx)*k; walk.vz += (tz-walk.vz)*k;
 
   let nx = walk.x + walk.vx*dt, nz = walk.z + walk.vz*dt;
-  for(let i=0;i<obstacles.length;i++){
+  if(!walk.swim) for(let i=0;i<obstacles.length;i++){
     const o=obstacles[i];
     const dx=nx-o.x, dz=nz-o.z, rr=o.r+BODY_R, d2=dx*dx+dz*dz;
     if(d2<rr*rr && d2>1e-6){
@@ -1727,11 +1808,11 @@ function updateWalk(dt, t){
       nx+=dx*p; nz+=dz*p; walk.vx*=0.6; walk.vz*=0.6;
     }
   }
-  // 不许走进海里太深
-  const gh = worldWalkHeight(nx,nz);
-  if(gh < -0.7){nx=walk.x;nz=walk.z;walk.vx=walk.vz=0;}
-  if(nz<-120&&nz>-304&&Math.abs(nx)>3.15&&Math.abs(walk.x)<3.7){nx=Math.sign(nx)*3.15;walk.vx=0;}
-  for(const n of residents){
+  // 游泳时不能游进陆地里；上岸靠走浅滩或翻上矮岸
+  if(walk.swim && worldWalkHeight(nx,nz) > SEA_LEVEL+0.45){ nx=walk.x; nz=walk.z; walk.vx*=.25; walk.vz*=.25; }
+  // 栈桥栏杆：走着不会掉下去，跳出去可以
+  if(!walk.air && nz<-120&&nz>-304&&Math.abs(nx)>3.15&&Math.abs(walk.x)<3.7){nx=Math.sign(nx)*3.15;walk.vx=0;}
+  if(!walk.swim) for(const n of residents){
     if(Math.abs(terrainH(nx,nz)-n.g.position.y)>2)continue;
     const dx=nx-n.g.position.x,dz=nz-n.g.position.z,d=Math.hypot(dx,dz),radius=1.0;
     if(d<radius){const angle=d>1e-5?Math.atan2(dz,dx):0;nx=n.g.position.x+Math.cos(angle)*radius;nz=n.g.position.z+Math.sin(angle)*radius;walk.vx*=.4;walk.vz*=.4;}
@@ -1748,8 +1829,10 @@ function updateWalk(dt, t){
     const pushed=pushOutOfHull(nx,nz,BODY_R*0.75);
     if(pushed){ nx=pushed.x; nz=pushed.z; walk.vx*=0.5; walk.vz*=0.5; }
   }
-  const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz);if(Math.abs(harborAdjusted.x-nx)>.001)walk.vx=0;if(Math.abs(harborAdjusted.z-nz)>.001)walk.vz=0;nx=harborAdjusted.x;nz=harborAdjusted.z;
+  // 在空中时不受码头边缘那圈护栏限制：可以纵身跳进港里
+  const harborAdjusted=resolveHarborWalk(walk.x,walk.z,nx,nz,true,!walk.air);if(Math.abs(harborAdjusted.x-nx)>.001)walk.vx=0;if(Math.abs(harborAdjusted.z-nz)>.001)walk.vz=0;nx=harborAdjusted.x;nz=harborAdjusted.z;
   walk.x=nx; walk.z=nz;
+  if(walk.swim){ const dr=Math.hypot(walk.x,walk.z); if(dr>SWIM_LIMIT){ walk.x=walk.x/dr*SWIM_LIMIT; walk.z=walk.z/dr*SWIM_LIMIT; walk.vx*=.2; walk.vz*=.2; } }
   syncHarborInterior();
   walk.speed=Math.hypot(walk.vx,walk.vz);
   if(walk.speed>0.4) walk.bob += dt*walk.speed*1.25;
@@ -1758,16 +1841,39 @@ function updateWalk(dt, t){
     const want=Math.atan2(walk.vx,walk.vz);
     walk.heading+=Math.atan2(Math.sin(want-walk.heading),Math.cos(want-walk.heading))*Math.min(1,dt*11);
   }
-  const bob=Math.sin(walk.bob*2)*0.045*Math.min(1,walk.speed/6);
-  const sway=Math.sin(walk.bob)*0.012*Math.min(1,walk.speed/6);
-  const ground = Math.max(worldWalkHeight(walk.x,walk.z), waveHeight(walk.x,walk.z,t)-0.2);
-  walk.groundY = ground;
-  camera.rotation.order="YXZ";
-  if(walk.tps) placeChaseCamera(ground, bob);
-  else{
-    camera.position.set(walk.x, ground + EYE + bob, walk.z);
-    camera.rotation.set(walk.pitch, walk.yaw, sway);
+  const bob=walk.air||walk.swim?0:Math.sin(walk.bob*2)*0.045*Math.min(1,walk.speed/6);
+  const sway=walk.air||walk.swim?0:Math.sin(walk.bob)*0.012*Math.min(1,walk.speed/6);
+
+  // ---------- 垂直方向：走、跳、坠落、落水、游泳 ----------
+  const ground = worldWalkHeight(walk.x,walk.z);
+  const sea = seaAt(walk.x,walk.z);
+  const deep = sea-ground > WADE;
+  if(walk.air){
+    walk.vy -= GRAVITY*dt;
+    walk.y += walk.vy*dt;
+    if(walk.vy<0) walk.fall = Math.max(walk.fall, -walk.vy);
+    if(walk.y <= (deep?sea-.12:ground)){
+      if(deep) enterWater(sea);
+      else{ walk.y=ground; walk.air=false; walk.vy=0; walk.fall=0; walk.dive=false; }
+    }
+  }else if(walk.swim){
+    walk.stroke += dt*(2.4+Math.min(1,walk.speed/SWIM_SPD)*5.6);
+    walk.y += ((sea-.02)-walk.y)*Math.min(1,dt*7);
+    if(walk.dive&&walk.stroke>2.2) walk.dive=false;
+    if(!deep){ walk.swim=false; walk.dive=false; walk.y=ground; }   // 踩到浅滩就站起来往岸上走
+    else tryClimbOut();
+  }else{
+    const drop = 0.42 + walk.speed*dt*1.4;
+    if(Math.abs(ground-walk.y) > 6) walk.y=ground;                  // 换区域传送后直接落地
+    else if(ground < walk.y-drop){ walk.air=true; walk.vy=0; walk.fall=0; }  // 走出边沿就往下掉
+    else{
+      walk.y += (ground-walk.y)*Math.min(1,dt*18);
+      if(Math.abs(ground-walk.y)<.02) walk.y=ground;
+      if(deep){ walk.swim=true; walk.stroke=0; walk.y=sea-.02; if(!swamOnce){swamOnce=true;showHint("游泳中 · 游向岸边就能上岸，靠近船按 F 上船");} }
+    }
   }
+  walk.groundY = walk.y;
+  placeWalkCamera(bob,sway);
 }
 
 /* 第三人称跟随镜头：从肩点向后拉，撞到楼板、墙或街景就自动收近 */
@@ -1781,13 +1887,13 @@ function chaseBlocked(x,y,z){
     for(const r of b.collisionFloors[harborFloor]) if(harborRectContains({x:lx,z:lz},r,0.3)) return true;
     return false;
   }
-  if(x>320){ for(const r of harborNearbySolids(x,z,1.4)) if(harborRectContains({x,z},r,0.3)) return true; return false; }
+  if(x>320){ for(const r of harborNearbySolids(x,z,1.4)) if(!r.edge&&harborRectContains({x,z},r,0.3)) return true; return false; }
   for(const o of obstacles){ const dx=x-o.x, dz=z-o.z; if(dx*dx+dz*dz < (o.r+0.3)*(o.r+0.3)) return true; }
   return false;
 }
 // Trace the actual final camera position, including floor clearance. No minimum distance overrides a hit.
 function safeChasePosition(anchor,dir,distance){
- const at=d=>{const x=anchor.x+dir.x*d,z=anchor.z+dir.z*d;return {x,y:Math.max(anchor.y+dir.y*d,worldWalkHeight(x,z)+.5),z};};
+ const at=d=>{const x=anchor.x+dir.x*d,z=anchor.z+dir.z*d;return {x,y:Math.max(anchor.y+dir.y*d,worldWalkHeight(x,z)+.5,seaAt(x,z)+.55),z};};
  const blocked=p=>chaseBlocked(p.x,p.y,p.z);
  if(blocked(at(0)))return null;
  const steps=Math.max(1,Math.ceil(distance/.12));let clear=0;
@@ -1800,7 +1906,7 @@ function safeChasePosition(anchor,dir,distance){
 }
 function placeChaseCamera(ground, bob){
  const y=walk.yaw,p=walk.pitch,cp=Math.cos(p),sp=Math.sin(p);
- const center={x:walk.x,y:ground+1.55+bob,z:walk.z};
+ const center={x:walk.x,y:ground+(walk.swim?.62:1.55)+bob,z:walk.z};
  const shoulder={x:center.x+Math.cos(y)*.42,y:center.y,z:center.z-Math.sin(y)*.42};
  const dir={x:Math.sin(y)*cp,y:-sp,z:Math.cos(y)*cp};
  const want=activeHarborBuilding?Math.min(walk.camDist,3.6):walk.camDist;
@@ -4551,7 +4657,7 @@ function focusRegion(next){
  $('ro-sub').textContent=next==='park'?'选一个项目，观景或乘坐':'跨海栈桥连接两岛 · 可步行或开船往来';
  updateRegionUi();
 }
-function parkEntry(){parkRide=null;region='park';setMode(MODE.WALK);walk.x=0;walk.z=-437;walk.yaw=0;walk.pitch=-.03;walk.vx=walk.vz=0;faceAway();updateRegionUi();showHint('欢迎来到星辉游乐岛 · 拖动环顾，WASD 移动');}
+function parkEntry(){parkRide=null;region='park';setMode(MODE.WALK);walk.x=0;walk.z=-437;walk.yaw=0;walk.pitch=-.03;walk.vx=walk.vz=0;faceAway();groundPlayer();updateRegionUi();showHint('欢迎来到星辉游乐岛 · 拖动环顾，WASD 移动');}
 function focusAttraction(){
  const r=selectedAttraction();parkRide=null;region='park';setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.copy(resortWorldPoint(r.target.x,r.target.y,r.target.z));ctrl.tDist=Math.max(25,r.dist*resortScale*(innerWidth<560?1.5:1));ctrl.tPhi=1.0;
  $('ro-name').textContent=r.name;$('ro-sub').textContent=r.sub+' · 可拖动环顾';updateRegionUi();
@@ -4559,7 +4665,7 @@ function focusAttraction(){
 function leaveParkRide(){
  const back=rideReturn;parkRide=null;region='park';setMode(MODE.WALK);
  if(back){walk.x=back.x;walk.z=back.z;walk.yaw=back.yaw;}else{walk.x=0;walk.z=-437;walk.yaw=0;}faceAway();
- walk.pitch=0;walk.vx=walk.vz=0;parkModule.sound.setWind(0);updateRegionUi();
+ walk.pitch=0;walk.vx=walk.vz=0;groundPlayer();parkModule.sound.setWind(0);updateRegionUi();
 }
 function rideAttraction(){
  if(parkRide){leaveParkRide();return;}
@@ -4593,7 +4699,7 @@ function toggleResortAudio(){const on=Snd.isOn();if(parkModule.sound.isOn()!==on
 $('region-island').onclick=()=>focusRegion('island');$('region-park').onclick=()=>focusRegion('park');$('region-all').onclick=()=>focusRegion('all');
 $('park-enter').onclick=parkEntry;$('attraction-select').addEventListener('change',focusAttraction);$('ride-action').onclick=rideAttraction;
 $('brand').addEventListener('click',toggleResortAudio);
-$('travel-action').onclick=()=>landShip();
+$('travel-action').onclick=()=>leaveShip();
 // 面板上的「码头出海」是把船叫到这个码头来；平时船停在你上次靠岸的地方
 $('park-sail').onclick=()=>summonShip(224,-475,Math.PI/2,'park');
 updateRegionUi();
@@ -5003,9 +5109,10 @@ function compileHarborCollisions(){
   }
  }
  // The stone quay and timber pier are level platforms; their edges are not ramps.
- outside.push({x:329.5,z:-305,w:1,d:430},{x:950.5,z:-305,w:1,d:430},{x:640,z:-520.5,w:620,d:1},
-  {x:478.25,z:-89.5,w:296.5,d:1},{x:799.75,z:-89.5,w:300.5,d:1},
-  {x:626.25,z:-56,w:.5,d:68},{x:649.75,z:-56,w:.5,d:68},{x:638,z:-21.75,w:23,d:.5});
+ // edge:true 表示这是站着不会掉下去的岸沿；跳起来时不拦人，车永远拦
+ outside.push({x:329.5,z:-305,w:1,d:430,edge:true},{x:950.5,z:-305,w:1,d:430,edge:true},{x:640,z:-520.5,w:620,d:1,edge:true},
+  {x:478.25,z:-89.5,w:296.5,d:1,edge:true},{x:799.75,z:-89.5,w:300.5,d:1,edge:true},
+  {x:626.25,z:-56,w:.5,d:68,edge:true},{x:649.75,z:-56,w:.5,d:68,edge:true},{x:638,z:-21.75,w:23,d:.5,edge:true});
  return compactHarborRects(outside);
 }
 const harborCollisionWorld=compileHarborCollisions();
@@ -5064,13 +5171,13 @@ function harborPeopleColliders(inside){
  for(const v of harborStaff){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
  return result;
 }
-function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true){
+function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true,includeEdges=true){
  if(Math.max(oldX,x)<320)return {x,z};
  // 走到某座大建筑跟前时，用它自己的墙（门洞是真的缺口）换掉那块实心占地
  const inside=harborBuildingAt(oldX,oldZ)||harborBuildingAt(x,z);
  const open=harborLandmarks.filter(b=>harborNearLandmark(b,oldX,oldZ)||harborNearLandmark(b,x,z));
  const rects=[];
- for(const r of harborCollisionWorld) if(!r.landmark||!open.some(b=>b.id===r.landmark)) rects.push(r);
+ for(const r of harborCollisionWorld) if((!r.landmark||!open.some(b=>b.id===r.landmark))&&(includeEdges||!r.edge)) rects.push(r);
  for(const b of open){
   const floor=b===inside?harborFloor:0;
   for(const r of b.worldFloors[floor]) rects.push(r);
@@ -5177,13 +5284,13 @@ for(const b of harborBuildings.filter(b=>!b.decorative)){const o=document.create
 function harborChosen(){return harborBuildings.find(b=>b.id===harborAttractionSelect.value&&!b.decorative)||harborBuildings[0];}
 function closeHarborInterior(){if(activeHarborBuilding){activeHarborBuilding.doorOpen=false;activeHarborBuilding.light.intensity=0;}activeHarborBuilding=null;harborFloor=0;document.body.classList.remove('inside-harbor');$('harbor-exit').hidden=true;}
 function visitHarbor(){
- closeHarborInterior();region='harbor';setMode(MODE.WALK);walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=.06;walk.vx=walk.vz=0;faceAway();updateRegionUi();showHint('维多利亚港 · 沿海滨大道步行，走到大门就能直接进去');
+ closeHarborInterior();region='harbor';setMode(MODE.WALK);walk.x=638;walk.z=-67;walk.yaw=0;walk.pitch=.06;walk.vx=walk.vz=0;faceAway();groundPlayer();updateRegionUi();showHint('维多利亚港 · 沿海滨大道步行，走到大门就能直接进去');
 }
 function focusHarbor(){
  closeHarborInterior();region='harbor';setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(618,12,-196);ctrl.tDist=innerWidth<560?285:220;ctrl.tTheta=.62;ctrl.tPhi=1.26;updateRegionUi();roName.textContent='旧维多利亚港';roSub.textContent='约 1900—1920 年风格 · 五座建筑可入内';
 }
-function strollHarbor(){visitHarbor();walk.x=638;walk.z=-126;walk.yaw=.42;walk.pitch=-.08;faceAway();updateWalk(0,0);showHint('WASD 沿街漫步 · 左上「维多利亚港」打开建筑导览');}
-function goHarborBuilding(){visitHarbor();const b=harborChosen();walk.x=b.entry.x;walk.z=b.entry.z+2;walk.yaw=0;walk.pitch=.04;faceAway();showHint(b.name+' · 往前走就进去了，无需按键');}
+function strollHarbor(){visitHarbor();walk.x=638;walk.z=-126;walk.yaw=.42;walk.pitch=-.08;faceAway();groundPlayer();updateWalk(0,0);showHint('WASD 沿街漫步 · 左上「维多利亚港」打开建筑导览');}
+function goHarborBuilding(){visitHarbor();const b=harborChosen();walk.x=b.entry.x;walk.z=b.entry.z+2;walk.yaw=0;walk.pitch=.04;faceAway();groundPlayer();showHint(b.name+' · 往前走就进去了，无需按键');}
 // 跨过门槛就算进屋，不再有按键和瞬移；这里只负责界面状态
 function beginHarborInterior(b){
  activeHarborBuilding=b;harborFloor=0;
@@ -5314,7 +5421,7 @@ function animateRemotePlayers(dt,t){
 }
 function localOnlinePose(){
  const traveling=journeys?.getPose();if(traveling)return traveling;
- let x=walk.x,y=walk.groundY,z=walk.z,heading=walk.heading,speed=walk.speed,kind=mode;
+ let x=walk.x,y=walk.y,z=walk.z,heading=walk.heading,speed=walk.speed,kind=walk.swim?'swim':mode;
  if(mode===MODE.DRIVE){x=car.x;y=car.y;z=car.z;heading=car.yaw;speed=Math.abs(car.spd);}
  else if(mode===MODE.SAIL){x=ship.x;y=waveHeight(ship.x,ship.z,performance.now()/1000)+.4;z=ship.z;heading=ship.yaw;speed=Math.abs(ship.spd);}
  else if(mode===MODE.FISH){x=fish.originX;y=fish.originY-1.7;z=fish.originZ;heading=fish.yaw;speed=0;}
@@ -5327,12 +5434,44 @@ const onlineWorld=window.AstraOnline?.init({
  onPeerLeave:id=>{removeRemotePlayer(id);journeys?.onPeerLeave(id);}
 });
 
+/* ---------- 落水的水花 ---------- */
+const splashGroup=new THREE.Group();splashGroup.visible=false;splashGroup.name='水花';scene.add(splashGroup);
+const splashRing=new THREE.Mesh(new THREE.RingGeometry(.55,.95,24),new THREE.MeshBasicMaterial({color:0xe9f7f8,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
+splashRing.rotation.x=-Math.PI/2;splashGroup.add(splashRing);
+const splashDrops=[];
+for(let i=0;i<9;i++){
+ const d=new THREE.Mesh(G.sph(.13,6,5),new THREE.MeshBasicMaterial({color:0xeaf7f8,transparent:true,opacity:0,depthWrite:false}));
+ const a=i/9*6.2832;d.userData={vx:Math.cos(a)*(1.5+Math.random()),vz:Math.sin(a)*(1.5+Math.random()),vy:3.2+Math.random()*2.1};
+ splashGroup.add(d);splashDrops.push(d);
+}
+let splashT=1e3,splashPower=1;
+function startSplash(x,y,z,power){
+ splashGroup.position.set(x,y,z);splashT=0;splashPower=Math.max(.6,Math.min(2,power));
+ splashGroup.visible=true;Snd.splash(splashPower);
+}
+function updateSplash(dt){
+ if(!splashGroup.visible)return;
+ splashT+=dt;const k=splashT/.85;
+ if(k>=1){splashGroup.visible=false;return;}
+ const s=(.5+k*3.1)*splashPower;
+ splashRing.scale.set(s,s,1);splashRing.material.opacity=(1-k)*.5;
+ for(const d of splashDrops){
+  const u=d.userData,tt=splashT*1.4,y=(u.vy*tt-9*tt*tt)*splashPower;
+  d.position.set(u.vx*tt*splashPower,y,u.vz*tt*splashPower);
+  d.material.opacity=Math.max(0,(1-k)*.75);d.visible=y>0;
+ }
+}
+
 function animatePlayer(dt,t){
  const show = mode===MODE.WALK && walk.tps && Math.hypot(camera.position.x-walk.x,camera.position.z-walk.z)>.75;
  player.g.visible=show;
  if(!show)return;
  player.g.position.set(walk.x, walk.groundY, walk.z);
  player.g.rotation.y=walk.heading;
+ // 游泳、跳跃、爬上岸各有各的姿势
+ if(walk.swim||walk.air||walk.climb){ poseInAir(t); return; }
+ player.body.rotation.y=0;
+ player.arms[0].pivot.rotation.z=player.arms[1].pivot.rotation.z=0;
  const gait=Math.min(1, walk.speed/(WALK_SPD*0.72));
  const phase=walk.bob*2.05;
  const swing=Math.sin(phase)*(0.24+0.46*gait);
@@ -5347,6 +5486,50 @@ function animatePlayer(dt,t){
  player.body.position.y=gait>0.05 ? Math.abs(Math.sin(phase))*0.05*gait : Math.sin(t*1.5)*0.012;
  player.body.rotation.z=Math.sin(phase)*0.035*gait;
  player.body.rotation.x=gait*0.09;
+}
+// 水里趴着划水；空中收腿；跳水时双臂过顶；爬岸时向上够
+function poseInAir(t){
+ const arms=player.arms,legs=player.legs;
+ player.body.rotation.y=0;
+ if(walk.swim){
+  const s=walk.stroke;
+  player.body.rotation.x=1.34;                       // 趴在水面上
+  player.body.rotation.z=Math.sin(s)*.1;
+  player.body.position.y=.08+Math.sin(s*2)*.03;
+  arms[0].pivot.rotation.x=s;arms[1].pivot.rotation.x=s+Math.PI;   // 轮流划水
+  arms[0].pivot.rotation.z=-.32;arms[1].pivot.rotation.z=.32;
+  arms[0].elbow.rotation.x=arms[1].elbow.rotation.x=-.28;
+  const kick=Math.sin(s*1.8)*.26;                    // 打腿
+  legs[0].pivot.rotation.x=kick;legs[1].pivot.rotation.x=-kick;
+  legs[0].knee.rotation.x=Math.max(0,kick)*.5;legs[1].knee.rotation.x=Math.max(0,-kick)*.5;
+  return;
+ }
+ if(walk.climb){
+  player.body.rotation.x=.35;player.body.rotation.z=0;player.body.position.y=.05;
+  arms[0].pivot.rotation.x=-2.5;arms[1].pivot.rotation.x=-2.2;
+  arms[0].pivot.rotation.z=-.25;arms[1].pivot.rotation.z=.25;
+  arms[0].elbow.rotation.x=arms[1].elbow.rotation.x=-.9;
+  legs[0].pivot.rotation.x=-.7;legs[1].pivot.rotation.x=-.25;
+  legs[0].knee.rotation.x=1.2;legs[1].knee.rotation.x=.6;
+  return;
+ }
+ if(walk.dive){                       // 跳水：身体前倾，双臂并拢过顶
+  player.body.rotation.x=.95;player.body.rotation.z=0;player.body.position.y=.1;
+  arms[0].pivot.rotation.x=arms[1].pivot.rotation.x=-2.9;
+  arms[0].pivot.rotation.z=-.12;arms[1].pivot.rotation.z=.12;
+  arms[0].elbow.rotation.x=arms[1].elbow.rotation.x=0;
+  legs[0].pivot.rotation.x=legs[1].pivot.rotation.x=.08;
+  legs[0].knee.rotation.x=legs[1].knee.rotation.x=0;
+  return;
+ }
+ const rise=Math.max(-1,Math.min(1,walk.vy/6));
+ player.body.rotation.x=-rise*.12;player.body.rotation.z=0;
+ player.body.position.y=Math.sin(t*1.5)*.012;
+ arms[0].pivot.rotation.x=arms[1].pivot.rotation.x=-.42-rise*.55;   // 双臂张开保持平衡
+ arms[0].pivot.rotation.z=-1.02;arms[1].pivot.rotation.z=1.02;
+ arms[0].elbow.rotation.x=arms[1].elbow.rotation.x=-.45;
+ legs[0].pivot.rotation.x=-.45+rise*.25;legs[1].pivot.rotation.x=-.1;
+ legs[0].knee.rotation.x=1.05;legs[1].knee.rotation.x=.35;
 }
 
 /* ---------- 一辆能开的车 ---------- */
@@ -5484,7 +5667,8 @@ function updateDrive(dt,t){
 }
 
 /* ---------- 上下车 ---------- */
-const vehicleBtn=$('vehicle-interact');
+const vehicleBtn=$('vehicle-interact'), jumpBtn=$('jump-button');
+jumpBtn.onclick=()=>jumpAction();
 let vehicleNear=false;
 function carExitSpot(){
  const h=vehicleHalfExtents(car.yaw);
@@ -5504,18 +5688,21 @@ function enterCar(){
 }
 function exitCar(){
  if(mode!==MODE.DRIVE)return;
- const spot=carExitSpot();if(!spot){showHint('车旁空间不足，挪开一点再下车');return;}
+ // 挤不出空位也照样下车，落到车边由脚下的地面接着
+ const h=vehicleHalfExtents(car.yaw), side=car.yaw+Math.PI/2;
+ const spot=carExitSpot()||{x:car.x+Math.sin(side)*(h.x+1.25),z:car.z+Math.cos(side)*(h.x+1.25)};
  car.spd=0; car.wheel=0; car.steer=0;
  setMode(MODE.WALK);
- region='harbor';
+ region=regionAt(spot.x,spot.z);
  walk.x=spot.x; walk.z=spot.z; walk.vx=walk.vz=0;
  walk.yaw=car.yaw+Math.PI; walk.heading=car.yaw;
+ groundPlayer();
  updateRegionUi();
  showHint('下车 · 走近车身按 F 再上车');
 }
 function toggleVehicle(){
  if(mode===MODE.DRIVE)exitCar();
- else if(mode===MODE.SAIL)landShip();
+ else if(mode===MODE.SAIL)leaveShip();
  else if(mode===MODE.WALK&&shipNear&&!vehicleNear)boardShip();
  else enterCar();
 }
@@ -5538,67 +5725,44 @@ function pushOutOfHull(x,z,radius){
  if(d<1e-4)return {x:x+cs*want,z:z-sn*want};
  return {x:x+px/d*(want-d),z:z+pz/d*(want-d)};
 }
-// 能站人的干地：沙滩、栈桥或码头。港区只认平台，不把人丢在海堤外的斜坡上
-function landingClear(x,z,minHeight){
- if(worldWalkHeight(x,z)<minHeight)return false;
- if(harborBuildingAt(x,z))return false;
- if(Math.abs(x-car.x)<CAR_R+BODY_R&&Math.abs(z-car.z)<CAR_R+BODY_R)return false;
- for(const o of obstacles)if(Math.hypot(x-o.x,z-o.z)<o.r+BODY_R)return false;
- if(shipHullDistance(x,z)<BODY_R)return false;
- const p=resolveHarborWalk(x,z,x,z,false);
- return Math.hypot(p.x-x,p.z-z)<.05;
-}
-function shipLandingSpot(){
- for(const minHeight of [3.5,0.05]){
-  for(let r=SHIP_HALF_WIDTH+1.6;r<=22;r+=2){
-   for(let i=0;i<36;i++){
-    // 从船头方向开始，左右交替绕船找
-    const a=ship.yaw+(i%2?-1:1)*Math.ceil(i/2)*Math.PI/18;
-    const x=ship.x+Math.sin(a)*r,z=ship.z+Math.cos(a)*r;
-    if(minHeight<3&&x>320)continue;
-    if(landingClear(x,z,minHeight))return {x,z,region:regionAt(x,z)};
-   }
+// 直接从船舷迈下去：旁边是岸就踩上去，是水就跳下去游
+function shipStepOff(){
+ const wet=[];
+ for(const a of [ship.yaw-Math.PI/2, ship.yaw+Math.PI/2, ship.yaw+Math.PI, ship.yaw]){
+  for(const d of [SHIP_HALF_WIDTH+1.15, SHIP_HALF_WIDTH+2.6]){
+   const x=ship.x+Math.sin(a)*d, z=ship.z+Math.cos(a)*d;
+   if(harborBuildingAt(x,z)) continue;
+   const p=resolveHarborWalk(ship.x,ship.z,x,z,false);
+   if(Math.hypot(p.x-x,p.z-z)>.05) continue;               // 舷外是墙
+   const g=worldWalkHeight(x,z);
+   // 沙滩、矮码头一步就跨上去；高过船舷就跳进水里，再游上岸
+   if(g>SEA_LEVEL+.35){ if(g<SEA_LEVEL+CLIMB_MAX&&standingSpot(x,z)) return {x,z,y:g,dry:true,region:regionAt(x,z)}; continue; }
+   wet.push({x,z,y:seaAt(x,z),dry:false,region:regionAt(x,z)});
   }
  }
- return null;
+ return wet[0]||null;
 }
-const PARK_PIER={x:199,z:-475,w:39,d:7};
-function mooringClear(x,z,spot){
- if(hullDistanceFrom(x,z,ship.yaw,spot.x,spot.z)<BODY_R+1.2)return false;
- const sn=Math.sin(ship.yaw),cs=Math.cos(ship.yaw);
- for(const k of [-3.5,0,3.5])if(terrainH(x+sn*k,z+cs*k)>-1.2)return false;
- if(harborRectContains({x,z},PARK_PIER,SHIP_HALF_WIDTH+.3))return false;
- if(x>320)for(const r of harborCollisionWorld)if(harborRectContains({x,z},r,SHIP_HALF_WIDTH+.3))return false;
- // 静屿码头：船身离栈桥轴线远一点
- const along=x*DOCK_DIR.x+z*DOCK_DIR.y,across=Math.abs(-x*DOCK_DIR.y+z*DOCK_DIR.x);
- if(along>DOCK_SHORE-12&&along<DOCK_END+SHIP_HALF_LENGTH&&across<SHIP_HALF_WIDTH+3.8)return false;
- return true;
-}
-// 靠岸后船慢慢往岸边系上，停到离下船点最近的深水处
-function moorShipNear(spot){
- const dx=ship.x-spot.x,dz=ship.z-spot.z,d=Math.hypot(dx,dz);
- let best=null;
- for(let s=d-.5;s>=SHIP_HALF_WIDTH+1.5;s-=.5){
-  const x=spot.x+dx/d*s,z=spot.z+dz/d*s;
-  if(!mooringClear(x,z,spot))break;
-  best={x,z};
- }
- ship.moor=best;
-}
-function landShip(){
- if(mode!==MODE.SAIL)return;
- const spot=shipLandingSpot();
- if(!spot){showHint('这里离岸太远 · 靠近沙滩或码头再靠岸');return;}
+function leaveShip(){
+ if(mode!==MODE.SAIL) return;
+ const spot=shipStepOff();
+ if(!spot){ showHint('船两侧都靠死了 · 退开一点再下船'); return; }
  ship.spd=0; ship.turn=0;
  setMode(MODE.WALK);
  region=spot.region;
  walk.x=spot.x; walk.z=spot.z; walk.vx=walk.vz=0;
- // 镜头朝向陆地，背对船
- walk.yaw=Math.atan2(ship.x-spot.x,ship.z-spot.z); faceAway();
- walk.pitch=-0.05; walk.groundY=worldWalkHeight(walk.x,walk.z);
- moorShipNear(spot);
+ walk.yaw=Math.atan2(spot.x-ship.x,spot.z-ship.z); faceAway();
+ walk.pitch=-0.05;
+ groundPlayer();
+ const sea=seaAt(spot.x,spot.z), rise=spot.y-sea;
+ if(!spot.dry){ walk.swim=true; walk.y=spot.y-.02; walk.stroke=0; swamOnce=true; startSplash(spot.x,spot.y,spot.z,.9); }
+ else if(rise>1.9){
+  // 岸比船舷高就翻上去
+  const mx=(ship.x+spot.x)/2, mz=(ship.z+spot.z)/2;
+  walk.x=mx; walk.z=mz; walk.y=sea;
+  walk.climb={x0:mx,z0:mz,y0:sea,x1:spot.x,z1:spot.z,y1:spot.y,t:0,dur:.45};
+ }
  updateRegionUi();
- showHint('靠岸 · '+SHIP_PLACE[spot.region]+' · 船就停在这里，走近船身按 F 再上船');
+ showHint(!spot.dry?'跳下水了 · 游到岸边上岸，靠近船身按 F 上船':rise>1.9?'翻上码头 · 船就停在这里，走近船身按 F 再上船':'下船 · 船就停在这里，走近船身按 F 再上船');
 }
 function boardShip(){
  if(mode===MODE.SAIL)return;
@@ -5606,21 +5770,16 @@ function boardShip(){
  closeHarborInterior();
  setMode(MODE.SAIL);
  updateRegionUi();
- showHint(near?'上船了 · W 前进，A / D 转舵，靠近岸边按 F 靠岸':'回到停船处 · 船停在'+SHIP_PLACE[region]+'附近');
+ showHint(near?'上船了 · W 前进，A / D 转舵，按 F 下船':'回到停船处 · 船停在'+SHIP_PLACE[region]+'附近');
 }
 // 把船叫到某个码头：面板上的「码头出海」「港口出海」
 function summonShip(x,z,yaw,where){
  closeHarborInterior();
- ship.x=x; ship.z=z; ship.yaw=yaw; ship.spd=0; ship.moor=null;
+ ship.x=x; ship.z=z; ship.yaw=yaw; ship.spd=0;
  setMode(MODE.SAIL); region=where; updateRegionUi();
 }
+// 船没人开就停在原地随浪起伏
 function updateMooredShip(dt,t){
- if(ship.moor){
-  const dx=ship.moor.x-ship.x,dz=ship.moor.z-ship.z,remaining=Math.hypot(dx,dz);
-  const step=Math.min(remaining,dt*Math.max(2.5,remaining*1.6));
-  if(remaining<=step+1e-6){ship.x=ship.moor.x;ship.z=ship.moor.z;ship.moor=null;}
-  else{ship.x+=dx/remaining*step;ship.z+=dz/remaining*step;}
- }
  const h=waveHeight(ship.x,ship.z,t);
  boat.g.position.set(ship.x,h+0.4,ship.z);
  boat.g.rotation.order="YXZ";
@@ -5630,10 +5789,16 @@ function updateVoyage(dt){
  const btn=$('travel-action');
  if(mode!==MODE.SAIL){shipLanding=null;btn.hidden=true;landingAcc=1;return;}
  landingAcc+=dt;
- if(landingAcc>=0.15){landingAcc=0;shipLanding=shipLandingSpot();}
+ if(landingAcc>=0.12){landingAcc=0;shipLanding=shipStepOff();}
  btn.hidden=!!document.querySelector('dialog[open]');
- btn.disabled=!shipLanding;
- btn.textContent=shipLanding?'靠岸 · '+SHIP_PLACE[shipLanding.region]+(innerWidth>700?' · F':''):'靠近沙滩或码头再靠岸';
+ btn.disabled=false;
+ btn.textContent=(shipLanding&&shipLanding.dry?'靠岸下船':'跳下水')+(innerWidth>700?' · F':'');
+}
+// 空格：陆上起跳，水里翻身上岸
+function jumpAction(){
+ if(mode!==MODE.WALK||walk.climb)return;
+ if(walk.swim){ tryClimbOut(true); if(!walk.climb)showHint('游到岸边、码头或栈桥旁再上岸'); return; }
+ playerJump();
 }
 function toggleCameraView(){
  if(mode!==MODE.WALK)return;
@@ -5651,12 +5816,15 @@ function updateActors(dt,t){
  }
  if(mode!==MODE.SAIL)updateMooredShip(dt,t);
  updateVoyage(dt);
+ updateSplash(dt);
  const parkedBounds=vehicleHalfExtents(car.yaw);
  vehicleNear=mode===MODE.WALK&&!activeHarborBuilding&&Math.hypot(Math.max(0,Math.abs(walk.x-car.x)-parkedBounds.x),Math.max(0,Math.abs(walk.z-car.z)-parkedBounds.z))<2.2;
  shipNear=mode===MODE.WALK&&!activeHarborBuilding&&shipHullDistance(walk.x,walk.z)<3.6;
  const show = (vehicleNear || shipNear || mode===MODE.DRIVE) && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
  if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':vehicleNear?'上车 · 老爷车':'上船 · 帆船')+(innerWidth>700?' · F':'');
+ const jumpLabel=walk.swim?'上岸':'跳';
+ if(jumpBtn.textContent!==jumpLabel)jumpBtn.textContent=jumpLabel;
 }
 
 vehicleBtn.onclick=toggleVehicle;
@@ -5666,6 +5834,7 @@ addEventListener('keydown',e=>{
  const k=e.key.toLowerCase();
  if(k==='f')toggleVehicle();
  else if(k==='v')toggleCameraView();
+ else if(k===' '&&mode===MODE.WALK){e.preventDefault();jumpAction();}
 });
 
 // One renderer and one local avatar own the entire journey. Only the active region advances.
