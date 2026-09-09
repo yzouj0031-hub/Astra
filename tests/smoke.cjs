@@ -30,7 +30,7 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -378,13 +378,17 @@ function test(width,height){
   assert(a.plane.y>20,'Flying at the fairground is lifted over the wheel, not through it');
   assert(a.planeGroundAt(a.lighthousePos.x,a.lighthousePos.z)>a.terrainH(a.lighthousePos.x,a.lighthousePos.z)+20,'The lighthouse tower counts as height');}
  // Taxiing is water-only: the floats cannot ride up over the stone quay.
- {a.plane.x=640;a.plane.z=-80;a.plane.y=a.seaAt(640,-80)+a.PLANE_FLOAT;a.plane.water=true;
-  a.plane.yaw=Math.PI;a.plane.spd=18;a.plane.thr=.6;a.plane.pitch=0;a.plane.roll=0;
+ {a.setMode('fly');
+  a.plane.x=580;a.plane.z=-60;a.plane.y=a.seaAt(580,-60)+a.PLANE_FLOAT;a.plane.water=true;
+  a.plane.yaw=Math.PI;a.plane.spd=16;a.plane.thr=.6;a.plane.pitch=0;a.plane.roll=0;
+  assert(a.terrainH(580,-60)<-1,'Starting in open water off the quay');
+  const z0=a.plane.z;
   a.keys.shift=true;
-  for(let i=0;i<120;i++)a.updateFly(.02,i*.02);
+  for(let i=0;i<200;i++)a.updateFly(.02,i*.02);
   a.clearInput();
+  assert(a.plane.z<z0-10,`It really taxis (${(z0-a.plane.z).toFixed(0)}m travelled)`);
   assert(a.plane.water,'Still on the water');
-  assert(a.terrainH(a.plane.x,a.plane.z)<0,`The floats stop at the quay instead of taxiing onto it (z=${a.plane.z.toFixed(1)})`);}
+  assert(!a.planeOverLand(a.plane.x,a.plane.z),`The floats stop short of the quay instead of riding onto it (z=${a.plane.z.toFixed(1)}, surface ${a.worldWalkHeight(a.plane.x,a.plane.z).toFixed(2)})`);}
  // Abandoning the aircraft in mid-air over land must not park it inside the island.
  {a.plane.x=0;a.plane.z=-20;a.plane.y=180;a.plane.water=false;a.plane.yaw=Math.atan2(0,1);
   a.plane.spd=45;a.plane.pitch=0;a.plane.roll=0;a.plane.vy=0;
@@ -408,7 +412,15 @@ function test(width,height){
   a.plane.y=a.seaAt(656,-60)+a.PLANE_FLOAT;
   const spot=a.planeStepOff();
   assert(spot&&spot.dry,'Stepping off at the mooring lands on the timber jetty');
-  assert(a.worldWalkHeight(spot.x,spot.z)>4,`On the deck, not the ramp (${a.worldWalkHeight(spot.x,spot.z).toFixed(1)}m)`);}
+  assert(a.worldWalkHeight(spot.x,spot.z)>4,`On the deck, not the ramp (${a.worldWalkHeight(spot.x,spot.z).toFixed(1)}m)`);
+  // Wherever stepping off puts you, boarding has to reach back — the two distances must agree.
+  assert(Math.hypot(spot.x-a.plane.x,spot.z-a.plane.z)<a.PLANE_BOARD_R,
+    `The step-off spot is within boarding range (${Math.hypot(spot.x-a.plane.x,spot.z-a.plane.z).toFixed(2)}m vs ${a.PLANE_BOARD_R.toFixed(2)}m)`);
+  a.setMode('fly');a.leavePlane();
+  for(let i=0;i<20;i++)a.updateWalk(.05,i*.05);
+  for(let i=0;i<6;i++)a.updateActors(.05,i*.05);
+  assert(a.getPlaneNear(),'Standing where it put you, the aircraft can be boarded again');
+  assert(nodes.get('vehicle-interact').textContent.includes('上机'),'And the prompt says so');}
  // Touch controls: the throttle is held per finger, and there is a way to ease it off again.
  {a.setMode('fly');
   const btn=nodes.get('jump-button');
