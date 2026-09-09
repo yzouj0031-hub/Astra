@@ -246,8 +246,9 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 
 #vehicle-interact{position:fixed;bottom:226px;left:50%;transform:translateX(-50%);z-index:28;padding:12px 21px;border:1px solid #ffe6b866;border-radius:30px;background:#2c3f4b;color:#f6ecd6;box-shadow:0 5px 24px #052e3455;font-size:14px;white-space:nowrap}
 #jump-button{position:fixed;right:26px;bottom:206px;z-index:27;width:78px;height:78px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:13px;display:none;box-shadow:0 5px 24px #052e3455}
-@media(max-width:900px){body[data-mode=walk] #jump-button,body[data-mode=fly] #jump-button{display:block}}
-@media(max-width:560px){#jump-button{width:66px;height:66px;right:18px;bottom:198px;font-size:12px}}
+#brake-button{position:fixed;right:26px;bottom:296px;z-index:27;width:68px;height:68px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:12px;display:none;box-shadow:0 5px 24px #052e3455}
+@media(max-width:900px){body[data-mode=walk] #jump-button,body[data-mode=fly] #jump-button,body[data-mode=fly] #brake-button{display:block}}
+@media(max-width:560px){#jump-button{width:66px;height:66px;right:18px;bottom:198px;font-size:12px}#brake-button{width:60px;height:60px;right:18px;bottom:276px;font-size:11px}}
 #greet-person{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:28;padding:13px 22px;border:1px solid #fff0cd66;border-radius:30px;background:#f1e8d2;color:#285056;box-shadow:0 5px 24px #052e3440;font-size:14px;white-space:nowrap}
 #resident-speech{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:27;width:min(390px,calc(100vw - 40px));padding:20px 24px;background:#f1e8d2f5;color:#285056;border-radius:18px;box-shadow:0 12px 36px #092d3c30;pointer-events:none}
 #resident-speech b{font-size:13px;font-weight:500;color:#64786e}#resident-speech p{font:16px/1.9 "Microsoft YaHei",sans-serif;margin-top:9px}
@@ -292,12 +293,13 @@ body[data-mode=walk][data-region=harbor]:not(.inside-harbor) #harbor-panel{displ
 <button class="pill" id="help-button" aria-expanded="false">? 怎么玩</button>
 </div>
 <aside id="island-map" aria-label="海岛地图"><div class="map-heading"><span>星屿导览</span><span id="map-north">N ↑</span></div><canvas id="map-canvas" width="288" height="248" aria-label="地图显示灯塔、营地、码头与你的位置"></canvas><div id="map-caption">循着海岸，慢慢走。</div></aside>
-<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。<br><b>空格跳跃</b>；走进海里就开始游泳，从栈桥或岸沿跳下去会溅起水花。<br>游到岸边、码头或栈桥旁按空格翻上岸。</p></div><div class="guide-row"><b>02.5 / 游泳与跳水</b><p>海不再是墙：从沙滩直接走进水里，深了就自动开始游。<br>W / S 划水，Shift 加速，游回浅滩自己站起来走上岸。<br>站在栈桥、石砌岸沿或船上按空格跳下去，落水会有水花。<br>贴着码头或岸沿时按空格翻上去，手机点右下角「上岸」。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；帆船停在哪就从哪下船。<br>想一眼看完三片地方，就去港口开那架水上飞机。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>05.5 / 驾机翱翔</b><p>港口栈桥外泊着一架水上飞机。走到旁边按 <b>F</b> 上机，或点底栏「驾机翱翔」。<br><b>Shift</b> 加油门滑跑，速度过 110 km/h 拉 <b>W</b> 离水；<b>A / D</b> 压坡度转弯，<b>空格</b> 收油门。<br>空中松开油门会自己回到巡航，压满坡度一圈约一百米，正好绕静屿一周。<br>降落：收油门、压低机头贴着海面，落水后滑行停稳，按 <b>F</b> 下机。飞机停在哪就留在哪。<br>只能落在水面；擦到陆地会被顶起来掉速，不会摔。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—6 切换玩法 · 空格 跳跃 / 上岸 · V 切视角 · F 上下车、上下船、上下飞机 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
+<dialog id="help-dialog"><button class="dialog-close" aria-label="关闭玩法说明">×</button><span class="dialog-kicker">A LITTLE FIELD GUIDE</span><h2>在这里，随心就好。</h2><div class="guide-row"><b>01 / 俯瞰</b><p>拖动环绕小岛，滚轮或双指缩放。<br>按 R 开启或暂停自动环岛。</p></div><div class="guide-row"><b>02 / 漫步 · 出海</b><p>默认第三人称：镜头跟在角色身后，人物朝着实际移动方向转身。<br>WASD 或方向键移动，拖动转镜头，Shift 奔跑，滚轮拉远拉近。<br>按 V 在第三人称和第一人称之间切换。<br>手机用左侧摇杆移动、右侧拖动转镜头。<br>走近岛民，按 E 或点按钮打招呼。<br><b>空格跳跃</b>；走进海里就开始游泳，从栈桥或岸沿跳下去会溅起水花。<br>游到岸边、码头或栈桥旁按空格翻上岸。</p></div><div class="guide-row"><b>02.5 / 游泳与跳水</b><p>海不再是墙：从沙滩直接走进水里，深了就自动开始游。<br>W / S 划水，Shift 加速，游回浅滩自己站起来走上岸。<br>站在栈桥、石砌岸沿或船上按空格跳下去，落水会有水花。<br>贴着码头或岸沿时按空格翻上去，手机点右下角「上岸」。</p></div><div class="guide-row"><b>03 / 垂钓</b><p>抛竿后等待咬钩，再点提竿。<br>按住收线，张力变高时松手；空格也可以。</p></div><div class="guide-row"><b>04 / 星辉游乐岛</b><p>点「星辉乐园」选择项目，可观景、乘坐或入园漫步。<br>跨海栈桥连接两岛；帆船停在哪就从哪下船。<br>想一眼看完三片地方，就去港口开那架水上飞机。<br>点「群岛全景」看到整个世界。星夜会点亮乐园。</p></div><div class="guide-row"><b>05 / 旧维多利亚港</b><p>五座大建筑<b>直接走进去</b>：门是真的门洞，走到门口门自己开，跨过门槛就在屋里，不用按键、不会瞬移。<br>大厅内可自由走动；右侧楼梯走上二楼，靠近展牌按 E 阅读。<br>原路走出门就回到街上，也可以点「离开建筑」。</p></div><div class="guide-row"><b>05.5 / 驾机翱翔</b><p>港口栈桥外泊着一架水上飞机。走到旁边按 <b>F</b> 上机，或点底栏「驾机翱翔」。<br><b>Shift</b> 加油门滑跑，速度过 110 km/h 拉 <b>W</b> 离水；<b>A / D</b> 压坡度转弯，<b>空格</b> 收油门。<br>手机：按住右下「油门」滑跑，摇杆往回拉抬头，「收油门」下降。<br>空中松开油门会自己回到巡航，压满坡度一圈约一百米，正好绕静屿一周。<br>降落：收油门、压低机头贴着海面，落水后滑行停稳，按 <b>F</b> 下机。飞机停在哪就留在哪。<br>只能落在水面；擦到陆地会被顶起来掉速，不会摔。</p></div><div class="guide-row"><b>06 / 开车兜风</b><p>海滨大道上停着一辆老爷车。走到车边按 F 上车，或点底栏「开车兜风」。<br>W / S 油门与刹车倒车，A / D 转向，空格手刹，F 下车。<br>撞墙会被挡住并减速，行人会主动避开车头；夜里自动亮起车灯。</p></div><p class="guide-footer">1—6 切换玩法 · 空格 跳跃 / 上岸 · V 切视角 · F 上下车、上下船、上下飞机 · E 读展牌 · H 收起界面 · P 留张明信片<br>渔获与时间偏好只保存在这台设备。</p><button id="help-done" class="solid-button">知道了，去听海</button></dialog>
 <dialog id="photo-dialog"><button class="dialog-close" aria-label="关闭明信片">×</button><span class="dialog-kicker">POSTCARD FROM YOUR ISLAND</span><h2>把这一刻带走。</h2><img id="postcard" alt="当前小岛风景明信片"><a id="download-photo" class="solid-button" download="我的小岛-明信片.png">保存明信片 ↓</a></dialog>
 <dialog id="online-dialog"><button class="dialog-close" id="online-close" aria-label="关闭联机面板">×</button><span class="dialog-kicker">WANDER TOGETHER</span><h2>和朋友一起逛星屿。</h2><section id="online-setup"><div class="online-fields"><input id="online-name" maxlength="18" autocomplete="nickname" placeholder="你的名字"><input id="online-room-code" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="房间码"></div><div class="online-actions"><button id="online-create">创建新房间</button><button id="online-join" class="secondary">加入房间</button></div><p id="online-status">联机是可选功能；没有网络时仍可正常单机游玩。</p></section><section id="online-room" hidden><div class="online-room-head"><div><span>当前房间</span><br><strong id="online-current-code">--------</strong></div><span id="online-count">1 人在线</span></div><div id="online-peer-list" aria-label="在线玩家"></div><div id="online-chat-log" aria-live="polite" aria-label="房间聊天"></div><div class="online-chat-send"><input id="online-chat-input" maxlength="160" placeholder="说点什么……"><button id="online-chat-send">发送</button></div><div class="online-actions" style="margin-top:12px"><button id="online-copy" class="secondary">复制邀请链接</button><button id="online-leave" class="secondary">离开房间</button></div><p class="online-note">房间通过随机代码临时建立，不保存聊天。请只把邀请链接发给认识的人；本版本同步位置、朝向和在线状态，不同步碰撞、车辆归属或游乐设施进度。</p></section></dialog>
 <button id="greet-person" hidden>打个招呼 · E</button>
 <button id="vehicle-interact" hidden>上车 · F</button>
 <button id="jump-button" aria-label="跳跃或上岸">跳</button>
+<button id="brake-button" aria-label="收油门">收油门</button>
 <aside id="resident-speech" hidden role="status" aria-live="polite"><b id="resident-name"></b><p id="resident-words"></p></aside>
 <nav id="world-regions" aria-label="群岛区域"><button id="region-island" aria-pressed="true">静屿</button><button id="region-park" aria-pressed="false">星辉乐园</button><button id="region-harbor" aria-pressed="false">维多利亚港</button><button id="region-all" aria-pressed="false">群岛全景</button></nav>
 <section id="park-panel" hidden aria-label="游乐园项目"><div class="park-heading">星辉游乐岛 <span>听海，也听欢笑</span></div><label for="attraction-select">选择项目</label><select id="attraction-select"></select><div class="park-actions"><button id="ride-action">乘坐这个项目</button><button id="park-enter">入园漫步</button><button id="park-sail">码头出海</button></div><p>两岛由跨海栈桥相连 · 夜场随星夜亮灯</p></section>
@@ -1180,10 +1182,10 @@ const ship = {x:DOCK_DIR.x*(DOCK_SHORE+6)+Math.cos(DOCK_ANG+Math.PI/2)*10, z:DOC
 // 一架 1920 年代的水上飞机：停在港口栈桥外侧的水面上，滑跑起飞，落水靠泊
 const PLANE_STALL=18, PLANE_MAX=62, PLANE_ROTATE=30, PLANE_CEIL=340, PLANE_TRADE=38;
 const PLANE_ROLL_MAX=1.05, PLANE_PITCH_MAX=0.6, PLANE_FLOAT=2.0, PLANE_SPAN=6.2, PLANE_LEN=4.4;
-const PLANE_CRUISE=0.68, PLANE_EDGE=1500;
+const PLANE_CRUISE=0.68, PLANE_EDGE=1200;   // 有浪的海面到 1800 就没了，别飞到能看见接缝的地方
 const plane = {x:656, z:-60, y:0, yaw:0, pitch:0, roll:0, spd:0, vy:0, thr:0, spin:0,
                water:true, camYaw:0, camPitch:0.14, camDist:17, warn:0};
-let throttleHeld=false;   // 手机上按住「油门」
+let throttleHeld=false, brakeHeld=false;   // 手机上按住「油门」/「收油门」
 
 /* ---------- 输入 ---------- */
 const keys = {};
@@ -1651,7 +1653,7 @@ const MODE_INFO = {
   sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 停在哪里就在哪里下船":"W / S 前进后退 · A / D 转舵 · F 下船，停在哪下在哪"},
   fish:{n:"码头垂钓", s:"抛竿 → 咬钩提竿 → 按住收线"},
   drive:{n:"开车兜风", s:innerWidth<700?"左侧摇杆油门转向 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"},
-  fly:{n:"驾机翱翔", s:innerWidth<700?"摇杆拉杆压杆 · 按住「油门」加速":"W / S 拉起俯冲 · A / D 压坡度 · Shift 加油门 · 空格收油门 · F 下机"}
+  fly:{n:"驾机翱翔", s:innerWidth<700?"摇杆往回拉抬头 · 按住「油门」/「收油门」":"W / S 拉起俯冲 · A / D 压坡度 · Shift 加油门 · 空格收油门 · F 下机"}
 };
 function setMode(m){
   const prev = mode;
@@ -1713,7 +1715,7 @@ function setMode(m){
       plane.camYaw=0; plane.camPitch=0.14;
       region=regionAt(plane.x,plane.z);
     }
-    showHint(innerWidth<700?"推摇杆压机头 · 按住「油门」加速起飞":"Shift 加油门滑跑，速度够了拉 W 起飞 · 落水后按 F 下机");
+    showHint(innerWidth<700?"按住「油门」滑跑 · 速度够了往回拉摇杆抬机头":"Shift 加油门滑跑，速度够了拉 W 起飞 · 落水后按 F 下机");
   }else if(m===MODE.VIEW){
     ctrl.tTarget.set(0, 10, 0); ctrl.tDist = innerWidth<560?540:350;
   }
@@ -2060,7 +2062,7 @@ function updateFly(dt, t){
   if(keys["d"]||keys["arrowright"]) ix+=1;
   const climbIn=Math.max(-1,Math.min(1,-iz)), rollIn=Math.max(-1,Math.min(1,ix));
   // 油门：Shift 加、空格收，松开慢慢回到巡航
-  const push=(keys["shift"]?1:0)+(throttleHeld?1:0), ease=keys[" "]?1:0;
+  const push=(keys["shift"]?1:0)+(throttleHeld?1:0), ease=(keys[" "]?1:0)+(brakeHeld?1:0);
   if(push) plane.thr=Math.min(1,plane.thr+dt*0.35);
   else if(ease) plane.thr=Math.max(0,plane.thr-dt*0.5);
   else if(plane.water) plane.thr=Math.max(0,plane.thr-dt*0.35);   // 水面上松开油门就收车，滑行停下
@@ -2107,8 +2109,10 @@ function updateFly(dt, t){
     const seaNow=planeSurface(plane.x,plane.z), land=planeGroundAt(plane.x,plane.z);
     if(planeOverLand(plane.x,plane.z) && plane.y < land+3.4){
       // 擦着陆地：这是水上飞机，只会被顶起来掉速，不会摔
-      plane.y=land+3.4; plane.vy=Math.max(plane.vy,0);
-      plane.pitch=Math.max(plane.pitch,0.12); plane.spd*=1-Math.min(0.6,dt*2.2);
+      // 顶上去、给一点爬升率，掉速留个下限：擦到东西总能重新爬起来，不会贴着地面卡住
+      plane.y=land+3.4; plane.vy=Math.max(plane.vy,2.5);
+      plane.pitch=Math.max(plane.pitch,0.12);
+      plane.spd=Math.max(PLANE_ROTATE, plane.spd*(1-Math.min(0.5,dt*2.2)));
       if(plane.warn<=0){ plane.warn=3; showHint(land>12?"当心屋顶 · 拉起来":"拉起来 · 水上飞机只能落在水面"); }
     }else if(plane.y<=seaNow+PLANE_FLOAT){
       plane.y=seaNow+PLANE_FLOAT;
@@ -2122,7 +2126,8 @@ function updateFly(dt, t){
     }
   }
   plane.warn=Math.max(0,plane.warn-dt);
-  if(!plane.water && plane.spd<PLANE_STALL+2.5 && plane.warn<=0){ plane.warn=2.5; showHint("速度太低要失速 · 推机头、加油门"); }
+  // 只有还在高处慢下来才提醒失速；贴着水面收油门那是在降落，不该一路唠叨
+  if(!plane.water && plane.spd<PLANE_STALL+2.5 && plane.y-sea>34 && plane.warn<=0){ plane.warn=7; showHint("速度太低要失速 · 推机头、加油门"); }
 
   const nextRegion=regionAt(plane.x,plane.z);
   if(nextRegion!==region){ region=nextRegion; updateRegionUi(); }
@@ -2153,7 +2158,8 @@ function placeFlyCamera(dt){
   const floor=Math.max(seaAt(_camT.x,_camT.z), planeGroundAt(_camT.x,_camT.z))+1.6;
   if(_camT.y<floor) _camT.y=floor;
   camera.position.lerp(_camT, Math.min(1,dt*4.5));
-  camera.up.set(Math.sin(-plane.roll)*0.42,1,0).normalize();
+  const bank=Math.sin(-plane.roll)*0.42;   // 把倾斜转到机头方向上，不然只有朝北飞时地平线才是对的
+  camera.up.set(bank*Math.cos(plane.yaw),1,-bank*Math.sin(plane.yaw)).normalize();
   camera.lookAt(plane.x, plane.y+1.1, plane.z);
 }
 
@@ -2380,7 +2386,7 @@ function updateAtmosphere(dt,t){
  _a.set(...p.dir).normalize();SUN_DIR.lerp(_a,k).normalize();skyU.sunD.value.copy(SUN_DIR);seaUniforms.uSunD.value.copy(SUN_DIR);
  starMat.opacity+=(p.stars-starMat.opacity)*k;moonMat.opacity=starMat.opacity;
  stars.position.set(camera.position.x,0,camera.position.z);stars.rotation.y=t*.001;
- seaSkirt.material.color.setHex(0x245b70).multiply(seaUniforms.uMood.value);
+ seaSkirt.material.color.copy(seaUniforms.uDeep.value).multiply(seaUniforms.uMood.value);
  const night=starMat.opacity/.9;beaconLight.intensity=night*2.5;dockLight.intensity=night*1.8;
  beamMat.opacity=night*.075;beamPivot.rotation.y=t*.22;cloudMat.opacity=.78-night*.58;
  tint(cloudMat.color,periodIndex===1?0xf7ccaf:periodIndex===2?0x6b829f:0xfff8e7,k);
@@ -2390,7 +2396,7 @@ selectPeriod(periodIndex);
 $('time-toggle').addEventListener('click',()=>{selectPeriod((periodIndex+1)%3);showHint(periods[periodIndex].caption);});
 $('sound-toggle').addEventListener('click',()=>$('brand').click());
 
-function clearInput(){Object.keys(keys).forEach(k=>delete keys[k]);joyRelease();onUp();lookId=null;castRelease();throttleHeld=false;}
+function clearInput(){Object.keys(keys).forEach(k=>delete keys[k]);joyRelease();onUp();lookId=null;castRelease();throttleHeld=brakeHeld=false;throttlePointer=brakePointer=null;}
 addEventListener('blur',clearInput);
 document.addEventListener('visibilitychange',()=>{clearInput();if(!document.hidden)clock.getDelta();});
 dom.addEventListener('touchcancel',clearInput,{passive:true});
@@ -5911,11 +5917,18 @@ function updateDrive(dt,t){
 }
 
 /* ---------- 上下车 ---------- */
-const vehicleBtn=$('vehicle-interact'), jumpBtn=$('jump-button');
+const vehicleBtn=$('vehicle-interact'), jumpBtn=$('jump-button'), brakeBtn=$('brake-button');
 jumpBtn.onclick=()=>{ if(mode!==MODE.FLY) jumpAction(); };
-jumpBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY){ throttleHeld=true; e.preventDefault(); } });
-addEventListener('pointerup',()=>{ throttleHeld=false; });
-addEventListener('pointercancel',()=>{ throttleHeld=false; });
+// 按住的是哪根手指要记住：另一只手离开摇杆时不该把油门松掉
+let throttlePointer=null, brakePointer=null;
+jumpBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY){ throttleHeld=true; throttlePointer=e.pointerId; e.preventDefault(); } });
+brakeBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY){ brakeHeld=true; brakePointer=e.pointerId; e.preventDefault(); } });
+function releasePointer(e){
+ if(e.pointerId===throttlePointer){ throttleHeld=false; throttlePointer=null; }
+ if(e.pointerId===brakePointer){ brakeHeld=false; brakePointer=null; }
+}
+addEventListener('pointerup',releasePointer);
+addEventListener('pointercancel',releasePointer);
 let vehicleNear=false;
 function carExitSpot(){
  const h=vehicleHalfExtents(car.yaw);
@@ -5959,7 +5972,8 @@ function toggleVehicle(){
 
 /* ---------- 上下水上飞机 ---------- */
 let planeNear=false;
-function planeStepOff(){ return stepOffSpot(plane.x,plane.z,plane.yaw,3.4,1.6); }
+// 探到翼尖外一点，停在栈桥边时才够得着码头，而不是每次都掉进水里
+function planeStepOff(){ return stepOffSpot(plane.x,plane.z,plane.yaw,3.4,5.2); }
 function boardPlane(){
  if(mode===MODE.FLY)return;
  const near=mode===MODE.WALK&&planeNear;
@@ -5983,10 +5997,21 @@ function leavePlane(){
 function updateMooredPlane(dt,t){
  const sea=waveHeight(plane.x,plane.z,t);
  if(!plane.water){
-  plane.y-=12*dt;
-  plane.spd*=1-Math.min(1,dt*0.5);
+  // 半空中被切走：飞机自己保持航向往前飞，一边下降一边找水面，绝不会停在岛上或屋顶里
+  plane.spd=Math.max(24,plane.spd*(1-Math.min(1,dt*0.3)));
+  plane.x+=Math.sin(plane.yaw)*plane.spd*dt;
+  plane.z+=Math.cos(plane.yaw)*plane.spd*dt;
+  const dr=Math.hypot(plane.x,plane.z);
+  if(dr>PLANE_EDGE){ plane.x=plane.x/dr*PLANE_EDGE; plane.z=plane.z/dr*PLANE_EDGE; plane.yaw+=1.4*dt; }
+  const here=waveHeight(plane.x,plane.z,t), floor=Math.max(here+PLANE_FLOAT, planeGroundAt(plane.x,plane.z)+3.4);
+  plane.y=Math.max(floor, plane.y-12*dt);
+  plane.pitch+=((plane.y>floor+0.05?-0.1:0)-plane.pitch)*Math.min(1,dt*2);
+  plane.roll*=1-Math.min(1,dt*2);
   plane.spin+=dt*(4+plane.thr*20);
-  if(plane.y<=sea+PLANE_FLOAT){ plane.y=sea+PLANE_FLOAT; plane.water=true; startSplash(plane.x,sea,plane.z,1.1); }
+  if(plane.y<=here+PLANE_FLOAT+0.02 && !planeOverLand(plane.x,plane.z)){
+   plane.y=here+PLANE_FLOAT; plane.water=true; plane.spd=0; startSplash(plane.x,here,plane.z,1.1);
+  }
+  Snd.engine(0);
   placePlane(t);
   return;
  }
@@ -6026,8 +6051,8 @@ function stepOffSpot(cx,cz,yaw,side,reach){
   for(const d of [side, side+reach]){
    const x=cx+Math.sin(a)*d, z=cz+Math.cos(a)*d;
    if(harborBuildingAt(x,z)) continue;
-   const p=resolveHarborWalk(cx,cz,x,z,false);
-   if(Math.hypot(p.x-x,p.z-z)>.05) continue;               // 舷外是墙
+   const p=resolveHarborWalk(cx,cz,x,z,false,false);
+   if(Math.hypot(p.x-x,p.z-z)>.05) continue;               // 舷外是墙（岸沿那圈护栏不算）
    const g=worldWalkHeight(x,z);
    // 沙滩、矮码头一步就跨上去；高过舷边就跳进水里，再游上岸
    if(g>SEA_LEVEL+.35){ if(g<SEA_LEVEL+CLIMB_MAX&&standingSpot(x,z)) return {x,z,y:g,dry:true,region:regionAt(x,z)}; continue; }
