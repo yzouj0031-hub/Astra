@@ -30,7 +30,7 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -311,6 +311,106 @@ function test(width,height){
  for(let i=0;i<20;i++)a.updateWalk(.05,i*.05);
  assert(!a.walk.swim&&a.worldWalkHeight(a.walk.x,a.walk.z)>4,`Climbed back onto the quay (${a.walk.z.toFixed(1)})`);
  assert(a.harborCollisionWorld.every(r=>!a.harborRectContains({x:a.walk.x,z:a.walk.z},r)),'Standing clear of the quay edge after climbing');
+ // ---- the harbour floatplane: moored, boarded from the pier, flown, landed, left behind ----
+ a.setMode('walk');
+ assert(a.plane.water,'The floatplane starts on the water');
+ assert(a.terrainH(a.plane.x,a.plane.z)<-1.6,'It is moored in navigable water, not on the quay');
+ assert(Math.abs(a.plane.y-(a.seaAt(a.plane.x,a.plane.z)+a.PLANE_FLOAT))<.4,'Its floats rest on the surface');
+ // Walk out along the timber pier to the aircraft and board it.
+ a.visitHarbor();a.walk.x=a.plane.x-7;a.walk.z=a.plane.z;a.walk.y=a.worldWalkHeight(a.walk.x,a.walk.z);
+ a.walk.vx=a.walk.vz=0;a.walk.swim=false;a.walk.air=false;
+ for(let i=0;i<6;i++)a.updateActors(.05,i*.05);
+ assert(a.getPlaneNear(),'The aircraft is within boarding reach of the pier');
+ assert(!nodes.get('vehicle-interact').hidden&&nodes.get('vehicle-interact').textContent.includes('上机'),'The board prompt names the aircraft');
+ a.toggleVehicle();assert.equal(body.dataset.mode,'fly','F boards the aircraft');
+ // Cannot step out in mid-air, and cannot step out until it has slowed down.
+ const moored={x:a.plane.x,z:a.plane.z};
+ // Take off: throttle up, then pull back once past rotation speed.
+ a.keys.shift=true;
+ let unstuck=null,runFrames=0;
+ for(let i=0;i<600&&a.plane.water;i++){ if(a.plane.spd>a.PLANE_ROTATE)a.keys.w=true; a.updateFly(.02,i*.02); runFrames++; }
+ a.clearInput();
+ assert(!a.plane.water,'Full throttle and back stick gets the floatplane off the water');
+ unstuck={x:a.plane.x,z:a.plane.z};
+ const run=Math.hypot(unstuck.x-moored.x,unstuck.z-moored.z);
+ assert(run>40&&run<400,`Take-off run is a plausible ${run.toFixed(0)}m`);
+ assert(a.plane.spd>a.PLANE_ROTATE,'It leaves the water above rotation speed');
+ // Climb away, then check the telemetry and the ceiling.
+ a.keys.shift=a.keys.w=true;
+ for(let i=0;i<1500;i++)a.updateFly(.02,i*.02);
+ a.clearInput();
+ const alt=a.plane.y-a.seaAt(a.plane.x,a.plane.z);
+ assert(alt>100,`Climbs well clear of the sea (${alt.toFixed(0)}m)`);
+ assert(a.plane.y<=a.PLANE_CEIL+1,`The soft ceiling holds at ${a.plane.y.toFixed(0)}m`);
+ assert(Number.isFinite(a.plane.spd)&&Number.isFinite(a.plane.yaw),'Flight state stays finite');
+ // Banking turns the aircraft, and a full-bank circle is small enough to orbit the island.
+ {const yaw0=a.plane.yaw;a.keys.a=true;
+  const xs=[],zs=[];
+  for(let i=0;i<900;i++){a.updateFly(.02,i*.02);if(i>300){xs.push(a.plane.x);zs.push(a.plane.z);}}
+  a.clearInput();
+  assert(Math.abs(a.plane.yaw-yaw0)>Math.PI,'Holding bank comes round through half a circle and more');
+  const radius=((Math.max(...xs)-Math.min(...xs))+(Math.max(...zs)-Math.min(...zs)))/4;
+  assert(radius<220,`A full-bank turn stays inside ${radius.toFixed(0)}m, tight enough to circle the island`);}
+ // The world has an edge: flying straight out is stopped, not escaped.
+ {for(let i=0;i<4000;i++){a.keys.shift=true;a.updateFly(.05,i*.05);}
+  a.clearInput();
+  assert(Math.hypot(a.plane.x,a.plane.z)<=a.PLANE_EDGE+1,'The aircraft is held inside the charted sea');}
+ // Flying low across the harbour is pushed up off the stone, never through it.
+ {a.plane.x=640;a.plane.z=-300;a.plane.y=a.worldWalkHeight(640,-300)+1;a.plane.water=false;
+  a.plane.pitch=0;a.plane.roll=0;a.plane.spd=40;a.plane.vy=0;
+  for(let i=0;i<40;i++)a.updateFly(.02,i*.02);
+  assert(a.plane.y>a.worldWalkHeight(a.plane.x,a.plane.z)+2,'Skimming the quay lifts the aircraft instead of sinking it into the stone');}
+ // Rooftops are solid too: the walking surface inside a building is only its ground floor.
+ {const tall=a.harborBuildings.filter(b=>b.h&&b.h>14).sort((x,y)=>y.h-x.h)[0];
+  assert(tall,'The harbour has tall buildings to avoid');
+  assert(a.planeGroundAt(tall.x,tall.z)>4.15+tall.h-0.01,'A building footprint reports its roof, not its floor');
+  a.plane.x=tall.x;a.plane.z=tall.z;a.plane.y=10;a.plane.water=false;
+  a.plane.pitch=0;a.plane.roll=0;a.plane.spd=40;a.plane.vy=0;
+  for(let i=0;i<30;i++)a.updateFly(.02,i*.02);
+  assert(a.plane.y>4.15+tall.h,`Flying at rooftop height is lifted over ${tall.name} instead of through it`);}
+ // The lighthouse and the fairground rides are not in the walking surface either.
+ {assert(a.airHazards.length>10,'Tall structures outside the harbour are registered');
+  const ferris=a.parkModule.rides.find(r=>r.id==='ferris');
+  const p=a.resortWorldPoint(ferris.target.x,0,ferris.target.z);
+  assert(a.planeGroundAt(p.x,p.z)>20,`The ferris wheel reads as ${a.planeGroundAt(p.x,p.z).toFixed(0)}m of obstacle`);
+  a.plane.x=p.x;a.plane.z=p.z;a.plane.y=8;a.plane.water=false;a.plane.pitch=0;a.plane.roll=0;a.plane.spd=38;a.plane.vy=0;
+  for(let i=0;i<30;i++)a.updateFly(.02,i*.02);
+  assert(a.plane.y>20,'Flying at the fairground is lifted over the wheel, not through it');
+  assert(a.planeGroundAt(a.lighthousePos.x,a.lighthousePos.z)>a.terrainH(a.lighthousePos.x,a.lighthousePos.z)+20,'The lighthouse tower counts as height');}
+ // Taxiing is water-only: the floats cannot ride up over the stone quay.
+ {a.plane.x=640;a.plane.z=-80;a.plane.y=a.seaAt(640,-80)+a.PLANE_FLOAT;a.plane.water=true;
+  a.plane.yaw=Math.PI;a.plane.spd=18;a.plane.thr=.6;a.plane.pitch=0;a.plane.roll=0;
+  a.keys.shift=true;
+  for(let i=0;i<120;i++)a.updateFly(.02,i*.02);
+  a.clearInput();
+  assert(a.plane.water,'Still on the water');
+  assert(a.terrainH(a.plane.x,a.plane.z)<0,`The floats stop at the quay instead of taxiing onto it (z=${a.plane.z.toFixed(1)})`);}
+ // Land it: idle throttle, nose down, touch the water.
+ {a.plane.x=700;a.plane.z=200;a.plane.y=a.seaAt(700,200)+120;a.plane.water=false;
+  a.plane.spd=40;a.plane.pitch=0;a.plane.roll=0;a.plane.yaw=0;a.plane.thr=.2;
+  let frames=0;
+  for(let i=0;i<3000&&!a.plane.water;i++){a.keys[' ']=true;if(a.plane.y-a.seaAt(a.plane.x,a.plane.z)>12)a.keys.s=true;else a.keys.s=false;a.updateFly(.02,i*.02);frames++;}
+  a.clearInput();
+  assert(a.plane.water,`It comes down and settles on the water (${(frames*0.02).toFixed(0)}s)`);
+  assert(Math.abs(a.plane.y-(a.seaAt(a.plane.x,a.plane.z)+a.PLANE_FLOAT))<1.2,'It floats at rest height after landing');}
+ // Cannot get out while moving; can once it stops; the aircraft stays where it was left.
+ a.plane.spd=20;a.leavePlane();assert.equal(body.dataset.mode,'fly','No stepping out while it is still moving');
+ a.plane.spd=0;
+ const parkedPlane={x:a.plane.x,z:a.plane.z};
+ a.leavePlane();
+ assert.equal(body.dataset.mode,'walk','Stepping out of a stopped aircraft works');
+ assert(Math.abs(a.plane.x-parkedPlane.x)<.01&&Math.abs(a.plane.z-parkedPlane.z)<.01,'The aircraft stays exactly where it was left');
+ assert(Math.hypot(a.walk.x-a.plane.x,a.walk.z-a.plane.z)<9,'You step off beside the aircraft, not across the bay');
+ assert(a.walk.swim,'Stepping out over open water drops you in to swim');
+ for(let i=0;i<10;i++)a.updateActors(.05,i*.05);
+ assert(a.getPlaneNear(),'Treading water beside it, you can climb back in');
+ // The dock-bar button returns to wherever the aircraft is parked.
+ a.walk.x=0;a.walk.z=0;a.walk.swim=false;a.walk.y=a.worldWalkHeight(0,0);
+ a.updateActors(.05,1);assert(!a.getPlaneNear());
+ a.pickMode('fly');assert.equal(body.dataset.mode,'fly');
+ assert(Math.abs(a.plane.x-parkedPlane.x)<.01,'The fly button rejoins the parked aircraft instead of respawning it');
+ a.leavePlane();a.setMode('walk');
+ console.log(`Floatplane: moored at the pier, boarded, ${run.toFixed(0)}m take-off run, climb to ceiling, banked circle, world edge, quay clearance, water landing and step-out passed.`);
  a.setMode('sail');a.ship.x=309;a.ship.z=-200;a.ship.yaw=Math.PI/2;a.ship.spd=0;a.keys.w=true;
  for(let i=0;i<240;i++){a.updateSail(.05,i*.05);assert(a.terrainH(a.ship.x,a.ship.z)<-1.5,'Seawall collision pushes the boat toward water');}a.clearInput();
  console.log(`Victoria Harbour: ${landmarks.length} interiors, ${a.harborFacadeCount} street buildings, 7 ships, ${a.harborVisitors.length} pedestrians; walked in and out through the doorways, stairs up/down, exhibits, facade/side/back walls still solid, furniture collisions, mode cleanup and dock landing passed.`);
