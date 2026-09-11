@@ -54,13 +54,15 @@ def M(px=0.0, py=0.0, pz=0.0, sx=1.0, sy=1.0, sz=1.0, rx=0.0, ry=0.0, rz=0.0):
 # 全部按 three.js 的分段数生成，并转回 three 空间（Y 轴朝上）存着。
 
 class Prim:
-    __slots__ = ("verts", "faces", "smooth", "uvs")
+    __slots__ = ("verts", "faces", "smooth", "uvs", "name", "extra")
 
-    def __init__(self, verts, faces, smooth, uvs):
+    def __init__(self, verts, faces, smooth, uvs, name="prim", extra=None):
         self.verts = verts      # [(x,y,z), ...] three 空间
         self.faces = faces      # [(i,j,k[,l]), ...]
         self.smooth = smooth    # [bool, ...] 与 faces 等长
         self.uvs = uvs          # [[(u,v), ...每个角], ...] 与 faces 等长
+        self.name = name        # 记账用的名字
+        self.extra = extra      # 记账用的参数（多边形、圆柱参数……），给测试比对
 
 
 def _bm_to_prim(bm, smooth_fn, uv_fn):
@@ -165,6 +167,115 @@ def _make_plane():
     return prim
 
 
+# --- 挤出与开口圆柱：屋顶、山墙、桥用的，不是固定原语 ------------------
+
+def _signed_area(poly):
+    a = 0.0
+    for i in range(len(poly)):
+        x0, y0 = poly[i]
+        x1, y1 = poly[(i + 1) % len(poly)]
+        a += x0 * y1 - x1 * y0
+    return a / 2
+
+
+def extrude_prim(poly, depth):
+    """three.js ExtrudeGeometry(shape, {depth, bevelEnabled:false})。
+
+    把 XY 平面上的多边形沿 +Z 拉成柱体。three.js 用 ShapeUtils 三角化，
+    这里直接留 ngon 端面 —— Blender 渲染时自己会三角化，形状一样，
+    只是顶点顺序和 JS 不同（所以测试比的是多边形本身，不是三角形）。
+
+    绕序统一成逆时针，端面法线才朝对；原始 shape 的绕序两种都有。
+    UV：端面用 (x, y)，侧壁用 (沿周长的距离, z)。这几块都是顶点色上色，
+    UV 只是留给 2B 烘焙用的占位，不追求和 three.js 的 UVGenerator 一致。
+    """
+    poly = [tuple(p) for p in poly]
+    if len(poly) > 1 and poly[0] == poly[-1]:
+        poly = poly[:-1]
+    original = [list(p) for p in poly]      # 记账用原始顺序，翻绕序只是内部实现
+    if _signed_area(poly) < 0:
+        poly = poly[::-1]
+    n = len(poly)
+
+    verts = [(x, y, 0.0) for x, y in poly] + [(x, y, depth) for x, y in poly]
+    faces, uvs, smooth = [], [], []
+
+    faces.append(tuple(range(n - 1, -1, -1)))          # 背面（-Z）
+    uvs.append([(poly[i][0], poly[i][1]) for i in range(n - 1, -1, -1)])
+    smooth.append(False)
+
+    faces.append(tuple(range(n, 2 * n)))               # 正面（+Z）
+    uvs.append([(x, y) for x, y in poly])
+    smooth.append(False)
+
+    run = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        seg = math.dist(poly[i], poly[j])
+        faces.append((i, j, j + n, i + n))
+        uvs.append([(run, 0.0), (run + seg, 0.0), (run + seg, depth), (run, depth)])
+        smooth.append(False)
+        run += seg
+
+    return Prim(verts, faces, smooth, uvs, "extrude",
+                {"poly": original, "depth": depth})
+
+
+def tube_prim(radius_top, radius_bottom, height, radial_segments,
+              open_ended=False, theta_start=0.0, theta_length=None):
+    """three.js CylinderGeometry 的参数版（桥洞内壁那种半开口圆管）。
+
+    顶点位置按 three.js 的公式：x = r*sin(theta)，z = r*cos(theta)，
+    theta 从 thetaStart 起算 —— 半圆管落在哪半边取决于这个，弄反了桥洞会朝天。
+    """
+    if theta_length is None:
+        theta_length = TAU
+    verts, faces, uvs, smooth = [], [], [], []
+    half = height / 2
+
+    for i in range(radial_segments + 1):
+        u = i / radial_segments
+        th = theta_start + u * theta_length
+        s, c = math.sin(th), math.cos(th)
+        verts.append((radius_top * s, half, radius_top * c))
+        verts.append((radius_bottom * s, -half, radius_bottom * c))
+
+    for i in range(radial_segments):
+        a, b = 2 * i, 2 * i + 1
+        c2, d2 = 2 * (i + 1), 2 * (i + 1) + 1
+        faces.append((a, c2, d2, b))
+        u0, u1 = i / radial_segments, (i + 1) / radial_segments
+        uvs.append([(u0, 1.0), (u1, 1.0), (u1, 0.0), (u0, 0.0)])
+        smooth.append(True)
+
+    if not open_ended:
+        base = len(verts)
+        verts.append((0.0, half, 0.0))
+        verts.append((0.0, -half, 0.0))
+        for i in range(radial_segments):
+            faces.append((base, 2 * (i + 1), 2 * i))
+            uvs.append([(0.5, 0.5)] * 3)
+            smooth.append(False)
+            faces.append((base + 1, 2 * i + 1, 2 * (i + 1) + 1))
+            uvs.append([(0.5, 0.5)] * 3)
+            smooth.append(False)
+
+    return Prim(verts, faces, smooth, uvs, "tube",
+                {"rt": radius_top, "rb": radius_bottom, "h": height,
+                 "rs": radial_segments, "open": open_ended,
+                 "ts": theta_start, "tl": theta_length})
+
+
+def flip_inside(p):
+    """watertown.js:68 的 flipInside —— 翻成从里面看（桥洞内壁）。
+    JS 那边是翻法线 + 翻三角绕序；Blender 的法线由绕序决定，翻绕序就够。"""
+    return Prim([tuple(v) for v in p.verts],
+                [f[::-1] for f in p.faces],
+                list(p.smooth),
+                [list(reversed(u)) for u in p.uvs],
+                p.name, dict(p.extra or {}, flipped=True))
+
+
 _cache = {}
 
 
@@ -218,10 +329,11 @@ class Batch:
         if self.log is not None:
             # 与 three.js Matrix4.elements 同样的列主序，方便逐个数比
             self.log.append((
-                prim_or_name if isinstance(prim_or_name, str) else "prim",
+                prim_or_name if isinstance(prim_or_name, str) else p.name,
                 matrix.elements(),
                 list(rgb),
                 list(uv_box) if uv_box else None,
+                None if isinstance(prim_or_name, str) else p.extra,
             ))
 
         base = len(self.verts)

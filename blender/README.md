@@ -23,6 +23,7 @@ lib/materials.py  # 2A 的程序化节点材质
 tools/make_atlas.py  # 用 PIL 画图集（要用系统 Python 跑）
 assets/           # 生成出来的图集
 parts/site.py     # 布局、水域判定、地形、驳岸、地面、广场、远山、菜畦、河水
+parts/hall.py     # 房子（墙体/屋顶/马头墙/临街立面）、石拱桥
 parts/plants.py   # 柳树、樟树
 milestones/       # 每步一个可渲染的验收场景
 tests/            # 与 JS 原函数的数值比对

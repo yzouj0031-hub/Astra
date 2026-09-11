@@ -76,6 +76,7 @@ export function makeEnv() {
     sliceBetween('function flipInside', '/* ---------- 文字贴图'),   // G / M / box / shape（原件）
     sliceBetween('const SIGNS=', '/* ---------- 镇子的布局'),        // 图集：SIGNS/FLAGS/buildAtlas/uvOf（原件）
     sliceBetween('const L = {', '/* =========='),                    // L / 判定 / hillY（原件）
+    sliceBetween('/* 屋顶截面', 'function buildHouse('),             // 屋顶/墙体/山墙/立面（原件）
   ].join('\n');
 
   const stubs = `
@@ -84,9 +85,26 @@ export function makeEnv() {
     // box()/shape() 都最终落到 add，所以只在这里记就够。
     const _noop = () => {};
     const LOG = [];
-    function _geoName(g){
-      for (const k of Object.keys(G)) if (G[k] === g) return k;
-      return 'unknown';
+    function _geoInfo(g){
+      for (const k of Object.keys(G)) if (G[k] === g) return [k, null];
+      // 屋顶/墙体/桥栏是现造的 ExtrudeGeometry，桥洞是带角度参数的圆柱。
+      // 三角化方式和 Blender 不一样，没法逐顶点比，所以记下**造它的参数**：
+      // 多边形顶点 / 圆柱参数。形状对不对全看这些。
+      if (g.type === 'ExtrudeGeometry') {
+        const sh = g.parameters.shapes;
+        return ['extrude', {
+          poly: sh.curves.map(c => [c.v1.x, c.v1.y]),
+          depth: g.parameters.options.depth,
+        }];
+      }
+      if (g.type === 'CylinderGeometry') {
+        const p = g.parameters;
+        return ['tube', {
+          rt: p.radiusTop, rb: p.radiusBottom, h: p.height, rs: p.radialSegments,
+          open: p.openEnded, ts: p.thetaStart, tl: p.thetaLength,
+        }];
+      }
+      return [g.type || 'unknown', null];
     }
     function _colOf(c){
       const t = (c && c.isColor) ? c : new T.Color(c);
@@ -94,7 +112,8 @@ export function makeEnv() {
     }
     const _batch = {
       add: (geo, m, color, uvBox) => {
-        LOG.push([_geoName(geo), Array.from(m.elements), _colOf(color), uvBox || null]);
+        const [name, extra] = _geoInfo(geo);
+        LOG.push([name, Array.from(m.elements), _colOf(color), uvBox || null, extra]);
       },
       empty: true, build: _noop,
     };
@@ -109,7 +128,8 @@ export function makeEnv() {
     });
     const document = { createElement: () => ({ width: 0, height: 0, getContext: () => _ctx2d }) };
     let signCounter = 0;
-    const buildHouse = _noop, buildBridge = _noop, buildGate = _noop, buildTeahouse = _noop;
+    // 还没移植的建筑先空着；buildHouse / buildBridge 会从源文件切真身进来
+    const buildGate = _noop, buildTeahouse = _noop, buildPagoda = _noop;
   `;
 
   const ctx = { T, THREE: T, console, Math, Object, Array, Number, String, JSON };
@@ -120,11 +140,19 @@ export function makeEnv() {
 }
 
 /** 跑一个 builder，返回取数个数、结束时的种子、以及完整的几何调用流水。 */
+const _defined = new WeakMap();
+
 export function record(ctx, name, callExpr) {
   // 同一个 JS 函数可能有多组参数（比如柳树的 bank / 非 bank），
-  // 所以函数名从调用表达式里取，不用 job 的 key。
+  // 所以函数名从调用表达式里取，不用 job 的 key。同一个函数只切一次 ——
+  // 切第二次会撞上已有的声明。
   const fn = callExpr.slice(0, callExpr.indexOf('(')).trim();
-  vm.runInContext(sliceFunction(fn), ctx, { filename: `${fn}.js` });
+  if (!_defined.has(ctx)) _defined.set(ctx, new Set());
+  const seen = _defined.get(ctx);
+  if (!seen.has(fn)) {
+    vm.runInContext(sliceFunction(fn), ctx, { filename: `${fn}.js` });
+    seen.add(fn);
+  }
   const probe = `
     (() => {
       _seed = 20260906;

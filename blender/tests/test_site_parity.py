@@ -11,6 +11,7 @@
 """
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -22,7 +23,7 @@ if ROOT not in sys.path:
 from blender.lib.geo import Batch  # noqa: E402
 from blender.lib.rng import Rng  # noqa: E402
 from blender.lib import atlas  # noqa: E402
-from blender.parts import plants, site  # noqa: E402
+from blender.parts import hall, plants, site  # noqa: E402
 
 HARNESS = os.path.join(ROOT, "blender", "tests", "js_harness.mjs")
 TOL = 1e-9
@@ -37,7 +38,41 @@ JOBS = {
     "buildWillow": "buildWillow(0, 0)",
     "buildWillowBank": "buildWillow(12, 7, 1.05, true)",
     "buildCamphor": "buildCamphor(-7, 19, 1.1)",
+    # 房子的四种形态：临街铺面挂竖招牌 / 挂酒旗 / 民居带马头墙 / 底层敞开（茶馆那种）
+    "houseShopBoard": ("buildHouse({x:-30,z:19,w:9.5,d:10.5,floors:2,facing:Math.PI,"
+                       "shop:true,gable:true,balcony:true,signKind:'board',signIdx:5})"),
+    "houseShopFlag": ("buildHouse({x:12,z:-20,w:8,d:9,floors:1,facing:0,"
+                      "shop:true,gable:false,signKind:'flag',signIdx:2})"),
+    "housePlain": ("buildHouse({x:-70,z:30,w:11,d:9,floors:2,facing:Math.PI/2,"
+                   "shop:false,gable:true,balcony:false,signIdx:9})"),
+    "houseOpen": ("buildHouse({x:5,z:40,w:12,d:11,floors:2,facing:0,"
+                  "openGround:true,gable:true,signIdx:1})"),
+    "bridgeSmall": "buildBridge({x:-72,z:0,axis:'z',len:11,halfW:2.1,h:3.6})",
+    "bridgeBig": "buildBridge({x:-4,z:0,axis:'z',len:12,halfW:2.5,h:4.8,big:true})",
+    "bridgeCross": "buildBridge({x:64,z:9,axis:'x',len:10,halfW:2.0,h:3.0})",
     "groundPiece": [-380, 60, 6, 380],
+}
+
+
+# Python 侧的同参数（要和上面 JOBS 里的 JS 字面量一字不差）
+HOUSES = {
+    "houseShopBoard": {"x": -30, "z": 19, "w": 9.5, "d": 10.5, "floors": 2,
+                       "facing": math.pi, "shop": True, "gable": True,
+                       "balcony": True, "signKind": "board", "signIdx": 5},
+    "houseShopFlag": {"x": 12, "z": -20, "w": 8, "d": 9, "floors": 1,
+                      "facing": 0, "shop": True, "gable": False,
+                      "signKind": "flag", "signIdx": 2},
+    "housePlain": {"x": -70, "z": 30, "w": 11, "d": 9, "floors": 2,
+                   "facing": math.pi / 2, "shop": False, "gable": True,
+                   "balcony": False, "signIdx": 9},
+    "houseOpen": {"x": 5, "z": 40, "w": 12, "d": 11, "floors": 2, "facing": 0,
+                  "openGround": True, "gable": True, "signIdx": 1},
+}
+BRIDGES = {
+    "bridgeSmall": {"x": -72, "z": 0, "axis": "z", "len": 11, "halfW": 2.1, "h": 3.6},
+    "bridgeBig": {"x": -4, "z": 0, "axis": "z", "len": 12, "halfW": 2.5, "h": 4.8,
+                  "big": True},
+    "bridgeCross": {"x": 64, "z": 9, "axis": "x", "len": 10, "halfW": 2.0, "h": 3.0},
 }
 
 
@@ -84,6 +119,10 @@ def run_python(name):
         plants.build_willow(bs["foliage"], rng, 12, 7, 1.05, True)
     elif name == "buildCamphor":
         plants.build_camphor(bs["foliage"], rng, -7, 19, 1.1)
+    elif name in HOUSES:
+        hall.build_house(bs, rng, reg, HOUSES[name])
+    elif name in BRIDGES:
+        hall.build_bridge(bs, rng, reg, BRIDGES[name])
     else:
         raise KeyError(name)
     return rng.calls, rng.seed, log
@@ -94,8 +133,8 @@ def compare_log(name, js_log, py_log):
         print(f"  FAIL {name}: 几何调用数 JS={len(js_log)} PY={len(py_log)}")
         return False
     for i, (j, p) in enumerate(zip(js_log, py_log)):
-        j_geo, j_m, j_col, j_uv = j
-        p_geo, p_m, p_col, p_uv = p
+        j_geo, j_m, j_col, j_uv, j_extra = j
+        p_geo, p_m, p_col, p_uv, p_extra = p
         if j_geo != p_geo:
             print(f"  FAIL {name}[{i}]: 原语 JS={j_geo} PY={p_geo}")
             return False
@@ -115,6 +154,40 @@ def compare_log(name, js_log, py_log):
                 if abs(j_uv[k] - p_uv[k]) > TOL:
                     print(f"  FAIL {name}[{i}]: uvBox[{k}] JS={j_uv[k]!r} PY={p_uv[k]!r}")
                     return False
+        if not compare_extra(name, i, j_extra, p_extra):
+            return False
+    return True
+
+
+def compare_extra(name, i, j_extra, p_extra):
+    """挤出体比多边形顶点，圆柱比参数 —— 三角化方式两边本来就不同，
+    比不了顶点，但造它的形状参数必须一模一样。"""
+    if j_extra is None and p_extra is None:
+        return True
+    if (j_extra is None) != (p_extra is None):
+        print(f"  FAIL {name}[{i}]: 一边有形状参数一边没有 JS={j_extra} PY={p_extra}")
+        return False
+
+    if "poly" in j_extra:
+        jp, pp = j_extra["poly"], p_extra.get("poly", [])
+        if len(jp) != len(pp):
+            print(f"  FAIL {name}[{i}]: 多边形点数 JS={len(jp)} PY={len(pp)}")
+            return False
+        for k, (a, b) in enumerate(zip(jp, pp)):
+            if abs(a[0] - b[0]) > TOL or abs(a[1] - b[1]) > TOL:
+                print(f"  FAIL {name}[{i}]: 多边形第 {k} 点 JS={a} PY={b}")
+                return False
+        if abs(j_extra["depth"] - p_extra["depth"]) > TOL:
+            print(f"  FAIL {name}[{i}]: 挤出深度 JS={j_extra['depth']} PY={p_extra['depth']}")
+            return False
+        return True
+
+    for k in ("rt", "rb", "h", "rs", "ts", "tl", "open"):
+        a, b = j_extra.get(k), p_extra.get(k)
+        same = (a == b) if isinstance(a, bool) else abs(a - b) <= TOL
+        if not same:
+            print(f"  FAIL {name}[{i}]: 圆柱参数 {k} JS={a} PY={b}")
+            return False
     return True
 
 
