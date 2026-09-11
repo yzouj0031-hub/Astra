@@ -14,7 +14,11 @@ JS 那边是 MeshPhongMaterial + 顶点色，只有漫反射（watertown.js:707-
 配套要把 view transform 设成 Standard，否则 AgX 会把江南的灰调压没。
 """
 
+import os
+
 import bpy
+
+from . import atlas as _atlas
 
 
 def _set(node, name, value):
@@ -265,6 +269,48 @@ def water_material(name="M_Water"):
     return mat
 
 
+# ---------------------------------------------------------------- 招牌
+
+def atlas_image_path():
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "assets", _atlas.IMAGE_NAME)
+
+
+def sign_material(name="M_Sign"):
+    """招牌、酒旗、牌匾：贴 tools/make_atlas.py 用 PIL 画的那张图集。
+
+    几何那边由 uvBox 把每块牌子的 UV 压进图集的某一格（Batch.add 的
+    uv_box 参数），所以这里直接采样 UVMap 就行，不需要再做偏移。
+    图没生成时退回木头材质，并且吼一声 —— 免得渲出一片空白牌子还不知道为什么。
+    """
+    path = atlas_image_path()
+    if not os.path.exists(path):
+        print(f"[materials] 图集缺失：{path}")
+        print("[materials] 先用系统 Python 跑 `python blender/tools/make_atlas.py`"
+              "（Blender 自带的 Python 没有 PIL），这次先按木头渲。")
+        return wood_material()
+
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    bsdf = nodes["Principled BSDF"]
+    _set(bsdf, "Roughness", 0.7)
+    _kill_specular(bsdf)
+
+    uv = nodes.new("ShaderNodeUVMap")
+    uv.uv_map = "UVMap"
+    uv.location = (-800, 0)
+
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.location = (-560, 0)
+    tex.image = bpy.data.images.load(path, check_existing=True)
+    tex.interpolation = "Cubic"          # 字在斜视角下不糊成一团
+    tex.extension = "CLIP"
+    links.new(uv.outputs["UV"], tex.inputs["Vector"])
+    links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    return mat
+
+
 # ---------------------------------------------------------------- 场景设置
 
 def setup_view_transform(scene):
@@ -278,15 +324,13 @@ def setup_view_transform(scene):
 def for_batch_key(key):
     """把 JS 的 BATCH_KEYS 映到 2A 材质。
 
-    sign 还没有材质 —— 它要 buildAtlas 那张画着招牌文字的图集，
-    等图集移植了再补，现在先按木头处理。
     """
     return {
         "stone": stone_material,
         "wood": wood_material,
         "foliage": foliage_material,
         "ground": ground_material,
-        "sign": wood_material,
+        "sign": sign_material,
         "wall": stone_material,
         "roof": stone_material,
         "misc": vertex_color_material,

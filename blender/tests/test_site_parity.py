@@ -21,12 +21,15 @@ if ROOT not in sys.path:
 
 from blender.lib.geo import Batch  # noqa: E402
 from blender.lib.rng import Rng  # noqa: E402
+from blender.lib import atlas  # noqa: E402
 from blender.parts import plants, site  # noqa: E402
 
 HARNESS = os.path.join(ROOT, "blender", "tests", "js_harness.mjs")
 TOL = 1e-9
 
 JOBS = {
+    # 放最前面：buildAtlas 先跑，后面 buildPlaza 里的 uvOf('dock') 才有值
+    "atlasCells": "buildAtlas()",
     "buildBanks": "buildBanks()",
     "buildPlaza": "buildPlaza()",
     "buildFields": "buildFields()",
@@ -70,7 +73,7 @@ def run_python(name):
     if name == "buildBanks":
         site.build_banks(bs, rng, reg)
     elif name == "buildPlaza":
-        site.build_plaza(bs, rng, reg)
+        site.build_plaza(bs, rng, reg, atlas.uv_of)
     elif name == "buildFields":
         site.build_fields(bs["foliage"], rng)
     elif name == "buildMountains":
@@ -107,6 +110,11 @@ def compare_log(name, js_log, py_log):
         if (j_uv is None) != (p_uv is None):
             print(f"  FAIL {name}[{i}]: uvBox JS={j_uv} PY={p_uv}")
             return False
+        if j_uv is not None:
+            for k in range(4):
+                if abs(j_uv[k] - p_uv[k]) > TOL:
+                    print(f"  FAIL {name}[{i}]: uvBox[{k}] JS={j_uv[k]!r} PY={p_uv[k]!r}")
+                    return False
     return True
 
 
@@ -145,10 +153,33 @@ def check_ground_piece(ref):
     return ok
 
 
+def check_atlas(ref):
+    """图集格子：JS 的 buildAtlas 在空壳画布上跑出来的 Atlas.cells，
+    对 lib/atlas.py 算出来的同一张表。字形不比（PIL 和 canvas 本来就不同），
+    比的是每一格的 uvBox —— 贴歪没贴歪全看这个。"""
+    mine = atlas.cells()
+    if set(mine) != set(ref):
+        print(f"  FAIL atlas: 格子名对不上 少={sorted(set(ref) - set(mine))} "
+              f"多={sorted(set(mine) - set(ref))}")
+        return False
+    worst = 0.0
+    for key, box_ref in ref.items():
+        for k in range(4):
+            worst = max(worst, abs(box_ref[k] - mine[key][k]))
+    if worst > TOL:
+        print(f"  FAIL atlas: uvBox 最大偏差 {worst:.3e}")
+        return False
+    print(f"  ok  atlas            {len(mine)} 格全等（招牌 24 + 酒旗 4 + 匾 4）")
+    return True
+
+
 def main():
     ref = js_reference()
     ok = True
     for name in JOBS:
+        if name == "atlasCells":
+            ok &= check_atlas(ref[name])
+            continue
         if name == "groundPiece":
             ok &= check_ground_piece(ref[name])
             continue

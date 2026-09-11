@@ -74,6 +74,7 @@ export function makeEnv() {
     sliceBetween('let _seed', '/* ---------- 调色 ---------- */'),   // rnd/rr/ri/pick/clamp/lerp/smooth
     sliceBetween('const C = {', '/* ---------- 合批'),               // C 与 tint（原件）
     sliceBetween('function flipInside', '/* ---------- 文字贴图'),   // G / M / box / shape（原件）
+    sliceBetween('const SIGNS=', '/* ---------- 镇子的布局'),        // 图集：SIGNS/FLAGS/buildAtlas/uvOf（原件）
     sliceBetween('const L = {', '/* =========='),                    // L / 判定 / hillY（原件）
   ].join('\n');
 
@@ -99,9 +100,14 @@ export function makeEnv() {
     };
     const B = new Proxy({}, { get: () => _batch });
     const MAT = new Proxy({}, { get: () => ({}) });
-    const Atlas = { tex: null, cells: {}, W: 1024, H: 1024 };
-    const uvOf = () => null;
     const scene = { add: _noop };
+    // 画布空壳：所有绘制调用都是空的，但 buildAtlas 里
+    // Atlas.cells[...] = cell(...) 那套算术是原件，跑出来的格子坐标是真的。
+    const _ctx2d = new Proxy({}, {
+      get: () => () => {},
+      set: () => true,
+    });
+    const document = { createElement: () => ({ width: 0, height: 0, getContext: () => _ctx2d }) };
     let signCounter = 0;
     const buildHouse = _noop, buildBridge = _noop, buildGate = _noop, buildTeahouse = _noop;
   `;
@@ -162,9 +168,14 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const jobs = JSON.parse(process.argv[2] || '{}');
   const out = {};
   for (const [name, call] of Object.entries(jobs)) {
-    out[name] = name === 'groundPiece'
-      ? recordGroundPiece(ctx, call)
-      : record(ctx, name, call);
+    if (name === 'atlasCells') {
+      // 真的 buildAtlas 跑一遍（画布是空壳，格子算术是原件）
+      out[name] = vm.runInContext('buildAtlas(); Atlas.cells', ctx);
+    } else if (name === 'groundPiece') {
+      out[name] = recordGroundPiece(ctx, call);
+    } else {
+      out[name] = record(ctx, name, call);
+    }
   }
   process.stdout.write(JSON.stringify(out));
 }
