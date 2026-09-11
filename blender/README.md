@@ -41,7 +41,7 @@ tests/            # 与 JS 原函数的数值比对
 画图交给系统 Python：
 
 ```powershell
-python blender	ools\make_atlas.py 4      # 参数是放大倍率，默认 4 -> 4096x4096
+python blender\tools\make_atlas.py 4      # 参数是放大倍率，默认 4 -> 4096x4096
 ```
 
 字体写死 `C:\Windows\Fonts\simsun.ttc`，找不到就直接报错退出 ——
