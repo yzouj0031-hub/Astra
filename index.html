@@ -1170,10 +1170,19 @@ function faceAway(){ walk.heading = walk.yaw + Math.PI; }
 /* ---------- 驾车 ---------- */
 // 模型的车头指向 +Z，yaw 与角色朝向同一套约定：前进方向 = (sin yaw, cos yaw)
 const CAR_HALF_WIDTH=1.66, CAR_HALF_LENGTH=2.6;
-const CAR_R = Math.hypot(CAR_HALF_WIDTH,CAR_HALF_LENGTH), CAR_TOP = 26, CAR_REV = 8, CAR_BASE = 2.9, CAR_LOCK = 0.62;
+const CAR_R = Math.hypot(CAR_HALF_WIDTH,CAR_HALF_LENGTH), CAR_TOP = 18, CAR_REV = 6, CAR_BASE = 2.9, CAR_LOCK = 0.62;
+// 车身用一组圆盘铺满，而不是一个轴对齐的包围盒：包围盒在 45 度时会撑到 6 米见方，
+// 车明明是 3.3×5.2，于是斜着开一路都在蹭看不见的东西。圆盘各方向膨胀量相同，
+// 2×3 铺开刚好盖住整个车身（每个格子的外接圆），最多只比真车身胖 0.37 米。
+const CAR_DISC_COLS = 2, CAR_DISC_ROWS = 3;
+const CAR_DISC_R = Math.hypot(CAR_HALF_WIDTH/CAR_DISC_COLS, CAR_HALF_LENGTH/CAR_DISC_ROWS);
+const CAR_DISCS = (()=>{const out=[];
+ for(let i=0;i<CAR_DISC_COLS;i++)for(let j=0;j<CAR_DISC_ROWS;j++)
+  out.push([(2*i+1-CAR_DISC_COLS)*CAR_HALF_WIDTH/CAR_DISC_COLS,(2*j+1-CAR_DISC_ROWS)*CAR_HALF_LENGTH/CAR_DISC_ROWS]);
+ return out;})();
 // 停在海滨大道上，车头朝西（-X）
 const car = {x:650, z:-148, yaw:-Math.PI/2, spd:0, steer:0, wheel:0, spin:0,
-             camYaw:0, camPitch:0.10, camDist:11.5, camFree:0, y:4.15, hop:0};
+             camYaw:0, camPitch:0.17, camDist:11.5, camFree:0, y:4.15, hop:0};
 
 /* ---------- 航行 ---------- */
 // 帆船是一艘停在世界里的船：开到哪里、在哪里靠岸，它就留在哪里；走近船身再上船
@@ -5990,23 +5999,42 @@ function vehicleHalfExtents(yaw){
  const sn=Math.abs(Math.sin(yaw)),cs=Math.abs(Math.cos(yaw));
  return {x:CAR_HALF_LENGTH*sn+CAR_HALF_WIDTH*cs,z:CAR_HALF_LENGTH*cs+CAR_HALF_WIDTH*sn};
 }
-function vehicleRotationBounds(fromYaw,toYaw){
- const steps=Math.max(1,Math.ceil(Math.abs(toYaw-fromYaw)/.02)),half={x:0,z:0};
- for(let i=0;i<=steps;i++){const h=vehicleHalfExtents(fromYaw+(toYaw-fromYaw)*i/steps);half.x=Math.max(half.x,h.x);half.z=Math.max(half.z,h.z);}
- const allowance=CAR_R*Math.abs(toYaw-fromYaw)/steps/2;
- half.x+=allowance;half.z+=allowance;return half;
+// 圆盘相对车心偏移 o，所以「圆盘撞到某个矩形」等价于「车心撞到该矩形平移 -o 再外扩圆盘半径」。
+// 于是仍然只扫一个点，形状却贴着车身。车头是本地 +Z，rotation.y=yaw 的映射照抄。
+function vehicleDiscRects(rects,yaw){
+ const cs=Math.cos(yaw),sn=Math.sin(yaw),out=[];
+ for(const [lx,lz] of CAR_DISCS){
+  const ox=lx*cs+lz*sn, oz=-lx*sn+lz*cs;
+  for(const r of rects)out.push({x:r.x-ox,z:r.z-oz,w:r.w+2*CAR_DISC_R,d:r.d+2*CAR_DISC_R});
+ }
+ return out;
+}
+// 平时每帧转不到 0.01 弧度，一次取样就够；只有像原地掉头那样的大角度才补采样，
+// 免得车身从某个东西中间扫过去。
+function vehicleTurnRects(rects,fromYaw,toYaw,atTo){
+ const steps=Math.ceil(Math.abs(toYaw-fromYaw)/0.25);
+ if(steps<=1)return atTo;
+ let out=atTo.slice();
+ for(let i=0;i<steps;i++)out=out.concat(vehicleDiscRects(rects,fromYaw+(toYaw-fromYaw)*i/steps));
+ return out;
 }
 function resolveVehicle(oldX,oldZ,x,z,fromYaw=car.yaw,toYaw=car.yaw){
  const start={x:oldX,z:oldZ};
  const reach=Math.hypot(x-oldX,z-oldZ)/2+CAR_R+4,mx=(oldX+x)/2,mz=(oldZ+z)/2;
  const rects=[...harborNearbySolids(mx,mz,reach),...harborTrams.map(c=>({x:c.g.position.x,z:c.g.position.z,w:11,d:3.8}))];
  for(const p of harborPeopleColliders(null))if(Math.abs(p.x-mx)<reach&&Math.abs(p.z-mz)<reach)rects.push({...p,w:1,d:1});
- const expand=h=>rects.map(r=>({...r,w:r.w+2*h.x,d:r.d+2*h.z}));
- const initial=expand(vehicleHalfExtents(fromYaw));
- // An externally introduced overlap stops the car; recovery must not teleport it through people.
- if(initial.some(r=>harborRectContains(start,r,0)))return {...start,yaw:fromYaw,hit:true};
- let yaw=toYaw,turnBlocked=false,expanded=expand(vehicleRotationBounds(fromYaw,toYaw));
- if(expanded.some(r=>harborRectContains(start,r,0))){yaw=fromYaw;turnBlocked=true;expanded=initial;}
+ const initial=vehicleDiscRects(rects,fromYaw);
+ // 已经陷在某个形状里了——行人走过来、电车蹭上、或者上一帧停在了接触面的误差之内。
+ // 原来是就地冻住，于是怎么打方向、挂什么挡都再也动不了。现在把正卡着的那几个形状
+ // 先放开，让车自己挪出来；其余障碍照常拦着，所以也不会从人身上穿过去。
+ if(initial.some(r=>harborRectContains(start,r,0))){
+  const clear=initial.filter(r=>!harborRectContains(start,r,0));
+  const out=sweepHarborMotion(start,{x,z},clear,null,0);
+  return {...out,yaw:fromYaw,hit:true};
+ }
+ let yaw=toYaw,turnBlocked=false,expanded=vehicleDiscRects(rects,toYaw);
+ // 转过去会卡住就不转，但车身照样按原来的朝向往前挪，不至于一碰就钉死
+ if(vehicleTurnRects(rects,fromYaw,toYaw,expanded).some(r=>harborRectContains(start,r,0))){yaw=fromYaw;turnBlocked=true;expanded=initial;}
  const p=sweepHarborMotion(start,{x,z},expanded,null,0);
  return {...p,yaw,hit:turnBlocked||Math.hypot(p.x-x,p.z-z)>.001};
 }
@@ -6027,10 +6055,10 @@ function updateDrive(dt,t){
  const hand=!!keys[" "];
 
  // 油门、刹车、倒车分开，踩反向键先当刹车用
- if(throttle<-0.05 && car.spd>0.35) car.spd-=24*dt;
- else if(throttle>0.05 && car.spd<-0.35) car.spd+=24*dt;
- else car.spd+=throttle*(throttle>0?12.5:8)*dt;
- car.spd*=1-Math.min(0.9,(hand?3.2:0.5)*dt);
+ if(throttle<-0.05 && car.spd>0.35) car.spd-=14*dt;
+ else if(throttle>0.05 && car.spd<-0.35) car.spd+=14*dt;
+ else car.spd+=throttle*(throttle>0?6.0:4)*dt;
+ car.spd*=1-Math.min(0.9,(hand?3.2:0.34)*dt);
  car.spd=Math.max(-CAR_REV,Math.min(CAR_TOP,car.spd));
  if(Math.abs(car.spd)<0.04 && Math.abs(throttle)<0.05) car.spd=0;
 
@@ -6044,11 +6072,16 @@ function updateDrive(dt,t){
  const step=car.spd*dt;
  let nx=car.x+fx*step, nz=car.z+fz*step;
  const solved=resolveVehicle(car.x,car.z,nx,nz,oldYaw,nextYaw);car.yaw=solved.yaw;
- if(solved.hit){ car.spd*=0.3; car.hop=Math.min(1,car.hop+0.5); }
+ if(solved.hit){
+  // 贴着墙蹭过去和正面撞上不是一回事：按实际被挡掉多少来扣速度
+  const want=Math.hypot(nx-car.x,nz-car.z),got=Math.hypot(solved.x-car.x,solved.z-car.z);
+  const lost=want>1e-6?Math.max(0,Math.min(1,1-got/want)):0;
+  car.spd*=1-0.8*lost; car.hop=Math.min(1,car.hop+0.5*lost);
+ }
  nx=solved.x; nz=solved.z;
  // 不许开进海里，也不许爬上二楼
  const gy=carGroundY(nx,nz);
- if(gy<3.2||gy>6){ car.spd*=-0.12; }
+ if(gy<3.2||gy>6){ car.spd*=-0.12; car.hop=Math.min(1,car.hop+0.35); }
  else { car.x=nx; car.z=nz; car.y+=(gy-car.y)*Math.min(1,dt*8); }
 
  car.hop*=1-Math.min(1,dt*4);
@@ -6068,9 +6101,9 @@ function updateDrive(dt,t){
  // 跟车镜头：有速度时自动回到车尾，拖动后短暂保持自由视角
  const behind=car.yaw+Math.PI;
  car.camFree=Math.max(0,(car.camFree||0)-dt);
- if(!car.camFree && !dragging && Math.abs(car.spd)>1.2){
+ if(!car.camFree && !dragging && car.spd>1.2){
   const drift=Math.atan2(Math.sin(behind-car.camYaw),Math.cos(behind-car.camYaw));
-  car.camYaw+=drift*Math.min(1,dt*(car.spd>0?2.4:1.2));
+  car.camYaw+=drift*Math.min(1,dt*3.6);
  }
  const y=car.camYaw, p=car.camPitch, cp=Math.cos(p), sp=Math.sin(p);
  const anchor={x:car.x,y:car.y+2.15,z:car.z},dir={x:Math.sin(y)*cp,y:-sp,z:Math.cos(y)*cp};

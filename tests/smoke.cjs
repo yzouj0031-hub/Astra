@@ -30,7 +30,7 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,vehicleRotationBounds,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -552,8 +552,10 @@ function test(width,height){
  const start={x:a.car.x,z:a.car.z};let peak=0;
  a.keys.w=true;for(let i=0;i<200;i++){a.updateDrive(.05,i*.05);peak=Math.max(peak,a.car.spd);}
  a.clearInput();
- assert(peak>18,`The car reaches road speed (${(peak*3.6).toFixed(0)} km/h)`);
- assert(Math.hypot(a.car.x-start.x,a.car.z-start.z)>120,'The car covers the length of the boulevard');
+ // Fast enough to cross the harbour, slow enough to place on a street full of kerbs and
+ // lamp posts — the old 94 km/h was the main reason the car felt unmanageable.
+ assert(peak>13&&peak<=a.CAR_TOP+1e-6,`The car reaches town speed without running away (${(peak*3.6).toFixed(0)} km/h)`);
+ assert(Math.hypot(a.car.x-start.x,a.car.z-start.z)>110,'The car covers the length of the boulevard');
  assert(a.roadster.g.position.x===a.car.x&&a.roadster.g.position.z===a.car.z,'The car body follows the simulated position');
  // Steering signs: D turns right (yaw up), A turns left.
  for(const [key,sign] of [['d',1],['a',-1]]){
@@ -611,8 +613,20 @@ function test(width,height){
  }
  const turned=a.resolveVehicle(customs.x,wallFace-2.7,customs.x,wallFace-2.7,0,Math.PI);
  assert(turned.hit&&turned.yaw===0,'A turn whose endpoints fit but middle strikes the wall is rejected');
- const envelope=a.vehicleRotationBounds(0,Math.PI);
- for(let i=0;i<=600;i++){const half=a.vehicleHalfExtents(Math.PI*i/600);assert(half.x<=envelope.x&&half.z<=envelope.z,'The entire rotation stays within its swept envelope');}
+ // The disc hull replaced the axis-aligned envelope: it must still cover every part of the
+ // body, and must stay near the real shape rather than ballooning into a square again.
+ for(let lx=-a.CAR_HALF_WIDTH;lx<=a.CAR_HALF_WIDTH+1e-9;lx+=a.CAR_HALF_WIDTH/8)
+  for(let lz=-a.CAR_HALF_LENGTH;lz<=a.CAR_HALF_LENGTH+1e-9;lz+=a.CAR_HALF_LENGTH/12)
+   assert(a.CAR_DISCS.some(([dx,dz])=>Math.hypot(lx-dx,lz-dz)<=a.CAR_DISC_R+1e-9),
+    `Disc hull covers body point (${lx.toFixed(2)}, ${lz.toFixed(2)})`);
+ const hullReach=Math.max(...a.CAR_DISCS.map(([dx,dz])=>Math.hypot(dx,dz)))+a.CAR_DISC_R;
+ assert(hullReach<a.CAR_R+0.2,`Disc hull hugs the body instead of a square (${hullReach.toFixed(2)} vs ${a.CAR_R.toFixed(2)})`);
+ // Wedged against something (a pedestrian walking into the car, a contact-epsilon landing)
+ // used to freeze the car forever; it has to be able to drive back out.
+ {
+  const pinned=a.resolveVehicle(customs.x,wallFace-2.0,customs.x,wallFace-9,0,0);
+  assert(Math.hypot(pinned.x-customs.x,pinned.z-(wallFace-2.0))>1,'A car overlapping something can still reverse out');
+ }
 
  // Free-look toward a nearby wall used to force the driving camera into it.
  a.car.spd=0;a.car.camYaw=0;a.car.camPitch=0;a.car.camFree=10;a.updateDrive(0,10);
