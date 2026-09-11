@@ -15,15 +15,17 @@ import math
 import os
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from blender.lib.geo import Batch  # noqa: E402
+from blender.lib import rng as rng_mod  # noqa: E402
 from blender.lib.rng import Rng  # noqa: E402
 from blender.lib import atlas  # noqa: E402
-from blender.parts import hall, plants, site  # noqa: E402
+from blender.parts import hall, plants, site, town  # noqa: E402
 
 HARNESS = os.path.join(ROOT, "blender", "tests", "js_harness.mjs")
 TOL = 1e-9
@@ -50,7 +52,14 @@ JOBS = {
     "bridgeSmall": "buildBridge({x:-72,z:0,axis:'z',len:11,halfW:2.1,h:3.6})",
     "bridgeBig": "buildBridge({x:-4,z:0,axis:'z',len:12,halfW:2.5,h:4.8,big:true})",
     "bridgeCross": "buildBridge({x:64,z:9,axis:'x',len:10,halfW:2.0,h:3.0})",
+    "buildGate": "buildGate(1, 23)",
+    "buildPagoda": "buildPagoda(L.hill.x, L.hill.z)",
+    "buildTeahouse": "buildTeahouse()",
     "groundPiece": [-380, 60, 6, 380],
+    # 整镇总装：一条随机流从头走到尾，一万多次几何调用逐个比
+    "layoutTown": "layoutTown()",
+    # 总装尾段：水面倒影片也在随机流里，漏了它地面的草色会整体错位
+    "afterStreaks": "(function(){ layoutTown(); buildWater(); buildStreaks(); })()",
 }
 
 
@@ -76,9 +85,12 @@ BRIDGES = {
 }
 
 
+REF_DIR = tempfile.mkdtemp(prefix="wt_ref_")
+
+
 def js_reference():
     proc = subprocess.run(
-        ["node", HARNESS, json.dumps(JOBS)],
+        ["node", HARNESS, json.dumps(JOBS), REF_DIR],
         capture_output=True, text=True, cwd=ROOT, shell=(os.name == "nt"),
     )
     if proc.returncode != 0:
@@ -96,6 +108,14 @@ def _batches(log):
         b.log = log          # 共用一份流水，才能和 JS 那边单条 LOG 的顺序对上
         bs[k] = b
     return bs
+
+
+def make_logging_batch(log):
+    def factory(nm):
+        b = Batch(nm)
+        b.log = log
+        return b
+    return factory
 
 
 def run_python(name):
@@ -123,16 +143,38 @@ def run_python(name):
         hall.build_house(bs, rng, reg, HOUSES[name])
     elif name in BRIDGES:
         hall.build_bridge(bs, rng, reg, BRIDGES[name])
+    elif name == "buildGate":
+        hall.build_gate(bs, rng, reg, 1, 23)
+    elif name == "buildPagoda":
+        hall.build_pagoda(bs, rng, reg, site.L["hill"]["x"], site.L["hill"]["z"],
+                          site.hill_y)
+    elif name == "layoutTown":
+        town.layout_town(bs, rng, reg, make_logging_batch(log))
+    elif name == "afterStreaks":
+        factory = make_logging_batch(log)
+        town.layout_town(bs, rng, reg, factory)
+        town.build_streaks(factory("Streaks"), rng, reg)
+    elif name == "buildTeahouse":
+        # 茶馆自己那套 batch 也记进同一条流水
+        hall.build_teahouse(bs, rng, reg, make_logging_batch(log))
     else:
         raise KeyError(name)
     return rng.calls, rng.seed, log
 
 
-def compare_log(name, js_log, py_log):
-    if len(js_log) != len(py_log):
-        print(f"  FAIL {name}: 几何调用数 JS={len(js_log)} PY={len(py_log)}")
+def read_log(path):
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                yield json.loads(line)
+
+
+def compare_log(name, ref, py_log):
+    if ref["count"] != len(py_log):
+        print(f"  FAIL {name}: 几何调用数 JS={ref['count']} PY={len(py_log)}")
         return False
-    for i, (j, p) in enumerate(zip(js_log, py_log)):
+    for i, (j, p) in enumerate(zip(read_log(ref["file"]), py_log)):
         j_geo, j_m, j_col, j_uv, j_extra = j
         p_geo, p_m, p_col, p_uv, p_extra = p
         if j_geo != p_geo:
@@ -206,7 +248,8 @@ def check_ground_piece(ref):
         print(f"  FAIL groundPiece: 顶点数 JS={ref['count']} PY={len(b.verts)}")
         return False
     worst_p = worst_c = 0.0
-    for i, (jp, jc) in enumerate(zip(ref["pos"], ref["col"])):
+    for i, row in enumerate(read_log(ref["file"])):
+        jp, jc = row[:3], row[3:]
         pv, pc = b.verts[i], b.cols[i]
         worst_p = max(worst_p, max(abs(jp[k] - pv[k]) for k in range(3)))
         # Python 侧 cols 存的是线性值，JS 是原始显示值，比之前先编码回去
@@ -246,10 +289,24 @@ def check_atlas(ref):
     return True
 
 
+def check_module_preroll(ref):
+    """layoutTown 不是从种子起点开始的：模块级的星空和雨滴先消耗了 6200 个数。
+    这条对不上，整座镇子的布局就全错。"""
+    r = Rng()
+    got = rng_mod.module_preroll(r)
+    if got != ref:
+        print(f"  FAIL 模块级预消耗: JS={ref} PY={got}")
+        return False
+    print(f"  ok  模块级预消耗    {rng_mod.MODULE_LEVEL_DRAWS} 个数后种子 {got}")
+    return True
+
+
 def main():
     ref = js_reference()
-    ok = True
+    ok = check_module_preroll(ref["_moduleSeed"])
     for name in JOBS:
+        if name.startswith("_"):
+            continue
         if name == "atlasCells":
             ok &= check_atlas(ref[name])
             continue
@@ -266,7 +323,7 @@ def main():
             print(f"  FAIL {name}: 结束种子 JS={r['seed']} PY={seed}")
             good = False
         else:
-            good = compare_log(name, r["log"], log)
+            good = compare_log(name, r, log)
         if good:
             print(f"  ok  {name:<16} draws={draws} 几何调用={len(log)} 种子={seed}")
         ok &= good

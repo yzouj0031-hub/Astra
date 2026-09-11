@@ -22,6 +22,7 @@ import math
 
 from ..lib import atlas as _atlas
 from ..lib import color as _color
+from ..lib.geo import BATCH_KEYS as _BATCH_KEYS
 from ..lib.geo import (M, TAU, box, extrude_prim, flip_inside, js_round,
                        tube_prim)
 
@@ -332,3 +333,155 @@ def build_bridge(batches, rng, reg, b):
             reg.lantern_spots.append({"x": p[0], "y": p[1], "z": p[2],
                                       "water": 0, "light": bool(b.get("big"))})
     reg.bridges.append(b)
+
+
+# ---------------------------------------------------------------- 宝塔
+PAGODA_DRAWS = 5 * 6        # 每层：墙身 tint 3 + 檐 tint 3
+
+
+def build_pagoda(batches, rng, reg, x, z, hill_y):
+    """watertown.js:365 —— 山顶的望江塔，五层。
+
+    hill_y 是个函数（parts.site.hill_y），塔要坐在山上。
+    """
+    y = hill_y(x, z)
+    parent = M(x, y, z)
+    b_stone, b_wall, b_wood, b_roof, b_sign = (
+        batches["stone"], batches["wall"], batches["wood"],
+        batches["roof"], batches["sign"])
+
+    box(b_stone, C["stone"], 14, 2.6, 14, 0, 0.5, 0, 0, 0, 0, parent)
+    b_stone.add("cyl", parent @ M(0, 2.1, 0, 6.2, 0.6, 6.2), C["stoneLt"])
+
+    r, yy = 3.4, 2.4
+    for _i in range(5):
+        h = 2.7
+        b_wall.add("cyl", parent @ M(0, yy + h / 2, 0, r, h, r),
+                   _color.tint(C["wallWarm"], 0.02, rng))
+        b_wood.add("cyl", parent @ M(0, yy + h * 0.55, 0, r * 1.25, 0.14, r * 1.25),
+                   C["woodDk"])                                          # 平座
+        for k in range(8):
+            a = k / 8 * TAU + math.pi / 8
+            box(b_wood, C["woodDk"], 0.22, h, 0.22,
+                math.cos(a) * (r - 0.05), yy + h / 2, math.sin(a) * (r - 0.05),
+                -a, 0, 0, parent)
+        b_roof.add("cone", parent @ M(0, yy + h + 0.55, 0, r * 1.75, 1.3, r * 1.75),
+                   _color.tint(C["slate"], 0.02, rng))
+        b_roof.add("cyl", parent @ M(0, yy + h + 0.1, 0, r * 1.75, 0.25, r * 1.75),
+                   C["slateDk"])
+        for k in (1, 5):
+            a = k / 8 * TAU
+            p = parent.xform((math.cos(a) * (r * 1.55), yy + h - 0.1,
+                              math.sin(a) * (r * 1.55)))
+            reg.lantern_spots.append({"x": p[0], "y": p[1], "z": p[2],
+                                      "water": 0, "light": False})
+        yy += h + 1.0
+        r *= 0.86
+
+    b_wood.add("cyl", parent @ M(0, yy + 1.4, 0, 0.18, 3.2, 0.18), C["woodDk"])
+    b_sign.add("sph", parent @ M(0, yy + 3.0, 0, 0.5, 0.5, 0.5), 0xE8C66A)
+    reg.obstacles.append({"x0": x - 7, "x1": x + 7, "z0": z - 7, "z1": z + 7})
+
+
+# ---------------------------------------------------------------- 牌坊
+GATE_DRAWS = 0
+
+
+def build_gate(batches, rng, reg, x, z):
+    """watertown.js:387 —— 四柱三间的石牌坊，顶上三段小屋顶。"""
+    parent = M(x, 0, z)
+    b_stone, b_wood, b_roof, b_sign = (
+        batches["stone"], batches["wood"], batches["roof"], batches["sign"])
+
+    xs = [-5.2, -1.9, 1.9, 5.2]
+    hs = [5.6, 7.4, 7.4, 5.6]
+    for i, px in enumerate(xs):
+        box(b_stone, C["stoneLt"], 0.62, hs[i], 0.62, px, hs[i] / 2, 0, 0, 0, 0, parent)
+        box(b_stone, C["stoneDk"], 1.1, 0.5, 1.1, px, 0.25, 0, 0, 0, 0, parent)
+
+    box(b_wood, C["woodDk"], 4.4, 0.55, 0.7, 0, 6.6, 0, 0, 0, 0, parent)
+    box(b_wood, C["woodDk"], 4.4, 0.42, 0.7, 0, 5.2, 0, 0, 0, 0, parent)
+    for s in (-1, 1):
+        box(b_wood, C["woodDk"], 3.9, 0.45, 0.6, s * 3.55, 4.9, 0, 0, 0, 0, parent)
+    box(b_sign, C["woodDk"], 3.3, 1.0, 0.18, 0, 5.9, 0.42, 0, 0, 0, parent,
+        _atlas.uv_of("gate"))
+
+    def mini(px, w, yb):
+        poly = [[-1.3, yb], [1.3, yb], [1.3, yb + 0.3], [0, yb + 1.25], [-1.3, yb + 0.3]]
+        b_roof.add(extrude_prim(poly, w),
+                   parent @ M(px - w / 2, 0, 0, 1, 1, 1, 0, math.pi / 2, 0),
+                   C["slate"])
+        box(b_roof, C["slateDk"], w + 0.5, 0.3, 0.4, px, yb + 1.3, 0, 0, 0, 0, parent)
+
+    mini(0, 4.6, 7.6)
+    mini(-3.55, 4.0, 5.9)
+    mini(3.55, 4.0, 5.9)
+
+    for px in xs:
+        reg.obstacles.append({"x0": x + px - 0.45, "x1": x + px + 0.45,
+                              "z0": z - 0.45, "z1": z + 0.45})
+
+
+# ---------------------------------------------------------------- 茶馆
+TEAHOUSE_DRAWS = HOUSE_DRAWS + 5     # 房子 13 + 五只茶壶各 pick 一次
+
+TEAHOUSE_INFO = {
+    "box": {"x0": 14, "x1": 28, "z0": 12, "z1": 24},
+    "door": {"x": 21, "z": 12},
+}
+
+
+def build_teahouse(batches, rng, reg, make_batch):
+    """watertown.js:404 —— 同福茶楼。
+
+    上半截走**自己的一套 batch**（TH.batches），因为原场景里人走进去时
+    要把它单独变透明（watertown.js:717-719）。2A 不需要这个交互，但保留
+    分组有用：可以单独隐藏上半截渲室内。室内陈设、匾额仍然走全局 batch，
+    照原文。
+
+    make_batch(name) 由调用方给，用来造 TH 的那套 batch（测试里会让它们
+    共用同一份记账流水，才能和 JS 的调用顺序对上）。
+    """
+    th = {k: make_batch("TH_" + k) for k in _BATCH_KEYS}
+
+    o = {"x": 21, "z": 18, "w": 14, "d": 12, "floors": 2, "facing": math.pi,
+         "openGround": True, "batches": th, "noObstacle": True, "gable": True}
+    build_house(batches, rng, reg, o)
+
+    box(batches["sign"], C["woodDk"], 3.4, 0.9, 0.16, 21, 3.55, 11.6, 0, 0, 0,
+        None, _atlas.uv_of("tea"))                                        # 匾额
+
+    # 室内：方桌、条凳、柜台、茶壶
+    b_wood, b_misc = batches["wood"], batches["misc"]
+    for tx, tz in ((17.5, 15.5), (24.5, 15.5), (17.5, 20.5), (24.5, 20.5)):
+        box(b_wood, C["wood"], 1.5, 0.08, 1.5, tx, 0.8, tz)
+        box(b_wood, C["woodDk"], 0.14, 0.76, 0.14, tx, 0.4, tz)
+        for dx, dz in ((0, 1.15), (0, -1.15), (1.15, 0), (-1.15, 0)):
+            box(b_wood, C["woodLt"], 0.9, 0.06, 0.3, tx + dx, 0.48, tz + dz,
+                math.pi / 2 if dz == 0 else 0)
+        b_misc.add("sph", M(tx + 0.2, 0.98, tz - 0.1, 0.16, 0.14, 0.16), 0xC9C0AA)
+        b_misc.add("cyl", M(tx - 0.3, 0.9, tz + 0.25, 0.09, 0.12, 0.09), 0xC9C0AA)
+        reg.obstacles.append({"x0": tx - 0.9, "x1": tx + 0.9,
+                              "z0": tz - 0.9, "z1": tz + 0.9, "h": 1.1})
+
+    box(b_wood, C["woodDk"], 6, 1.0, 0.8, 21, 0.5, 23.2)
+    box(b_wood, C["wood"], 6, 0.1, 0.9, 21, 1.02, 23.2)
+    box(b_wood, C["woodDk"], 5, 2.4, 0.3, 21, 2.0, 23.8)
+    for i in range(5):
+        b_misc.add("cyl", M(18.9 + i * 1.05, 1.65, 23.65, 0.2, 0.28, 0.2),
+                   rng.pick([0x7A5230, 0xB5AC93, 0x4F6B6B]))
+    reg.obstacles.append({"x0": 17.8, "x1": 24.2, "z0": 22.6, "z1": 24.4, "h": 1.2})
+
+    # 墙体碰撞（留门）
+    reg.obstacles += [
+        {"x0": 14, "x1": 28, "z0": 23.6, "z1": 24.4},
+        {"x0": 14, "x1": 14.5, "z0": 12, "z1": 24},
+        {"x0": 27.5, "x1": 28, "z0": 12, "z1": 24},
+        {"x0": 14, "x1": 19.4, "z0": 12, "z1": 12.5},
+        {"x0": 22.6, "x1": 28, "z0": 12, "z1": 12.5},
+    ]
+    reg.lantern_spots += [
+        {"x": 18, "y": 2.7, "z": 18, "water": 0, "light": True},
+        {"x": 24, "y": 2.7, "z": 18, "water": 0, "light": True},
+    ]
+    return th

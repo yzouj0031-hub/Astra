@@ -279,6 +279,14 @@ def flip_inside(p):
 _cache = {}
 
 
+def prim_sphere(u_segments, v_segments):
+    """参数化球。灯笼用的是 SphereGeometry(0.28,10,8)，分段数和 G.sph(9,7) 不同。"""
+    key = ("sph", u_segments, v_segments)
+    if key not in _cache:
+        _cache[key] = _make_sph(u_segments, v_segments)
+    return _cache[key]
+
+
 def prim(name):
     """watertown.js:75-79 的 G.*"""
     if name not in _cache:
@@ -411,6 +419,9 @@ def shape(batch, col, geo, x, y, z, parent=None, ry=0.0):
 
 
 TAU = math.pi * 2
+
+# watertown.js:164
+BATCH_KEYS = ("wall", "roof", "wood", "stone", "glow", "foliage", "sign", "misc")
 
 
 def js_round(v):

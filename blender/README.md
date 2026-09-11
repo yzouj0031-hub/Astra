@@ -23,8 +23,12 @@ lib/materials.py  # 2A 的程序化节点材质
 tools/make_atlas.py  # 用 PIL 画图集（要用系统 Python 跑）
 assets/           # 生成出来的图集
 parts/site.py     # 布局、水域判定、地形、驳岸、地面、广场、远山、菜畦、河水
-parts/hall.py     # 房子（墙体/屋顶/马头墙/临街立面）、石拱桥
+parts/hall.py     # 房子（墙体/屋顶/马头墙/临街立面）、石拱桥、牌坊、茶馆、宝塔
 parts/plants.py   # 柳树、樟树
+parts/lamps.py    # 灯笼
+parts/town.py     # layoutTown：整镇布局
+build_garden.py   # 总装入口，出 renders/town.blend
+render_still.py   # 2A 出图：五个固定机位 x 昼/黄昏/夜
 milestones/       # 每步一个可渲染的验收场景
 tests/            # 与 JS 原函数的数值比对
 ```
@@ -50,8 +54,28 @@ python blender\tools\make_atlas.py 4      # 参数是放大倍率，默认 4 -> 
 放大倍率不影响任何 UV：`cell()` 是按 W/H 取比例的，整张图等比放大，
 格子坐标一个不变，所以想要多清晰就调多少，几何侧不用动。
 
-## 三条硬性约束
+## 出图
 
+```powershell
+& $B --background --python blender\build_garden.py                      # 只总装，存 .blend
+& $B --background --python blender\render_still.py -- --cam canal --time day
+& $B --background --python blender\render_still.py -- --cam bridge --time night --samples 1024 --scale 100
+```
+
+机位固化在 `render_still.py` 的 `CAMERAS` 里（canal / bridge / teahouse /
+pagoda / overview），昼夜是 `TIMES` 里的一个开关，改的是世界环境、太阳、
+以及灯笼与窗纸的自发光强度 —— 几何一个字不动。
+
+**夜景不需要补光**：灯笼纸是自发光材质，在 Cycles 里发光的网格就是光源，
+灯下的石板、水里的倒影都会自然算出来。原作那套 `mkGlow` sprite 和
+「最多 9 盏 PointLight」是 WebGL 的性能妥协，不要照搬。
+
+## 四条硬性约束
+
+0. **总装前先空转 6200 个随机数**。watertown.js 的整个模块体在 init() 之前
+   就执行了，其中星空（1100x2）和雨滴（1000x4）会先消耗掉 6200 个数 ——
+   layoutTown 并不是从种子起点开始的。`rng.module_preroll()` 负责这件事，
+   漏了它整座镇子的布局全错。
 1. **随机流顺序**。整座镇子由一条全局 LCG 按调用顺序生成（种子 20260906）。
    移植任何 `build*` 函数时，`rr/ri/pick/tint` 的调用次数和先后必须和 JS 一模一样，
    否则后面所有物件全部错位。每个函数都在 `parts/*.py` 里带一个 `*_DRAWS` 常量，

@@ -60,6 +60,11 @@ def _noise(nt_nodes, scale, detail=6.0, rough=0.5, x=-900, y=-300):
     return n
 
 
+def _set_input(node, index, value):
+    """按序号设输入（有些节点的同名输入不止一个）。"""
+    node.inputs[index].default_value = value
+
+
 def _bump(nt_nodes, strength, x=-350, y=-400):
     n = nt_nodes.new("ShaderNodeBump")
     n.location = (x, y)
@@ -117,6 +122,113 @@ def stone_material(name="M_Stone"):
     links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
 
     bump = _bump(nodes, 0.35)
+    links.new(grain.outputs["Fac"], bump.inputs["Height"])
+    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    return mat
+
+
+# ---------------------------------------------------------------- 粉墙
+
+def plaster_material(name="M_Plaster"):
+    """粉墙。石灰抹面：几乎全漫反射，大尺度的斑驳，墙脚泛潮发暗。
+
+    墙脚那圈水渍是江南老墙的样子，用世界坐标的高度驱动 —— 不需要 UV，
+    也不挑物件。高度 0~1.6 米之间从潮渍过渡到干净墙面。
+    """
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    bsdf = nodes["Principled BSDF"]
+    _set(bsdf, "Roughness", 0.92)
+    _kill_specular(bsdf)
+
+    col = _vcol(nodes)
+    mottle = _noise(nodes, scale=2.2, detail=6.0, rough=0.55, y=-300)
+
+    wash = nodes.new("ShaderNodeMix")          # 斑驳
+    wash.data_type = "RGBA"
+    wash.blend_type = "MULTIPLY"
+    wash.location = (-560, 0)
+    _set(wash, "Factor", 0.13)
+    links.new(col.outputs["Color"], wash.inputs[6])
+    links.new(mottle.outputs["Color"], wash.inputs[7])
+
+    # 墙脚潮渍：Blender 的 Z 就是高度
+    geom = nodes.new("ShaderNodeNewGeometry")
+    geom.location = (-1150, -650)
+    sep = nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (-980, -650)
+    links.new(geom.outputs["Position"], sep.inputs["Vector"])
+
+    damp = nodes.new("ShaderNodeMapRange")
+    damp.location = (-800, -650)
+    _set(damp, "From Min", 0.0)
+    _set(damp, "From Max", 1.6)
+    _set(damp, "To Min", 1.0)
+    _set(damp, "To Max", 0.0)
+    _set(damp, "Clamp", True)
+    links.new(sep.outputs["Z"], damp.inputs["Value"])
+
+    # 潮渍边缘用噪声打碎，不要一条直线
+    edge = _noise(nodes, scale=7.0, detail=5.0, x=-980, y=-900)
+    jitter = nodes.new("ShaderNodeMath")
+    jitter.operation = "MULTIPLY_ADD"
+    jitter.location = (-620, -820)
+    _set_input(jitter, 1, 0.45)
+    links.new(damp.outputs["Result"], jitter.inputs[0])
+    links.new(edge.outputs["Fac"], jitter.inputs[2])
+
+    stain = nodes.new("ShaderNodeMix")
+    stain.data_type = "RGBA"
+    stain.blend_type = "MIX"
+    stain.location = (-330, 0)
+    stain.inputs[7].default_value = (0.20, 0.21, 0.18, 1.0)   # 潮渍的青灰
+    links.new(jitter.outputs["Value"], stain.inputs[0])
+    links.new(wash.outputs[2], stain.inputs[6])
+    links.new(stain.outputs[2], bsdf.inputs["Base Color"])
+
+    bump = _bump(nodes, 0.12)
+    links.new(mottle.outputs["Fac"], bump.inputs["Height"])
+    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    return mat
+
+
+# ---------------------------------------------------------------- 黛瓦
+
+def roof_material(name="M_Roof"):
+    """黛瓦。比石头亮、比木头滑：瓦当是烧结面，江南又常年潮湿，
+    所以粗糙度压到 0.22~0.55 之间并让噪声驱动 —— 屋面上会出现一条条
+    半干半湿的高光，这是瓦面的识别特征，磨砂一片就不像了。"""
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    bsdf = nodes["Principled BSDF"]
+    if not _set(bsdf, "Specular IOR Level", 0.55):
+        _set(bsdf, "Specular", 0.55)
+
+    col = _vcol(nodes)
+    wet = _noise(nodes, scale=5.5, detail=7.0, rough=0.6, y=-260)
+    grain = _noise(nodes, scale=60.0, detail=6.0, y=-560)
+
+    tintmix = nodes.new("ShaderNodeMix")
+    tintmix.data_type = "RGBA"
+    tintmix.blend_type = "MULTIPLY"
+    tintmix.location = (-520, 0)
+    _set(tintmix, "Factor", 0.18)
+    links.new(col.outputs["Color"], tintmix.inputs[6])
+    links.new(grain.outputs["Color"], tintmix.inputs[7])
+    links.new(tintmix.outputs[2], bsdf.inputs["Base Color"])
+
+    rough = nodes.new("ShaderNodeMapRange")
+    rough.location = (-520, -300)
+    _set(rough, "From Min", 0.0)
+    _set(rough, "From Max", 1.0)
+    _set(rough, "To Min", 0.22)
+    _set(rough, "To Max", 0.55)
+    links.new(wet.outputs["Fac"], rough.inputs["Value"])
+    links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
+
+    bump = _bump(nodes, 0.16)
     links.new(grain.outputs["Fac"], bump.inputs["Height"])
     links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     return mat
@@ -311,7 +423,75 @@ def sign_material(name="M_Sign"):
     return mat
 
 
+# ---------------------------------------------------------------- 灯笼
+
+def lantern_material(name="M_Lantern", strength=12.0):
+    """灯笼纸：薄半透明 + 自发光。
+
+    原作是 MeshPhongMaterial 加一点 emissive，再靠 mkGlow 那种 sprite 伪造光晕。
+    2A 里发光的网格本身就是光源 —— 灯下的石板、水面的倒影、雨雾里的光锥
+    都会自然算出来，不用补 PointLight，也不用贴光晕片。
+
+    strength 是发光强度（W/m²），夜景调它。
+    """
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    for n in list(nodes):
+        if n.type != "OUTPUT_MATERIAL":
+            nodes.remove(n)
+    out = nodes["Material Output"]
+
+    # 纸：暖橙，背光时透一点
+    emit = nodes.new("ShaderNodeEmission")
+    emit.location = (-260, 120)
+    _set(emit, "Color", (1.0, 0.36, 0.16, 1.0))
+    _set(emit, "Strength", strength)
+
+    diffuse = nodes.new("ShaderNodeBsdfDiffuse")
+    diffuse.location = (-260, -60)
+    _set(diffuse, "Color", (0.75, 0.12, 0.07, 1.0))
+
+    mix = nodes.new("ShaderNodeMixShader")
+    mix.location = (40, 40)
+    _set(mix, "Fac", 0.82)
+    links.new(diffuse.outputs["BSDF"], mix.inputs[1])
+    links.new(emit.outputs["Emission"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], out.inputs["Surface"])
+    return mat
+
+
+def glow_material(name="M_Glow", strength=2.4):
+    """窗纸：屋里透出来的暖光（原作的 C.glowWin 那些片）。"""
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    for n in list(nodes):
+        if n.type != "OUTPUT_MATERIAL":
+            nodes.remove(n)
+    out = nodes["Material Output"]
+    emit = nodes.new("ShaderNodeEmission")
+    emit.location = (-260, 0)
+    _set(emit, "Color", (1.0, 0.70, 0.40, 1.0))
+    _set(emit, "Strength", strength)
+    links.new(emit.outputs["Emission"], out.inputs["Surface"])
+    return mat
+
+
 # ---------------------------------------------------------------- 场景设置
+
+def set_emission_strength(mat_name, value):
+    """改自发光强度（灯笼、窗纸）。昼夜切换就是调这个，几何不动。"""
+    mat = bpy.data.materials.get(mat_name)
+    if not mat or not mat.node_tree:
+        return False
+    hit = False
+    for n in mat.node_tree.nodes:
+        if n.type == "EMISSION":
+            _set(n, "Strength", value)
+            hit = True
+    return hit
+
 
 def setup_view_transform(scene):
     """顶点色是按显示值写的，用 Standard 才还原得回去。"""
@@ -331,8 +511,9 @@ def for_batch_key(key):
         "foliage": foliage_material,
         "ground": ground_material,
         "sign": sign_material,
-        "wall": stone_material,
-        "roof": stone_material,
+        "wall": plaster_material,
+        "roof": roof_material,
         "misc": vertex_color_material,
-        "glow": vertex_color_material,
+        "glow": glow_material,
+        "lantern": lantern_material,
     }.get(key, vertex_color_material)()

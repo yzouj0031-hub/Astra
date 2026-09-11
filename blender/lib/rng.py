@@ -90,3 +90,23 @@ def smooth(a, b, x):
 
 
 TAU = math.pi * 2
+
+
+# ---- 模块级预消耗 ----------------------------------------------------------
+# watertown.js 的整个工厂函数体在 init() 之前就执行了，其中有两处循环会消耗
+# 随机数：
+#   line 500  星空 1100 颗，每颗 2 个   -> 2200
+#   line 560  雨滴 1000 滴，每滴 4 个   -> 4000
+# 所以 layoutTown 并不是从种子起点开始的，而是从第 6200 个数往后。
+# 总装时必须先空转这些，否则整座镇子的布局全错。
+# （已核对：从 20260906 空转 6200 次后种子 = 2708464514，与 node 里真跑
+#  整个模块体得到的值一致，见 tests/js_harness.mjs 的 _moduleSeed。）
+MODULE_LEVEL_DRAWS = 1100 * 2 + 1000 * 4
+MODULE_LEVEL_SEED = 2708464514
+
+
+def module_preroll(rng):
+    """把模块级那 6200 个数空转掉。返回消耗后的种子。"""
+    for _ in range(MODULE_LEVEL_DRAWS):
+        rng.rnd()
+    return rng.seed
