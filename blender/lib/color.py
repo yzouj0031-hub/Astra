@@ -107,3 +107,10 @@ def srgb_to_linear(c):
         (v / 12.92) if v <= 0.04045 else (((v + 0.055) / 1.055) ** 2.4)
         for v in (r, g, b)
     )
+
+
+def lerp_color(a, b, t):
+    """three.js Color.lerp"""
+    a = hex_to_rgb(a) if isinstance(a, int) else a
+    b = hex_to_rgb(b) if isinstance(b, int) else b
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))

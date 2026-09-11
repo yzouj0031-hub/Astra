@@ -23,9 +23,10 @@ import math
 
 import bmesh
 import bpy
-from mathutils import Matrix, Vector
 
 from . import color as _color
+from . import mat4 as _mat4
+from .mat4 import IDENTITY, Mat4
 
 # ---------------------------------------------------------------- 坐标系
 
@@ -43,48 +44,90 @@ def from_blender(v):
 
 def M(px=0.0, py=0.0, pz=0.0, sx=1.0, sy=1.0, sz=1.0, rx=0.0, ry=0.0, rz=0.0):
     """watertown.js:81 的 M()。返回 three 空间的 4x4，T·R·S。"""
-    t = Matrix.Translation((px, py, pz))
-    r = (Matrix.Rotation(rx, 4, "X")
-         @ Matrix.Rotation(ry, 4, "Y")
-         @ Matrix.Rotation(rz, 4, "Z"))
-    s = Matrix.Diagonal((sx, sy, sz, 1.0))
+    t = _mat4.translation(px, py, pz)
+    r = _mat4.rot_x(rx) @ _mat4.rot_y(ry) @ _mat4.rot_z(rz)
+    s = _mat4.scale(sx, sy, sz)
     return t @ r @ s
-
-
-IDENTITY = Matrix.Identity(4)
 
 
 # ---------------------------------------------------------------- 原语
 # 全部按 three.js 的分段数生成，并转回 three 空间（Y 轴朝上）存着。
 
 class Prim:
-    __slots__ = ("verts", "faces", "smooth")
+    __slots__ = ("verts", "faces", "smooth", "uvs")
 
-    def __init__(self, verts, faces, smooth):
+    def __init__(self, verts, faces, smooth, uvs):
         self.verts = verts      # [(x,y,z), ...] three 空间
         self.faces = faces      # [(i,j,k[,l]), ...]
         self.smooth = smooth    # [bool, ...] 与 faces 等长
+        self.uvs = uvs          # [[(u,v), ...每个角], ...] 与 faces 等长
 
 
-def _bm_to_prim(bm, smooth_fn):
+def _bm_to_prim(bm, smooth_fn, uv_fn):
+    """uv_fn(face_normal_three, vert_three) -> (u,v)，按 three.js 的贴图约定算。"""
     bm.verts.ensure_lookup_table()
     bm.faces.ensure_lookup_table()
     verts = [from_blender(v.co) for v in bm.verts]
-    faces, smooth = [], []
+    faces, smooth, uvs = [], [], []
     for f in bm.faces:
-        idx = [v.index for v in f.verts]
-        # Z-up -> Y-up 是镜像无关的旋转，绕序不变；但 from_blender 里
-        # y=z, z=-y 是纯旋转，行列式 +1，所以绕序保持。
-        faces.append(tuple(idx))
+        idx = tuple(v.index for v in f.verts)
+        # Z-up -> Y-up 是纯旋转（行列式 +1），绕序不变
+        faces.append(idx)
         smooth.append(smooth_fn(f))
+        n = from_blender(f.normal)
+        uvs.append([uv_fn(n, verts[i]) for i in idx])
     bm.free()
-    return Prim(verts, faces, smooth)
+    return Prim(verts, faces, smooth, uvs)
+
+
+# --- three.js 的贴图约定 ------------------------------------------------
+# BoxGeometry：每个面各自铺满 0..1，v 朝上。逐面核对过 three.js buildPlane
+# 的 udir/vdir（见 BoxGeometry 源码里六次 buildPlane 调用的符号）。
+
+def _uv_box(n, v):
+    x, y, z = v
+    ax, ay, az = abs(n[0]), abs(n[1]), abs(n[2])
+    if ax >= ay and ax >= az:
+        return (0.5 - z, y + 0.5) if n[0] > 0 else (z + 0.5, y + 0.5)
+    if az >= ay:
+        return (x + 0.5, y + 0.5) if n[2] > 0 else (0.5 - x, y + 0.5)
+    return (x + 0.5, z + 0.5) if n[1] > 0 else (x + 0.5, 0.5 - z)
+
+
+def _uv_plane(n, v):
+    return (v[0] + 0.5, v[1] + 0.5)
+
+
+def _uv_tube(n, v):
+    """柱/锥：侧壁绕一圈 u=theta/2pi、v 沿高；顶底盖是圆形投影。"""
+    x, y, z = v
+    if abs(n[1]) > 0.7:                       # 盖
+        sign = 1.0 if n[1] > 0 else -1.0
+        return (x * 0.5 + 0.5, z * 0.5 * sign + 0.5)
+    return (math.atan2(x, z) / TAU % 1.0, y + 0.5)
+
+
+def _uv_sph(n, v):
+    x, y, z = v
+    r = max(1e-9, math.sqrt(x * x + y * y + z * z))
+    return (math.atan2(x, z) / TAU % 1.0, 0.5 + math.asin(max(-1.0, min(1.0, y / r))) / math.pi)
+
+
+def _fix_seam(prim):
+    """绕一圈的原语在接缝处 u 会从 0.99 跳回 0，把跳变那一侧补成 1。"""
+    for corners in prim.uvs:
+        us = [c[0] for c in corners]
+        if max(us) - min(us) > 0.5:
+            for i, (u, vv) in enumerate(corners):
+                if u < 0.5:
+                    corners[i] = (u + 1.0, vv)
+    return prim
 
 
 def _make_box():
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
-    return _bm_to_prim(bm, lambda f: False)
+    return _bm_to_prim(bm, lambda f: False, _uv_box)
 
 
 def _make_cyl(segments):
@@ -92,21 +135,21 @@ def _make_cyl(segments):
     bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=segments,
                           radius1=1.0, radius2=1.0, depth=1.0)
     # three.js 的柱面侧壁是平滑法线，顶底盖是平的
-    return _bm_to_prim(bm, lambda f: len(f.verts) == 4)
+    return _fix_seam(_bm_to_prim(bm, lambda f: len(f.verts) == 4, _uv_tube))
 
 
 def _make_cone(segments):
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=False, segments=segments,
                           radius1=1.0, radius2=0.0, depth=1.0)
-    return _bm_to_prim(bm, lambda f: len(f.verts) == 3)
+    return _fix_seam(_bm_to_prim(bm, lambda f: len(f.verts) == 3, _uv_tube))
 
 
 def _make_sph(u_segments, v_segments):
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=u_segments, v_segments=v_segments,
                               radius=1.0)
-    return _bm_to_prim(bm, lambda f: True)
+    return _fix_seam(_bm_to_prim(bm, lambda f: True, _uv_sph))
 
 
 def _make_plane():
@@ -115,8 +158,10 @@ def _make_plane():
     # three.js PlaneGeometry 在 XY 平面、法线 +Z；create_grid 在 XY 平面法线 +Z(blender)
     # 转到 three 空间后会变成朝 -Y，这里绕回去。
     bm.verts.ensure_lookup_table()
-    prim = _bm_to_prim(bm, lambda f: False)
+    prim = _bm_to_prim(bm, lambda f: False, _uv_plane)
     prim.verts = [(v[0], -v[2], v[1]) for v in prim.verts]
+    prim.uvs = [[(v[0] + 0.5, v[1] + 0.5) for v in
+                 (prim.verts[i] for i in f)] for f in prim.faces]
     return prim
 
 
@@ -144,7 +189,11 @@ def prim(name):
 # ---------------------------------------------------------------- 合批
 
 class Batch:
-    """watertown.js:39-66 的 Batch。颜色写进顶点，一个 Batch 出一个 mesh。"""
+    """watertown.js:39-66 的 Batch。颜色写进顶点，一个 Batch 出一个 mesh。
+
+    顶点色和 UV 都保留：2A 的程序化材质用不到它们，但 2B 烘焙回 Three.js 时
+    要靠 UV 贴 lightMap、靠顶点色还原原来的配色，所以几何上一律留着。
+    """
 
     def __init__(self, name):
         self.name = name
@@ -152,26 +201,54 @@ class Batch:
         self.cols = []
         self.faces = []
         self.smooth = []
+        self.uvs = []
+        self.log = None      # 设成 list 就记账，给 tests/ 比对 JS 用
 
     @property
     def empty(self):
         return not self.verts
 
-    def add(self, prim_or_name, matrix=IDENTITY, col=(1, 1, 1)):
+    def add(self, prim_or_name, matrix=IDENTITY, col=(1, 1, 1), uv_box=None):
+        """uv_box = [u0,v0,u1,v1]，把原语的 0..1 UV 压进图集里的一格
+        （watertown.js:52-54 的同名参数）。"""
         p = prim(prim_or_name) if isinstance(prim_or_name, str) else prim_or_name
         rgb = _color.hex_to_rgb(col) if isinstance(col, int) else tuple(col[:3])
         lin = _color.srgb_to_linear(rgb)
 
+        if self.log is not None:
+            # 与 three.js Matrix4.elements 同样的列主序，方便逐个数比
+            self.log.append((
+                prim_or_name if isinstance(prim_or_name, str) else "prim",
+                matrix.elements(),
+                list(rgb),
+                list(uv_box) if uv_box else None,
+            ))
+
         base = len(self.verts)
         for v in p.verts:
-            w = matrix @ Vector(v)
-            self.verts.append((w.x, w.y, w.z))
+            self.verts.append(matrix.xform(v))
             self.cols.append(lin)
 
-        flip = matrix.to_3x3().determinant() < 0
-        for f, sm in zip(p.faces, p.smooth):
+        flip = matrix.det3() < 0
+        for f, sm, uv in zip(p.faces, p.smooth, p.uvs):
             idx = tuple(i + base for i in f)
+            if uv_box:
+                u0, v0, u1, v1 = uv_box
+                uv = [(u0 + u * (u1 - u0), v0 + v * (v1 - v0)) for u, v in uv]
+            else:
+                uv = list(uv)
             self.faces.append(idx[::-1] if flip else idx)
+            self.uvs.append(uv[::-1] if flip else uv)
+            self.smooth.append(sm)
+
+    def add_raw(self, verts, faces, cols, uvs, smooth):
+        """直接塞一块自造几何（地面网格那种），坐标同样是 three 空间。"""
+        base = len(self.verts)
+        self.verts.extend(verts)
+        self.cols.extend(_color.srgb_to_linear(c) for c in cols)
+        for f, uv, sm in zip(faces, uvs, smooth):
+            self.faces.append(tuple(i + base for i in f))
+            self.uvs.append(list(uv))
             self.smooth.append(sm)
 
     def build(self, collection, material=None):
@@ -189,6 +266,11 @@ class Batch:
         for i, c in enumerate(self.cols):
             attr.data[i].color = (c[0], c[1], c[2], 1.0)
 
+        uv_layer = mesh.uv_layers.new(name="UVMap")
+        for poly, corners in zip(mesh.polygons, self.uvs):
+            for li, uv in zip(poly.loop_indices, corners):
+                uv_layer.data[li].uv = uv
+
         if material is not None:
             mesh.materials.append(material)
 
@@ -202,11 +284,11 @@ class Batch:
 # 注意 box() 的坑：第 9/10/11 个参数是 ry, rx, rz（不是 rx,ry,rz），
 # 内部再按 M(x,y,z,w,h,d, rx,ry,rz) 装配。见 watertown.js:85-87。
 
-def box(batch, col, w, h, d, x, y, z, ry=0.0, rx=0.0, rz=0.0, parent=None):
+def box(batch, col, w, h, d, x, y, z, ry=0.0, rx=0.0, rz=0.0, parent=None, uv_box=None):
     m = M(x, y, z, w, h, d, rx, ry, rz)
     if parent is not None:
         m = parent @ m
-    batch.add("box", m, col)
+    batch.add("box", m, col, uv_box)
 
 
 def shape(batch, col, geo, x, y, z, parent=None, ry=0.0):
@@ -217,3 +299,9 @@ def shape(batch, col, geo, x, y, z, parent=None, ry=0.0):
 
 
 TAU = math.pi * 2
+
+
+def js_round(v):
+    """JS 的 Math.round 是 floor(x+0.5)（.5 一律向上），Python 的 round() 是
+    银行家舍入，两者在 x.5 上不一样。地面分段数用得到，必须用这个。"""
+    return math.floor(v + 0.5)
