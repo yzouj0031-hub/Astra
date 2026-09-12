@@ -674,8 +674,26 @@ function test(width,height){
  assert.equal(remote.avatar.legs[0].pivot.rotation.x,0,'A stationary remote player does not walk in place');
  a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:800}});
  assert.equal(remote.avatar.g.position.x,800,'Region teleports snap instead of sweeping through intervening buildings');
+ // 朋友开车/开船/开飞机时得看得见那台载具：以前不管对方在干什么，
+ // 远端永远只有一个人形，于是"人以每秒三十米贴着马路滑行"。
+ for(const [kind,label] of [['drive','车'],['sail','船'],['fly','飞机']]){
+  a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:800,kind}});
+  assert(remote.vehicle,`远端${label}应该有模型`);
+  assert(a.scene.children.includes(remote.vehicle.g),`远端${label}要挂进场景`);
+  assert(!remote.avatar.g.children.some(c=>c!==remote.label&&c.visible),`坐进${label}以后人形要收起来`);
+  assert(remote.label?.visible,'名牌要留着，不然认不出是谁');
+  a.animateRemotePlayers(.016,1);
+  assert.deepEqual(remote.vehicle.g.position.toArray(),remote.avatar.g.position.toArray(),`${label}要跟着人走`);
+ }
+ const stowed=remote.vehicle.g;
+ a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:800,kind:'walk'}});
+ assert(!remote.vehicle,'下了载具就收掉');assert(!a.scene.children.includes(stowed),'收掉的载具要从场景里摘走');
+ assert(remote.avatar.g.children.some(c=>c!==remote.label&&c.visible),'下车之后人形回来');
+ a.upsertRemotePlayer({id:'smoke_peer',name:'Guest',color:0,pose:{...remotePose,x:800,kind:'drive'}});
+ const leaving=remote.vehicle.g;
  a.removeRemotePlayer('smoke_peer');assert.equal(a.remotePlayers.size,0);assert(!a.scene.children.includes(remote.avatar.g));
- console.log('Online game integration: actual frame-loop position publishing, exact spawn, smooth movement, teleport and departure passed.');
+ assert(!a.scene.children.includes(leaving),'人走了载具也要一起收走');
+ console.log('Online game integration: actual frame-loop position publishing, exact spawn, smooth movement, teleport, remote vehicles and departure passed.');
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);

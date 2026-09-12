@@ -1647,6 +1647,10 @@ const tlDot=$("tl-dot"), tlMode=$("tl-mode");
 const tlFps=$("tl-fps"), tlA=$("tl-a"), tlB=$("tl-b");
 const hintEl=$("hint");
 let hintTmr=null;
+// 触屏和键盘的提示分开写。注意这些 showHint 是在 setMode 之后发的，
+// 会盖掉 setMode 里那条 —— 所以这里也必须分两套，否则手机上会看到
+// 「Shift 加油门」「按 F 下车」这种做不到的指示。
+const touchUi=()=>innerWidth<700;
 function showHint(txt){
   hintEl.textContent=txt; hintEl.classList.add("show");
   clearTimeout(hintTmr); hintTmr=setTimeout(()=>hintEl.classList.remove("show"), 2200);
@@ -1807,7 +1811,7 @@ function enterWater(sea){
   walk.dive=hard>5.2; walk.vx*=.4; walk.vz*=.4;
   if(hard>1.6) startSplash(walk.x,sea,walk.z,.6+hard/8);
   walk.fall=0;
-  if(!swamOnce){ swamOnce=true; showHint("游泳中 · 游向岸边就能上岸，靠近船按 F 上船"); }
+  if(!swamOnce){ swamOnce=true; showHint(touchUi()?"游泳中 · 游向岸边就能上岸，靠近船点「上船」":"游泳中 · 游向岸边就能上岸，靠近船按 F 上船"); }
 }
 // 从水里翻上岸：够得着的矮岸、码头、栈桥都能爬
 function tryClimbOut(force){
@@ -1934,7 +1938,7 @@ function updateWalk(dt, t){
     else{
       walk.y += (ground-walk.y)*Math.min(1,dt*18);
       if(Math.abs(ground-walk.y)<.02) walk.y=ground;
-      if(deep){ walk.swim=true; walk.stroke=0; walk.y=sea-.02; if(!swamOnce){swamOnce=true;showHint("游泳中 · 游向岸边就能上岸，靠近船按 F 上船");} }
+      if(deep){ walk.swim=true; walk.stroke=0; walk.y=sea-.02; if(!swamOnce){swamOnce=true;showHint(touchUi()?"游泳中 · 游向岸边就能上岸，靠近船点「上船」":"游泳中 · 游向岸边就能上岸，靠近船按 F 上船");} }
     }
   }
   walk.groundY = walk.y;
@@ -2135,7 +2139,7 @@ function updateFly(dt, t){
         const hard=Math.abs(plane.vy)>8||plane.spd>PLANE_MAX*0.62;
         startSplash(plane.x,seaNow,plane.z,hard?1.9:1.1);
         plane.spd*=hard?0.45:0.8; plane.pitch=0; plane.roll*=0.3;
-        showHint(hard?"落得有点重 · 下次收油门、压平了再贴水面":"落水了 · 滑行停稳后按 F 下机");
+        showHint(hard?"落得有点重 · 下次收油门、压平了再贴水面":(touchUi()?"落水了 · 滑行停稳后点「下机」":"落水了 · 滑行停稳后按 F 下机"));
       }
     }
   }
@@ -5755,7 +5759,33 @@ function makeRemoteLabel(name){
  ctx.font='500 24px "Microsoft YaHei",sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff3da';ctx.fillText(String(name||'旅人').slice(0,18),128,32,226);
  const texture=new THREE.CanvasTexture(canvas);texture.encoding=THREE.sRGBEncoding;const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const sprite=new THREE.Sprite(material);sprite.userData.remoteLabel=true;sprite.position.set(0,2.72,0);sprite.scale.set(3.8,.95,1);sprite.renderOrder=12;return sprite;
 }
-function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene.remove(r.avatar.g);r.avatar.g.traverse(o=>{if(o.userData?.remoteLabel){o.material?.map?.dispose?.();o.material?.dispose?.();}});remotePlayers.delete(id);}
+function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene.remove(r.avatar.g);r.avatar.g.traverse(o=>{if(o.userData?.remoteLabel){o.material?.map?.dispose?.();o.material?.dispose?.();}});if(r.vehicle)disposeRemoteVehicle(r.vehicle);remotePlayers.delete(id);}
+/* 朋友开车、开船、开飞机时，本地也给他摆一台。
+   世界里车船机各只有一台，而且不同步归属（联机面板里那行说明），
+   所以这是「他那台」，跟你自己开的互不干扰 —— 但至少不会再看到一个人
+   以每秒三十米的速度贴着马路滑行了。 */
+const REMOTE_CAR_PAINT=[0x7a3b3b,0x2f4a41,0x3b4a72,0x6b5a2f];
+function buildRemoteVehicle(kind,color){
+ if(kind==='drive'){
+  const car=buildCar(REMOTE_CAR_PAINT[Math.abs(color|0)%REMOTE_CAR_PAINT.length]);
+  car.lamp?.parent?.remove(car.lamp);   // 车头灯不要：每台远端车都挂一盏点光源会把灯位吃光
+  return car;
+ }
+ if(kind==='sail')return buildSailboat();
+ if(kind==='fly')return buildSeaplane();
+ return null;
+}
+// 几何体是 G.* 每次新建的，可以放心释放；材质有共享的（humanMat / M.*），碰不得
+function disposeRemoteVehicle(v){v.g.parent?.remove(v.g);v.g.traverse(o=>o.geometry?.dispose?.());}
+function setRemoteVehicle(r,kind){
+ if(r.vehicleKind===kind)return;
+ r.vehicleKind=kind;
+ if(r.vehicle){disposeRemoteVehicle(r.vehicle);r.vehicle=null;}
+ r.vehicle=buildRemoteVehicle(kind,r.colorIndex||0);
+ if(r.vehicle){r.vehicle.g.name='联机载具 · '+(r.name||'');scene.add(r.vehicle.g);}
+ // 坐进载具就把人形收起来，只留名牌浮在上面
+ for(const child of r.avatar.g.children)child.visible=!r.vehicle||child===r.label;
+}
 // 换名牌：标签是画在画布上的精灵，改名时得换掉重画，否则头顶永远挂着进房时那个名字
 function setRemoteLabel(r,name){
  if(r.name===name)return;
@@ -5766,17 +5796,21 @@ function upsertRemotePlayer(peer){
  if(!peer||!peer.id||!peer.pose)return;
  let r=remotePlayers.get(peer.id);
  if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.visible=false;scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
+ r.colorIndex=peer.color;
  setRemoteLabel(r,peer.name);
+ setRemoteVehicle(r,peer.pose.kind);
  r.target.set(peer.pose.x,peer.pose.y,peer.pose.z);r.heading=peer.pose.heading;r.speed=peer.pose.speed;r.kind=peer.pose.kind;r.region=peer.pose.region;r.seen=true;
  if(!r.avatar.g.visible||r.avatar.g.position.distanceTo(r.target)>20){r.avatar.g.position.copy(r.target);r.avatar.g.rotation.y=r.heading;}
  r.avatar.g.visible=true;
 }
 function animateRemotePlayers(dt,t){
  for(const r of remotePlayers.values()){
-  if(!r.seen||!['island','park','harbor','all'].includes(r.region)){r.avatar.g.visible=false;continue;}
+  if(!r.seen||!['island','park','harbor','all'].includes(r.region)){r.avatar.g.visible=false;if(r.vehicle)r.vehicle.g.visible=false;continue;}
  r.avatar.g.visible=true;
   r.avatar.g.position.lerp(r.target,Math.min(1,dt*10));
   r.avatar.g.rotation.y+=Math.atan2(Math.sin(r.heading-r.avatar.g.rotation.y),Math.cos(r.heading-r.avatar.g.rotation.y))*Math.min(1,dt*10);
+  // 载具跟着走。远端只同步了偏航，没有横滚和俯仰，所以飞机不会压坡度
+  if(r.vehicle){r.vehicle.g.visible=true;r.vehicle.g.position.copy(r.avatar.g.position);r.vehicle.g.rotation.y=r.avatar.g.rotation.y;}
   const gait=Math.min(1,Math.max(0,r.speed)/6);r.phase+=dt*Math.max(1,r.speed)*2;
   const swing=Math.sin(r.phase)*.54*gait;
   r.avatar.legs[0].pivot.rotation.x=swing;r.avatar.legs[1].pivot.rotation.x=-swing;
@@ -6146,7 +6180,7 @@ function carExitSpot(){
 function enterCar(){
  if(mode!==MODE.WALK||!vehicleNear||activeHarborBuilding)return;
  setMode(MODE.DRIVE);
- showHint('上车了 · W 加速，A / D 转向，空格手刹，F 下车');
+ showHint(touchUi()?'上车了 · 推摇杆前进，左右转向，点「下车」离开':'上车了 · W 加速，A / D 转向，空格手刹，F 下车');
 }
 function exitCar(){
  if(mode!==MODE.DRIVE)return;
@@ -6160,7 +6194,7 @@ function exitCar(){
  walk.yaw=car.yaw+Math.PI; walk.heading=car.yaw;
  groundPlayer();
  updateRegionUi();
- showHint('下车 · 走近车身按 F 再上车');
+ showHint(touchUi()?'下车 · 走到车边点「上车」':'下车 · 走近车身按 F 再上车');
 }
 function toggleVehicle(){
  if(mode===MODE.DRIVE)exitCar();
@@ -6182,7 +6216,7 @@ function boardPlane(){
  closeHarborInterior();
  setMode(MODE.FLY);
  updateRegionUi();
- showHint(near?'上机了 · Shift 加油门滑跑，速度够了拉 W 起飞':'回到停机处 · 飞机停在'+SHIP_PLACE[region]+'附近');
+ showHint(near?(touchUi()?'上机了 · 按住「油门」滑跑，速度够了往回拉摇杆抬机头':'上机了 · Shift 加油门滑跑，速度够了拉 W 起飞'):'回到停机处 · 飞机停在'+SHIP_PLACE[region]+'附近');
 }
 function leavePlane(){
  if(mode!==MODE.FLY)return;
@@ -6193,7 +6227,7 @@ function leavePlane(){
  plane.spd=0; plane.thr=0;
  setMode(MODE.WALK);
  const rise=placeAfterStepOff(spot,plane.x,plane.z);
- showHint(!spot.dry?'跳进水里了 · 游到岸边上岸，靠近飞机按 F 上机':rise>1.9?'翻上码头 · 飞机就停在这里':'下机了 · 飞机就停在这里，走近按 F 再上机');
+ showHint(!spot.dry?(touchUi()?'跳进水里了 · 游到岸边上岸，走近飞机点「上机」':'跳进水里了 · 游到岸边上岸，靠近飞机按 F 上机'):rise>1.9?'翻上码头 · 飞机就停在这里':(touchUi()?'下机了 · 飞机就停在这里，走近点「上机」':'下机了 · 飞机就停在这里，走近按 F 再上机'));
 }
 // 没人开的时候，飞机就系在水面上随浪起伏；半空中被切走的话，自己滑下来落水
 function updateMooredPlane(dt,t){
@@ -6288,7 +6322,7 @@ function leaveShip(){
  ship.spd=0; ship.turn=0;
  setMode(MODE.WALK);
  const rise=placeAfterStepOff(spot,ship.x,ship.z);
- showHint(!spot.dry?'跳下水了 · 游到岸边上岸，靠近船身按 F 上船':rise>1.9?'翻上码头 · 船就停在这里，走近船身按 F 再上船':'下船 · 船就停在这里，走近船身按 F 再上船');
+ showHint(touchUi()?(!spot.dry?'跳下水了 · 游到岸边上岸，走近船身点「上船」':rise>1.9?'翻上码头 · 船就停在这里，走近点「上船」':'下船 · 船就停在这里，走近点「上船」'):(!spot.dry?'跳下水了 · 游到岸边上岸，靠近船身按 F 上船':rise>1.9?'翻上码头 · 船就停在这里，走近船身按 F 再上船':'下船 · 船就停在这里，走近船身按 F 再上船'));
 }
 function boardShip(){
  if(mode===MODE.SAIL)return;
@@ -6296,7 +6330,7 @@ function boardShip(){
  closeHarborInterior();
  setMode(MODE.SAIL);
  updateRegionUi();
- showHint(near?'上船了 · W 前进，A / D 转舵，按 F 下船':'回到停船处 · 船停在'+SHIP_PLACE[region]+'附近');
+ showHint(near?(touchUi()?'上船了 · 推摇杆前进，左右转舵，点「下船」上岸':'上船了 · W 前进，A / D 转舵，按 F 下船'):'回到停船处 · 船停在'+SHIP_PLACE[region]+'附近');
 }
 // 把船叫到某个码头：面板上的「码头出海」「港口出海」
 function summonShip(x,z,yaw,where){
