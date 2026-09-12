@@ -37,9 +37,8 @@ def apply_time(scene, sun, which):
     sun.data.color = color
     sun.rotation_euler = tuple(math.radians(a) for a in rot)
 
-    bg = scene.world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (*cfg["world"][0], 1.0)
-    bg.inputs[1].default_value = cfg["world"][1]
+    horizon, zenith, strength = cfg["world"]
+    materials.gradient_world(scene, horizon, zenith, strength)
 
     materials.set_emission_strength("M_Lantern", cfg["lantern"])
     materials.set_emission_strength("M_Glow", cfg["glow"])

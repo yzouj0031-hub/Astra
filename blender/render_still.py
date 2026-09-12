@@ -42,21 +42,22 @@ CAMERAS = {
     "overview": ((-86.0, 62.0, -74.0), (0.0, 6.0, 12.0), 35.0),
 }
 
-# 昼夜：太阳(强度,色温,角度) / 世界(颜色,强度) / 自发光(灯笼,窗纸)
+# 昼夜。world 是天空的 (地平线色, 天顶色, 强度) —— 渐变，不是一坨纯色，
+# 而且色值 x 强度必须 <= 1.0，否则 Standard 视图变换下天空削平成纯白。
 TIMES = {
     "day": {
         "sun": (3.0, (1.0, 0.95, 0.87), (58, 0, -118)),
-        "world": ((0.62, 0.68, 0.74), 1.7),
+        "world": ((0.86, 0.88, 0.90), (0.42, 0.55, 0.72), 1.0),
         "lantern": 2.0, "glow": 0.6,
     },
     "dusk": {
         "sun": (1.6, (1.0, 0.72, 0.45), (12, 0, -150)),
-        "world": ((0.36, 0.34, 0.40), 0.9),
+        "world": ((0.85, 0.60, 0.42), (0.16, 0.18, 0.34), 0.9),
         "lantern": 14.0, "glow": 3.0,
     },
     "night": {
         "sun": (0.06, (0.62, 0.72, 1.0), (34, 0, 60)),      # 月光
-        "world": ((0.045, 0.055, 0.085), 0.5),
+        "world": ((0.075, 0.085, 0.12), (0.012, 0.018, 0.045), 0.9),
         "lantern": 28.0, "glow": 6.5,
     },
 }
@@ -92,12 +93,8 @@ def set_time(scene, which):
     sun.rotation_euler = tuple(math.radians(a) for a in rot)
     scene.collection.objects.link(sun)
 
-    world = bpy.data.worlds.new("World")
-    world.use_nodes = True
-    bg = world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (*cfg["world"][0], 1.0)
-    bg.inputs[1].default_value = cfg["world"][1]
-    scene.world = world
+    horizon, zenith, strength = cfg["world"]
+    materials.gradient_world(scene, horizon, zenith, strength)
 
     # 自发光强度：灯笼本身就是光源，夜里全靠它们
     materials.set_emission_strength("M_Lantern", cfg["lantern"])

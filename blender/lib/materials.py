@@ -143,13 +143,13 @@ def plaster_material(name="M_Plaster"):
     _kill_specular(bsdf)
 
     col = _vcol(nodes)
-    mottle = _noise(nodes, scale=2.2, detail=6.0, rough=0.55, y=-300)
+    mottle = _noise(nodes, scale=4.5, detail=6.0, rough=0.55, y=-300)
 
     wash = nodes.new("ShaderNodeMix")          # 斑驳
     wash.data_type = "RGBA"
     wash.blend_type = "MULTIPLY"
     wash.location = (-560, 0)
-    _set(wash, "Factor", 0.13)
+    _set(wash, "Factor", 0.09)
     links.new(col.outputs["Color"], wash.inputs[6])
     links.new(mottle.outputs["Color"], wash.inputs[7])
 
@@ -534,6 +534,65 @@ def mist_material(name="M_Mist", density=0.006, color=(0.79, 0.83, 0.85)):
     _set(scatter, "Anisotropy", 0.35)
     links.new(scatter.outputs["Volume"], out.inputs["Volume"])
     return mat
+
+
+# ---------------------------------------------------------------- 天空
+
+def gradient_world(scene, horizon, zenith, strength=1.0, name="World"):
+    """竖直渐变的天空，地平线一色、天顶一色。
+
+    为什么不用一坨纯色：`色值 x 强度` 一旦超过 1.0，在 Standard 视图变换下
+    直接削平成纯白，天空就没了 —— 第一版 15 张静帧就是栽在这里（0.7 x 1.7）。
+    渐变除了不过曝，也更像江南的天：地平线亮而发灰，往上才转青。
+
+    为什么不用 Sky Texture(Nishita)：它的方位角约定和我们这套太阳角度对不上，
+    太阳的亮斑容易跑到别的方向去；渐变是自己说了算的。
+
+    天空同时是环境光来源，所以强度别给太低，否则背光面会死黑。
+    """
+    world = bpy.data.worlds.new(name)
+    world.use_nodes = True
+    nt = world.node_tree
+    for n in list(nt.nodes):
+        if n.type != "OUTPUT_WORLD":
+            nt.nodes.remove(n)
+    out = nt.nodes["World Output"]
+
+    bg = nt.nodes.new("ShaderNodeBackground")
+    bg.location = (-200, 0)
+    _set(bg, "Strength", strength)
+    nt.links.new(bg.outputs["Background"], out.inputs["Surface"])
+
+    coord = nt.nodes.new("ShaderNodeTexCoord")
+    coord.location = (-1000, 0)
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (-820, 0)
+    nt.links.new(coord.outputs["Generated"], sep.inputs["Vector"])
+
+    # Generated 的 Z 在 -1..1，映到 0..1 当渐变参数
+    rng = nt.nodes.new("ShaderNodeMapRange")
+    rng.location = (-640, 0)
+    _set(rng, "From Min", -0.25)      # 地平线附近那一段拉宽一点
+    _set(rng, "From Max", 0.75)
+    _set(rng, "To Min", 0.0)
+    _set(rng, "To Max", 1.0)
+    _set(rng, "Clamp", True)
+    nt.links.new(sep.outputs["Z"], rng.inputs["Value"])
+
+    ramp = nt.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-440, 0)
+    ramp.color_ramp.elements[0].position = 0.0
+    ramp.color_ramp.elements[0].color = (*horizon, 1.0)
+    ramp.color_ramp.elements[1].position = 1.0
+    ramp.color_ramp.elements[1].color = (*zenith, 1.0)
+    nt.links.new(rng.outputs["Result"], ramp.inputs["Fac"])
+    nt.links.new(ramp.outputs["Color"], bg.inputs["Color"])
+
+    scene.world = world
+    peak = max(max(horizon), max(zenith)) * strength
+    if peak > 1.0:
+        print(f"[materials] 天空最亮处 {peak:.2f} > 1.0，Standard 下会削平成白")
+    return world
 
 
 # ---------------------------------------------------------------- 场景设置
