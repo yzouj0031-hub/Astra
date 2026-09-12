@@ -9,14 +9,32 @@ assert.equal(t.normalizeRoomCode(' ab-01ioz9 '),'ABZ9');
 assert.equal(t.generateRoomCode(Uint8Array.from([0,1,2,3,4,5,6,7])),'ABCDEFGH');
 assert.equal(t.safeName('  <小\u0000明>  '),'小明');
 assert.equal(t.safeMessage('  你好\n  星屿  '),'你好 星屿');
-assert.deepEqual(JSON.parse(JSON.stringify(t.sanitizePose({x:1,y:2,z:3,heading:4,speed:5,kind:'drive',region:'harbor'}))),{x:1,y:2,z:3,heading:4,speed:5,kind:'drive',region:'harbor'});
+// heading 用 0：环绕算的是 (h+PI)%2PI-PI，其它值会带来最后一位的浮点噪声，
+// 精确值另外用容差比（见下面的 near）。
+assert.deepEqual(JSON.parse(JSON.stringify(t.sanitizePose({x:1,y:2,z:3,heading:0,speed:5,kind:'drive',region:'harbor'}))),{x:1,y:2,z:3,heading:0,speed:5,kind:'drive',region:'harbor'});
 assert.equal(t.sanitizePose({x:Infinity,y:2,z:3,heading:0,speed:0}),null);
+// 朝向要环绕而不是截断：车/船/飞机的 yaw 一路累加，以前 clamp 到 ±8π，
+// 朝一个方向转四十秒之后，别人看到的朝向就永远卡在那个角度上。
+const heading=value=>t.sanitizePose({x:0,y:0,z:0,heading:value,speed:0}).heading;
+const near=(a,b,label)=>assert(Math.abs(a-b)<1e-9,`${label}: ${a} != ${b}`);
+near(heading(4),4-Math.PI*2,'朝向落回 [-PI,PI]');
+near(heading(40),heading(40-Math.PI*20),'相差 2π 的朝向等价');
+assert(Math.abs(heading(97))<=Math.PI,'转再久也不会被截断');
+assert.equal(t.sanitizePose({x:0,y:0,z:0,heading:NaN,speed:0}),null,'朝向非数仍然整条丢弃');
+// 飞行和游泳不能被悄悄改写成走路
+for(const kind of ['view','walk','swim','sail','fish','ride','drive','fly'])assert.equal(t.sanitizePose({x:0,y:0,z:0,heading:0,speed:0,kind}).kind,kind,`${kind} 应原样保留`);
+assert.equal(t.sanitizePose({x:0,y:0,z:0,heading:0,speed:0,kind:'teleport'}).kind,'walk','没见过的动作退回走路');
 for(const region of ['rainport','watertown','temple'])assert.equal(t.sanitizePose({x:12,y:0,z:8,heading:0,speed:3,region}).region,region,'Co-op keeps the journey region ID');
 assert.equal(t.validPeer({id:'short',name:'A',pose:{x:0,y:0,z:0,heading:0,speed:0}}),null);
 assert(t.validPeer({id:'abcdefgh',name:'A',color:7,pose:{x:0,y:0,z:0,heading:0,speed:0}}));
 assert.equal(t.roomUrl('ABCDEFGH').href,'https://yzouj0031-hub.github.io/Astra/?room=ABCDEFGH');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 for(const token of ['id="online-button"','id="online-dialog"','src="./online.js"','AstraOnline?.init','animateRemotePlayers(dt,t)'])assert(html.includes(token),`Missing online integration: ${token}`);
+// 动作白名单必须跟得上 index.html 的 MODE。飞机是后来加的，当年就是这里漏了同步，
+// 于是所有飞行中的玩家在别人那边都被记成走路。
+const modes=[...html.match(/const MODE = \{([^}]*)\}/)[1].matchAll(/"([a-z]+)"/g)].map(m=>m[1]);
+assert(modes.includes('fly')&&modes.length>=7,`MODE 解析异常: ${modes}`);
+for(const mode of modes)assert.equal(t.sanitizePose({x:0,y:0,z:0,heading:0,speed:0,kind:mode}).kind,mode,`MODE.${mode} 过不了 sanitizePose，联机会把它当成走路`);
 const server=fs.readFileSync(path.join(root,'scripts','serve.mjs'),'utf8');assert(server.includes("['/online.js'"),'Local server exposes the online client');
 console.log('Online co-op: room validation, untrusted payload filtering, UI/world wiring and local serving passed');
 assert.equal(t.validPeer({id:'abcdefgh',name:'A',color:.5,pose:{x:0,y:0,z:0,heading:0,speed:0}}).color,0);
@@ -32,6 +50,14 @@ const {createHarness,createHub}=require('./online-harness.cjs');
   assert.equal(b.changes.at(-1).pose.x,669,'Second client receives movement without chat');
   const sent=hub.sent.length;a.advance(10);assert.equal(hub.sent.length,sent,'Broadcasts are rate-limited');
   hub.sync('astra-world:ABCDEFGH');assert.equal(b.changes.at(-1).pose.x,669,'Presence cannot rewind a moving peer');
+  // 在房间里把名字框清空，以前会让每条 pose 都被对方的 validPeer 丢掉 ——
+  // 人还挂在名单上，头像却当场定住。现在空名字退回进房时用的名字。
+  a.nodes.get('online-name').value='';a.state.pose={...a.state.pose,x:900};a.advance();
+  assert.equal(b.changes.at(-1).pose.x,900,'清空名字后位置照样同步');
+  assert.equal(b.changes.at(-1).name,'A','空名字退回进房时的名字');
+  a.nodes.get('online-name').value='A2';a.state.pose={...a.state.pose,x:901};a.advance();
+  assert.equal(b.changes.at(-1).name,'A2','改名仍然实时生效');
+  a.nodes.get('online-name').value='A';
   a.chat('hello');assert(b.nodes.get('online-chat-log').textContent.includes('hello'));
   const aChannel=hub.channels[0];await aChannel.status('CHANNEL_ERROR');
   assert.equal(a.nodes.get('online-button').dataset.online,'false');assert(a.nodes.get('online-chat-send').disabled);

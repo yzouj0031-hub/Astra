@@ -5756,10 +5756,17 @@ function makeRemoteLabel(name){
  const texture=new THREE.CanvasTexture(canvas);texture.encoding=THREE.sRGBEncoding;const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const sprite=new THREE.Sprite(material);sprite.userData.remoteLabel=true;sprite.position.set(0,2.72,0);sprite.scale.set(3.8,.95,1);sprite.renderOrder=12;return sprite;
 }
 function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene.remove(r.avatar.g);r.avatar.g.traverse(o=>{if(o.userData?.remoteLabel){o.material?.map?.dispose?.();o.material?.dispose?.();}});remotePlayers.delete(id);}
+// 换名牌：标签是画在画布上的精灵，改名时得换掉重画，否则头顶永远挂着进房时那个名字
+function setRemoteLabel(r,name){
+ if(r.name===name)return;
+ if(r.label){r.avatar.g.remove(r.label);r.label.material?.map?.dispose?.();r.label.material?.dispose?.();}
+ r.name=name;r.label=makeRemoteLabel(name);r.avatar.g.add(r.label);r.avatar.g.name='联机玩家 '+name;
+}
 function upsertRemotePlayer(peer){
  if(!peer||!peer.id||!peer.pose)return;
  let r=remotePlayers.get(peer.id);
- if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.name='联机玩家 '+peer.name;avatar.g.add(makeRemoteLabel(peer.name));avatar.g.visible=false;scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
+ if(!r){const avatar=buildAvatar(remoteLook(peer.color));avatar.g.visible=false;scene.add(avatar.g);r={avatar,target:new THREE.Vector3(),heading:0,speed:0,phase:0,seen:false};remotePlayers.set(peer.id,r);}
+ setRemoteLabel(r,peer.name);
  r.target.set(peer.pose.x,peer.pose.y,peer.pose.z);r.heading=peer.pose.heading;r.speed=peer.pose.speed;r.kind=peer.pose.kind;r.region=peer.pose.region;r.seen=true;
  if(!r.avatar.g.visible||r.avatar.g.position.distanceTo(r.target)>20){r.avatar.g.position.copy(r.target);r.avatar.g.rotation.y=r.heading;}
  r.avatar.g.visible=true;

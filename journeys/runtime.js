@@ -126,6 +126,12 @@ function init(host){
   cam.lookAt(target);r.cameraReady=true;
   if(r.id==='watertown')r.world.skyGroup.position.copy(cam.position);
  }
+ // 头像的几何体和材质是全局共享的（index.html 的 residentGeo / residentMats），
+ // 不能碰；只有名牌那张画布贴图是这只头像独有的，走的时候要还回去。
+ function disposePeer(model){
+  model.g.parent?.remove(model.g);
+  model.g.traverse(o=>{if(o.userData?.remoteLabel){o.material?.map?.dispose?.();o.material?.dispose?.();}});
+ }
  function poseAvatar(a,pos,dt,t){
   a.g.position.set(pos.x,pos.y||0,pos.z);const d=Math.atan2(Math.sin(pos.heading-a.g.rotation.y),Math.cos(pos.heading-a.g.rotation.y));a.g.rotation.y+=d*Math.min(1,dt*12);
   const gait=C.clamp(pos.speed/5,0,1),s=Math.sin(t*10)*.65*gait;
@@ -136,7 +142,9 @@ function init(host){
   for(const [id,peer] of peerData){
    let model=peerModels.get(id);
    if(peer.pose.region!==active.id){if(model)model.g.visible=false;continue;}
-   if(!model){model=host.makePeer(peer);peerModels.set(id,model);}
+   // 名牌是建模型时画死的，改名了就整只换掉（几何体是共享的，只有名牌那张画布是新的）
+   if(model&&model.peerName!==peer.name){disposePeer(model);peerModels.delete(id);model=null;}
+   if(!model){model=host.makePeer(peer);model.peerName=peer.name;peerModels.set(id,model);}
    if(model.g.parent!==active.scene)active.scene.add(model.g);
    if(!model.g.visible||model.g.position.distanceTo(new T.Vector3(peer.pose.x,peer.pose.y,peer.pose.z))>20)model.g.position.set(peer.pose.x,peer.pose.y,peer.pose.z);
    const p=model.g.position.clone().lerp(new T.Vector3(peer.pose.x,peer.pose.y,peer.pose.z),Math.min(1,dt*10));model.g.visible=true;poseAvatar(model,{x:p.x,y:p.y,z:p.z,heading:peer.pose.heading,speed:peer.pose.speed},dt,time);
@@ -234,7 +242,7 @@ function init(host){
  if(C.REGIONS[requested])setTimeout(()=>travel(requested),0);
  return {frame,travel,home,openMap,get active(){return active;},get busy(){return busy;},progress,
   getPose(){if(!active)return null;return {x:active.pos.x,y:active.pos.y,z:active.pos.z,heading:active.pos.heading,speed:active.pos.speed,kind:active.transport?'ride':'walk',region:active.id};},
-  onPeer(peer){peerData.set(peer.id,peer);},onPeerLeave(id){peerData.delete(id);const a=peerModels.get(id);if(a){a.g.parent?.remove(a.g);peerModels.delete(id);}},render(){if(active)renderer.render(active.scene,active.camera);}
+  onPeer(peer){peerData.set(peer.id,peer);},onPeerLeave(id){peerData.delete(id);const a=peerModels.get(id);if(a){disposePeer(a);peerModels.delete(id);}},render(){if(active)renderer.render(active.scene,active.camera);}
  };
 }
 root.AstraJourneys={init};
