@@ -2621,7 +2621,91 @@ const residentSkin=[0xc88f67,0xe6b18b,0x9e684b,0xd69c79];
    看着就是「方的」。翻倍之后多出来的顶点很有限（一个人约 350 -> 620），
    全场 80 人也才多两万出头，换来的是圆的轮廓。
    比例也修了：原来躯干上窄下宽（0.28 -> 0.32）像个坛子，人是肩宽腰窄，反过来。 */
-const residentGeo={head:G.sph(.235,20,16),torso:G.cyl(.315,.255,.65,18),limb:G.cyl(.082,.098,.38,12),leg:G.cyl(.103,.118,.4,12),shoe:G.box(.21,.13,.36),hand:G.sph(.10,12,9),eye:G.sph(.024,8,6)};
+/* ---------- 侧影旋转体 ----------
+   人物身上最缺的就是这个。CylinderGeometry 只有上下两个半径，一条线上做不出
+   「肩宽 -> 腰细 -> 胸厚」的起伏，所以分段数调多高，轮廓都还是一节一节的罐子。
+   给一串 [半径, 高度] 控制点绕 Y 轴转一圈，一次就能得到连续的人形侧影。
+
+   这个精简版 three 里没有 LatheGeometry（ExtrudeGeometry / Shape 也一并被裁了），
+   所以自己写。两个细节值得留意：
+
+   sx/sz 是横截面的椭圆比。人是宽扁的不是圆的 —— 胸腔宽深比约 1.4:1，
+   小腿反过来是前后深。这一项对「像不像人」的贡献比任何分段数都大。
+
+   法线走解析式，不用 computeVertexNormals：转一圈首尾两列顶点位置重合但
+   UV 不同，必须当成两列存，自动求法线会把接缝算成硬边，正面看是一道亮痕。 */
+function lathe(profile, seg, sx, sz){
+ sx=sx||1; sz=sz||1;
+ const rows=profile.length, pos=[], nor=[], uv=[], idx=[];
+ for(let i=0;i<rows;i++){
+  const r=profile[i][0], y=profile[i][1];
+  // 侧影切线取前后邻居的中心差分，端点退化成单侧差分
+  const a=profile[Math.max(0,i-1)], b=profile[Math.min(rows-1,i+1)];
+  let dr=b[0]-a[0], dy=b[1]-a[1];
+  const len=Math.hypot(dr,dy)||1; dr/=len; dy/=len;
+  for(let j=0;j<=seg;j++){
+   const t=j/seg, ang=t*Math.PI*2, c=Math.cos(ang), sn=Math.sin(ang);
+   pos.push(r*c*sx, y, r*sn*sz);
+   // 外法线 (dy*cos, -dr, dy*sin)；椭圆缩放要在法线上除回去，否则高光会歪
+   const nx=dy*c/sx, ny=-dr, nz=dy*sn/sz;
+   const nl=Math.hypot(nx,ny,nz)||1;
+   nor.push(nx/nl, ny/nl, nz/nl);
+   uv.push(t, i/(rows-1));
+  }
+ }
+ for(let i=0;i<rows-1;i++)for(let j=0;j<seg;j++){
+  const a=i*(seg+1)+j, b=a+seg+1;
+  idx.push(a,b,a+1, b,b+1,a+1);
+ }
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+ g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));
+ g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+ g.setIndex(idx);
+ return g;
+}
+
+/* 全岛的人共用这一张几何表：80 个路人 + 玩家 + 联机头像，所以这里可以给足分段，
+   显存只占一份。骨架尺寸（各段长度、关节位置）和原来逐字一致 ——
+   走路动画、座位偏移、碰撞体、蹭车挂点都是照这套数写死的，动了就全歪。
+   变的只有每一段的「形状」。 */
+const residentGeo={
+ // 躯干：胯宽 -> 腰细 -> 胸厚 -> 肩，顶上收进脖子里（开口被脖子圆柱挡住）
+ torso:lathe([[0,-.345],[.155,-.335],[.235,-.315],[.252,-.240],[.226,-.130],
+              [.214,-.050],[.238,.050],[.272,.140],[.292,.225],[.296,.275],
+              [.268,.325],[.196,.365],[.122,.395],[.100,.420]],24,1,.74),
+ // 头：下巴 -> 下颌 -> 颧骨 -> 太阳穴（最宽）-> 头顶。前后比左右长，所以 sz>1
+ head:lathe([[0,-.238],[.070,-.222],[.128,-.190],[.172,-.130],[.200,-.060],
+             [.216,.015],[.219,.080],[.205,.140],[.168,.190],[.098,.228],
+             [0,.245]],24,.97,1.10),
+ /* 关节怎么接：肘和膝的外形由「下面那一段」长出来 —— 前臂顶端、小腿顶端各做一个
+    圆顶，那就是关节本身；上臂和大腿的末端收成一个平口，直接扎进圆顶里藏起来。
+
+    一开始是给每个关节塞一个球去填缝，那是错的：肢体截面是椭圆（前后扁），球是正圆，
+    于是球从前后顶出来，整个人变成外露球窝的可动人偶，比原来的黑缝还难看。
+    黑缝的成因是两段各自收口到 0，中间形成一道凹槽 —— 让下段包住上段，凹槽根本不会出现。 */
+ /* 上臂：三角肌鼓 -> 收到肘。末端 .076 平口，扎进前臂的圆顶。
+    顶端封在 .180（不是 .208）：再高一点圆顶就冒到躯干的肩线以上，
+    在轮廓上多出两个孤立的鼓包，看着像垫肩。压到 .180 之后上臂内侧
+    整个埋在躯干里，肩只剩一条连续的斜线。 */
+ limb:lathe([[0,.180],[.070,.170],[.100,.150],[.106,.105],[.098,.020],
+             [.088,-.080],[.078,-.160],[.076,-.215],[0,-.215]],16,1,.94),
+ // 前臂：顶端圆顶就是肘，往下腕部收细
+ fore:lathe([[0,.235],[.048,.228],[.078,.205],[.086,.160],[.082,.080],
+             [.074,-.020],[.064,-.110],[.055,-.175],[0,-.190]],16,1,.90),
+ // 大腿：胯根最粗 -> 收到膝。末端 .100 平口，扎进小腿的圆顶
+ leg:lathe([[0,.215],[.088,.205],[.132,.180],[.134,.100],[.124,0],
+            [.112,-.100],[.102,-.180],[.100,-.225],[0,-.225]],16,1,.96),
+ // 小腿：顶端圆顶就是膝，下面鼓出小腿肚再收到脚踝。小腿前后深，所以 sz>1
+ shin:lathe([[0,.245],[.056,.238],[.096,.215],[.110,.180],[.112,.100],
+             [.102,.010],[.084,-.090],[.066,-.170],[.058,-.200],[0,-.210]],16,1,1.02),
+ // 鞋：一个矮圆包，摆的时候沿 z 拉长两倍就成了脚。原来是 .21x.13x.36 的方砖，
+ // 是全身上下最假的一块 —— 人物只有二十来个像素高的时候，别的都还能糊弄，
+ // 两个棱角分明的棕色盒子糊弄不过去。底面高度和原来的盒子一致，站位不变。
+ shoe:lathe([[0,-.065],[.075,-.065],[.100,-.055],[.105,-.020],[.098,.020],
+             [.075,.055],[0,.075]],14,.98,1),
+ hand:G.sph(.105,12,9),
+ eye:G.sph(.024,8,6)};
 const residentMats=new Map();
 function humanMat(color){if(!residentMats.has(color))residentMats.set(color,new THREE.MeshStandardMaterial({color,roughness:.88}));return residentMats.get(color);}
 function makeResident(spec){
@@ -2629,14 +2713,21 @@ function makeResident(spec){
  const body=new THREE.Group();g.add(body);
  const skin=humanMat(residentSkin[spec.skin||0]),shirt=humanMat(spec.shirt),pants=humanMat(spec.pants||0x4a6269),hair=humanMat(0x3d302a);
  add(body,residentGeo.torso,shirt,0,1.18,0);
- add(body,G.sph(.30,16,10),shirt,0,1.44,0).scale.set(1,.42,.86);   // 肩：躯干顶上压扁的一块，肩线不再是一刀切
  add(body,G.cyl(.105,.115,.2,12),skin,0,1.57,0);                    // 脖子
- const head=new THREE.Group();head.position.y=1.79;body.add(head);
+ /* 头身比：原来头高 .48、总身高 2.02，四头身出头 —— 娃娃感主要来自这里，
+    而且它在任何距离都看得出来，比关节缝、贴图这些都更先被眼睛抓到。
+    整组缩到 .82 再把中心抬到 1.819，头顶仍停在 2.02，总身高一点没变（座位偏移、
+    碰撞高度、蹭车挂点全是照总身高写死的，动不得）。头肩比从 .71 降到 .58。
+    缩的是整个 head 组，所以头发、眼鼻、帽子跟着一起缩，不用逐个重算坐标。 */
+ const head=new THREE.Group();head.position.y=1.819;head.scale.setScalar(.82);body.add(head);
  add(head,residentGeo.head,skin,0,0,0);
- add(head,G.sph(.24,10,8),hair,0,.055,-.045).scale.set(1,.76,.92);
- add(head,residentGeo.eye,humanMat(0x242e30),-.083,.01,.223);
- add(head,residentGeo.eye,humanMat(0x242e30),.083,.01,.223);
- add(head,G.sph(.04,7,5),skin,0,-.046,.242);
+ // 竖向 .78 时发顶在 y=.242、头顶在 .245 —— 差三毫米，两个面咬在一起就是那块锯齿。
+ // 抬到 .88，发顶到 .266，稳稳扣在头皮外面（帽子的碗也刚好盖得住）。
+ add(head,G.sph(.24,12,9),hair,0,.055,-.03).scale.set(.99,.88,1.02);
+ // 眼鼻的 z 照新头型的椭球面重算过：头左右窄了、前后长了，用旧值会陷进去
+ add(head,residentGeo.eye,humanMat(0x242e30),-.080,.01,.224);
+ add(head,residentGeo.eye,humanMat(0x242e30),.080,.01,.224);
+ add(head,G.sph(.04,7,5),skin,0,-.046,.232);
  if(spec.hat){add(head,G.cyl(.37,.37,.045,14),humanMat(0xd8bd84),0,.19,0);add(head,G.cyl(.23,.28,.19,12),humanMat(0xe6c998),0,.28,0);add(head,G.cyl(.265,.28,.05,12),shirt,0,.21,0);}
  else if(spec.hairLong)add(head,G.sph(.17,8,6),hair,0,.05,-.22).scale.set(1,1.1,1);
  const arms=[],legs=[];
@@ -2644,11 +2735,14 @@ function makeResident(spec){
   const arm=new THREE.Group();arm.position.set(side*.35,1.46,0);body.add(arm);
   add(arm,residentGeo.limb,shirt,0,-.16,0);
   const elbow=new THREE.Group();elbow.position.y=-.34;arm.add(elbow);
-  add(elbow,residentGeo.limb,skin,0,-.15,0);add(elbow,residentGeo.hand,skin,0,-.36,0);arms.push({pivot:arm,elbow});
+  add(elbow,residentGeo.fore,skin,0,-.15,0);
+  // 手：扁长的，不是个球
+  add(elbow,residentGeo.hand,skin,0,-.35,0).scale.set(.62,.92,.42);arms.push({pivot:arm,elbow});
   const leg=new THREE.Group();leg.position.set(side*.15,.87,0);body.add(leg);
   add(leg,residentGeo.leg,pants,0,-.19,0);
   const knee=new THREE.Group();knee.position.y=-.39;leg.add(knee);
-  add(knee,residentGeo.leg,pants,0,-.18,0);add(knee,residentGeo.shoe,humanMat(0x5b4b3b),0,-.38,.045);legs.push({pivot:leg,knee});
+  add(knee,residentGeo.shin,pants,0,-.18,0);
+  add(knee,residentGeo.shoe,humanMat(0x5b4b3b),0,-.38,.045).scale.set(1,1,2.05);legs.push({pivot:leg,knee});
  }
  if(spec.role==='fish'){
   arms[1].pivot.rotation.x=-.72;arms[1].elbow.rotation.x=-.58;
@@ -5877,23 +5971,34 @@ function buildAvatar(look){
  const skin=humanMat(look.skin),shirt=humanMat(look.shirt),pants=humanMat(look.pants),hair=humanMat(look.hair);
  add(body,residentGeo.torso,shirt,0,1.18,0);
  add(body,G.cyl(.11,.11,.18,8),skin,0,1.57,0);
- const head=new THREE.Group();head.position.y=1.79;body.add(head);
+ /* 头身比：原来头高 .48、总身高 2.02，四头身出头 —— 娃娃感主要来自这里，
+    而且它在任何距离都看得出来，比关节缝、贴图这些都更先被眼睛抓到。
+    整组缩到 .82 再把中心抬到 1.819，头顶仍停在 2.02，总身高一点没变（座位偏移、
+    碰撞高度、蹭车挂点全是照总身高写死的，动不得）。头肩比从 .71 降到 .58。
+    缩的是整个 head 组，所以头发、眼鼻、帽子跟着一起缩，不用逐个重算坐标。 */
+ const head=new THREE.Group();head.position.y=1.819;head.scale.setScalar(.82);body.add(head);
  add(head,residentGeo.head,skin,0,0,0);
- add(head,G.sph(.24,10,8),hair,0,.055,-.045).scale.set(1,.76,.92);
- add(head,residentGeo.eye,humanMat(0x242e30),-.083,.01,.223);
- add(head,residentGeo.eye,humanMat(0x242e30),.083,.01,.223);
- add(head,G.sph(.04,7,5),skin,0,-.046,.242);
+ // 竖向 .78 时发顶在 y=.242、头顶在 .245 —— 差三毫米，两个面咬在一起就是那块锯齿。
+ // 抬到 .88，发顶到 .266，稳稳扣在头皮外面（帽子的碗也刚好盖得住）。
+ add(head,G.sph(.24,12,9),hair,0,.055,-.03).scale.set(.99,.88,1.02);
+ // 眼鼻的 z 照新头型的椭球面重算过：头左右窄了、前后长了，用旧值会陷进去
+ add(head,residentGeo.eye,humanMat(0x242e30),-.080,.01,.224);
+ add(head,residentGeo.eye,humanMat(0x242e30),.080,.01,.224);
+ add(head,G.sph(.04,7,5),skin,0,-.046,.232);
  const arms=[],legs=[];
  for(const side of [-1,1]){
   const arm=new THREE.Group();arm.position.set(side*.35,1.46,0);body.add(arm);
   add(arm,residentGeo.limb,shirt,0,-.16,0);
   const elbow=new THREE.Group();elbow.position.y=-.34;arm.add(elbow);
-  add(elbow,residentGeo.limb,skin,0,-.15,0);add(elbow,residentGeo.hand,skin,0,-.36,0);
+  add(elbow,residentGeo.fore,skin,0,-.15,0);
+  // 手：扁长的，不是个球
+  add(elbow,residentGeo.hand,skin,0,-.35,0).scale.set(.62,.92,.42);
   arms.push({pivot:arm,elbow});
   const leg=new THREE.Group();leg.position.set(side*.15,.87,0);body.add(leg);
   add(leg,residentGeo.leg,pants,0,-.19,0);
   const knee=new THREE.Group();knee.position.y=-.39;leg.add(knee);
-  add(knee,residentGeo.leg,pants,0,-.18,0);add(knee,residentGeo.shoe,humanMat(0x2f2a26),0,-.38,.045);
+  add(knee,residentGeo.shin,pants,0,-.18,0);
+  add(knee,residentGeo.shoe,humanMat(0x2f2a26),0,-.38,.045).scale.set(1,1,2.05);
   legs.push({pivot:leg,knee});
  }
  return {g,body,head,arms,legs};
