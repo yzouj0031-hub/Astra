@@ -449,7 +449,9 @@ scene.add(sky);
 scene.fog = new THREE.FogExp2(0xbcd7e4, 0.00085);
 
 /* ---------- 光 ---------- */
-const hemi = new THREE.HemisphereLight(0xcbe6e5, 0x93897a, 0.52); scene.add(hemi);
+// 半球光和补光让位给环境贴图：这两盏原本是在手工替代天空的漫射，
+// 现在环境贴图真的把这件事做了，再按老强度就是打两遍。
+const hemi = new THREE.HemisphereLight(0xcbe6e5, 0x93897a, 0.26); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2d8, 0.70);
 sun.position.copy(SUN_DIR).multiplyScalar(220);
 sun.castShadow = true;
@@ -464,7 +466,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun); scene.add(sun.target);
 // 场景里没有弹射光，屋檐下和市场里只剩半球光，暗部会直接掉成黑洞。补一点常量
 // 环境光当作 GI 的替身：室内才有得看，室外几乎察觉不到，夜里跟着时段一起收。
-const fill = new THREE.AmbientLight(0xc6d2cb, 0.16); scene.add(fill);
+const fill = new THREE.AmbientLight(0xc6d2cb, 0.07); scene.add(fill);
 const rim = new THREE.DirectionalLight(0x8fb8d8, 0.13);
 rim.position.set(-60, 40, -80); scene.add(rim);
 
@@ -2405,8 +2407,35 @@ for(const items of batches.values()){
  items.forEach(o=>o.parent.remove(o));parts.forEach(g=>g.dispose());
 }
 
+/* 环境贴图：MeshStandardMaterial 没有环境光照时是"哑"的 —— 粗糙度和金属度
+   都表现不出来，石头、铜件、玻璃看着都像同一种塑料。拿天空那三色渐变现画一张
+   equirect 过 PMREM，全场标准材质立刻接上来自天空的间接光和反射。
+   天空色每帧都在插值，所以不能每帧重生成；换时段时打两次就够。 */
+const ENV_GAIN=0.40;
+let envPMREM=null, envTarget=null;
+function refreshEnvironment(){
+ try{
+  if(!envPMREM){envPMREM=new THREE.PMREMGenerator(renderer);envPMREM.compileEquirectangularShader();}
+  const c=document.createElement('canvas');c.width=16;c.height=64;
+  const g=c.getContext('2d');if(!g||!g.createLinearGradient)return;
+  // 压到四成：环境贴图接管的是天空来的漫射，按天空全亮度来会和半球光、
+  // 补光叠成两遍，画面直接冲白 —— 实测平均亮度 144 冲到 187，楼全成白的了。
+  const dim=col=>'#'+col.clone().multiplyScalar(ENV_GAIN).getHexString();
+  const grad=g.createLinearGradient(0,0,0,64);
+  grad.addColorStop(0,dim(skyU.top.value));
+  grad.addColorStop(.55,dim(skyU.mid.value));
+  grad.addColorStop(1,dim(skyU.bot.value));
+  g.fillStyle=grad;g.fillRect(0,0,16,64);
+  const src=new THREE.CanvasTexture(c);src.mapping=THREE.EquirectangularReflectionMapping;
+  const next=envPMREM.fromEquirectangular(src);
+  envTarget?.dispose();envTarget=next;scene.environment=next.texture;
+  src.dispose();
+ }catch(e){ /* 没有 WebGL 或画布时照常跑，只是少了环境光 */ }
+}
+function scheduleEnvironment(){refreshEnvironment();setTimeout(refreshEnvironment,1500);}
 function selectPeriod(index){
  periodIndex=index;document.body.dataset.period=periodNames[index];
+ scheduleEnvironment();          // 天空变了，环境光也要跟着变
  $('time-toggle').textContent=periods[index].label;$('map-caption').textContent=periods[index].caption;
  try{localStorage.setItem('windward-period-v2',periodNames[index]);}catch{}
 }
@@ -6494,6 +6523,7 @@ const journeys=window.AstraJourneys?.init({
 });
 
 applySurfaceDetail();
+scheduleEnvironment();   // 开局先把环境光挂上
 /* 色调映射：整套调色板是按 sRGB 挑的十六进制，却被当成线性值送进光照，所以颜色
    又淡又灰——石头是灰白的，草坡也是灰白的。这里在映射之前先把它还原回线性，浓度
    和明暗层次就回来了；天空和海是各自的着色器直接出图，不走这条路，不受影响。 */
