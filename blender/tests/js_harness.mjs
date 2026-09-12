@@ -163,7 +163,14 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   fs.mkdirSync(outDir, { recursive: true });
 
   const ctx = makeEnv();
-  const out = { _moduleSeed: moduleLevelSeed(ctx) };
+  const out = {
+    _moduleSeed: moduleLevelSeed(ctx),
+    // 模块级算出来的星空与雨滴，Python 侧要照着重算（parts/weather.py 要用）
+    _moduleData: ctx.__wt.evalIn(
+      '({ rain: rainDrops.slice(0, 4), rainN: rainDrops.length,' +
+      '   star0: Array.from(starGeo.attributes.position.array.slice(0, 3)),' +
+      '   starN: starGeo.attributes.position.count })'),
+  };
   for (const [name, call] of Object.entries(jobs)) {
     if (name === 'atlasCells') {
       out[name] = ctx.__wt.evalIn('buildAtlas(); Atlas.cells');

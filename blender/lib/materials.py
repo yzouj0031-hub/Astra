@@ -478,6 +478,64 @@ def glow_material(name="M_Glow", strength=2.4):
     return mat
 
 
+# ---------------------------------------------------------------- 雨与雾
+
+def rain_material(name="M_Rain", alpha=0.30):
+    """雨丝：大半透明，剩下的一点是漫反射白。
+
+    不做自发光 —— 雨丝该被灯笼照亮，而不是自己发光。夜里灯下那几缕亮的
+    雨丝就是这么来的，是真被照到的。
+    """
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    for n in list(nodes):
+        if n.type != "OUTPUT_MATERIAL":
+            nodes.remove(n)
+    out = nodes["Material Output"]
+
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    transparent.location = (-280, 120)
+    diffuse = nodes.new("ShaderNodeBsdfDiffuse")
+    diffuse.location = (-280, -60)
+    _set(diffuse, "Color", (0.86, 0.90, 0.95, 1.0))
+    _set(diffuse, "Roughness", 0.35)
+
+    mix = nodes.new("ShaderNodeMixShader")
+    mix.location = (20, 40)
+    _set(mix, "Fac", alpha)
+    links.new(transparent.outputs["BSDF"], mix.inputs[1])
+    links.new(diffuse.outputs["BSDF"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], out.inputs["Surface"])
+
+    # 雨丝不该投影（一千片细条投出来的碎影只会让画面脏）。
+    # Cycles 里这是物件级开关，见 render_still.py 里的 visible_shadow=False。
+    return mat
+
+
+def mist_material(name="M_Mist", density=0.006, color=(0.79, 0.83, 0.85)):
+    """雨雾：Volume Scatter。
+
+    各向异性给正值 —— 雾里的水滴前向散射更强，所以背光看过去光锥才明显。
+    这是灯笼光晕、桥洞透光的来源，不需要再贴 sprite。
+    """
+    mat, nodes, links = _fresh(name)
+    if nodes is None:
+        return mat
+    for n in list(nodes):
+        if n.type != "OUTPUT_MATERIAL":
+            nodes.remove(n)
+    out = nodes["Material Output"]
+
+    scatter = nodes.new("ShaderNodeVolumeScatter")
+    scatter.location = (-260, 0)
+    _set(scatter, "Color", (*color, 1.0))
+    _set(scatter, "Density", density)
+    _set(scatter, "Anisotropy", 0.35)
+    links.new(scatter.outputs["Volume"], out.inputs["Volume"])
+    return mat
+
+
 # ---------------------------------------------------------------- 场景设置
 
 def set_emission_strength(mat_name, value):

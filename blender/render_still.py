@@ -23,7 +23,10 @@ if ROOT not in sys.path:
 
 from blender import build_garden  # noqa: E402
 from blender.lib import materials  # noqa: E402
-from blender.lib.geo import to_blender  # noqa: E402
+from blender.lib.geo import Batch, to_blender  # noqa: E402
+from blender.lib.rng import Rng  # noqa: E402
+from blender.lib import rng as rng_mod  # noqa: E402
+from blender.parts import weather  # noqa: E402
 
 # 机位：three 空间坐标（和 parts/*.py 一致），(位置, 看向, 焦距)
 CAMERAS = {
@@ -101,6 +104,40 @@ def set_time(scene, which):
     materials.set_emission_strength("M_Glow", cfg["glow"])
 
 
+def add_weather(scene, cam_three, raining, drops_count):
+    """雨丝 + 雨雾。雨只下在相机周围（原作也是 +-22 米一个笼子）。"""
+    col = bpy.data.collections.new("Weather")
+    scene.collection.children.link(col)
+
+    # 雨滴用模块级算出来的那 1000 滴（与原作同一批数）
+    r = Rng()
+    drops = rng_mod.module_level(r)["rain"]
+
+    center = (cam_three[0], cam_three[2])
+    if drops_count:
+        batch = Batch("Rain")
+        n = weather.build_rain(batch, drops, center, drops_count, cam_three)
+        obj = batch.build(col, materials.rain_material())
+        obj.visible_shadow = False      # 一千片细条的碎影只会把画面弄脏
+        print(f"  雨丝 {n} 条")
+
+    # 雨雾：一个罩住镇子和远山的体积块
+    b = weather.mist_bounds(center)
+    bpy.ops.mesh.primitive_cube_add(size=1, location=to_blender(
+        ((b["x0"] + b["x1"]) / 2, (b["y0"] + b["y1"]) / 2, (b["z0"] + b["z1"]) / 2)))
+    mist = bpy.context.active_object
+    mist.name = "Mist"
+    mist.scale = (b["x1"] - b["x0"], b["z1"] - b["z0"], b["y1"] - b["y0"])
+    bpy.ops.object.transform_apply(scale=True)
+    mist.data.materials.append(
+        materials.mist_material(density=weather.mist_density(raining)))
+    mist.visible_shadow = False
+    for c in list(mist.users_collection):
+        c.objects.unlink(mist)
+    col.objects.link(mist)
+    print(f"  雨雾密度 {weather.mist_density(raining):.5f}")
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser()
@@ -108,6 +145,9 @@ def main():
     ap.add_argument("--time", default="day", choices=sorted(TIMES))
     ap.add_argument("--samples", type=int, default=128)
     ap.add_argument("--scale", type=int, default=50, help="分辨率百分比")
+    ap.add_argument("--rain", action="store_true", help="下雨：雨丝 + 更浓的雨雾")
+    ap.add_argument("--mist", action="store_true", help="只要雾，不要雨丝")
+    ap.add_argument("--drops", type=int, default=1000, help="雨丝条数（最多 1000）")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
@@ -121,6 +161,10 @@ def main():
     add_cameras(scene, args.cam)
     set_time(scene, args.time)
 
+    if args.rain or args.mist:
+        add_weather(scene, CAMERAS[args.cam][0], args.rain,
+                    args.drops if args.rain else 0)
+
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.samples = args.samples
@@ -131,8 +175,9 @@ def main():
     scene.render.image_settings.file_format = "PNG"
     materials.setup_view_transform(scene)
 
+    suffix = "_rain" if args.rain else ("_mist" if args.mist else "")
     out = args.out or os.path.join(ROOT, "renders",
-                                   f"2a_{args.cam}_{args.time}.png")
+                                   f"2a_{args.cam}_{args.time}{suffix}.png")
     scene.render.filepath = out
     os.makedirs(os.path.dirname(out), exist_ok=True)
     bpy.ops.render.render(write_still=True)

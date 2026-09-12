@@ -26,6 +26,7 @@ parts/site.py     # 布局、水域判定、地形、驳岸、地面、广场、
 parts/hall.py     # 房子（墙体/屋顶/马头墙/临街立面）、石拱桥、牌坊、茶馆、宝塔
 parts/plants.py   # 柳树、樟树
 parts/lamps.py    # 灯笼
+parts/weather.py  # 雨丝与雨雾（不是移植，按 2A 重做）
 parts/town.py     # layoutTown：整镇布局
 build_garden.py   # 总装入口，出 renders/town.blend
 render_still.py   # 2A 出图：五个固定机位 x 昼/黄昏/夜
@@ -70,6 +71,28 @@ pagoda / overview），昼夜是 `TIMES` 里的一个开关，改的是世界环
 灯下的石板、水里的倒影都会自然算出来。原作那套 `mkGlow` sprite 和
 「最多 9 盏 PointLight」是 WebGL 的性能妥协，不要照搬。
 
+## 雨与雾
+
+```powershell
+& $B --background --python blender\render_still.py -- --cam canal --time night --rain
+& $B --background --python blender\render_still.py -- --cam pagoda --time day --mist
+```
+
+这一块不是移植，是按 2A 重做的：
+
+- 原作的雨是 1000 条 LineSegments，每帧在 CPU 上挪位置。Cycles 里线段没有
+  厚度也接不上光，所以改成真几何：每滴一片细长四边形，绕 Y 轴转到正对相机
+  （不转的话侧看就是一张纸的边，等于没有）。雨丝**不自发光** —— 它该被
+  灯笼照亮，夜里灯下那几缕亮的雨丝是真被照到的。
+- 原作的雾是 `scene.fog`（线性距离雾），只染颜色不参与光照。这里换成
+  Volume Scatter，各向异性 0.35：灯笼的光锥、桥洞的透光、远山被压淡
+  都会自然出现，不用再贴 `mkGlow` 那种 sprite。密度按原作的 `fog.far`
+  反推（光学厚度约 1 时看不见 far 处）：晴 1/320，雨 1/150。
+
+雨滴的位置和下落速度**直接用模块级算出来的那 1000 滴**（`rng.module_level`），
+不是另起一套随机 —— 那本来就是原作的雨，白算了可惜。测试里连雨滴的
+x/y/z/v 都和 JS 逐值比过。
+
 ## 四条硬性约束
 
 0. **总装前先空转 6200 个随机数**。watertown.js 的整个模块体在 init() 之前
@@ -87,10 +110,17 @@ pagoda / overview），昼夜是 `TIMES` 里的一个开关，改的是世界环
 
 ## 跑验收
 
-`tests/js_harness.mjs` 会把 `index.html` 里内嵌的真 three.js r128 抠出来，
-再从 `watertown.js` 切出**原函数**在 node 里跑，报告它消耗的随机数个数、
-结束时的种子、以及每一次 `Batch.add` 的原语/矩阵/颜色/uvBox。
-`test_site_parity.py` 拿这份流水和 Python 侧逐项比 —— 移植对不对不靠眼看。
+`tests/js_harness.mjs` 把 `index.html` 里内嵌的真 three.js r128 抠出来，
+再把 `watertown.js` 的**整个模块体**（到最后那句 `init()` 为止）在 node 里
+原样跑一遍 —— 只跳过 `init()`（它要 WebGL 和 DOM）。装完之后把
+`Batch.prototype.add` 换成记账版：`box()`/`shape()` 最终都落到 `add`，
+一处就够。再通过模块内的 direct eval 调具体 builder，能读写 `_seed` 和 `rnd`。
+除了「不画东西」，跑的全是原件。
+
+`test_site_parity.py` 拿这份流水和 Python 侧逐项比：每一次 `Batch.add` 的
+原语、16 个矩阵元素、颜色、uvBox，加上取数个数与结束种子。挤出体比多边形
+顶点，圆柱比参数（三角化方式两边本来就不同，比不了顶点）。整镇一万一千多次
+调用全覆盖 —— 移植对不对不靠眼看。
 
 ```powershell
 $B = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"

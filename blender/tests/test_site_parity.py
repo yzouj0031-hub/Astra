@@ -289,21 +289,37 @@ def check_atlas(ref):
     return True
 
 
-def check_module_preroll(ref):
+def check_module_preroll(ref, data):
     """layoutTown 不是从种子起点开始的：模块级的星空和雨滴先消耗了 6200 个数。
-    这条对不上，整座镇子的布局就全错。"""
+    这条对不上，整座镇子的布局就全错。顺带比一下算出来的雨滴和星星本身 ——
+    parts/weather.py 直接用它们。"""
     r = Rng()
-    got = rng_mod.module_preroll(r)
-    if got != ref:
-        print(f"  FAIL 模块级预消耗: JS={ref} PY={got}")
+    got = rng_mod.module_level(r)
+    if r.seed != ref:
+        print(f"  FAIL 模块级预消耗: JS={ref} PY={r.seed}")
         return False
-    print(f"  ok  模块级预消耗    {rng_mod.MODULE_LEVEL_DRAWS} 个数后种子 {got}")
+    if len(got["rain"]) != data["rainN"] or len(got["stars"]) * 3 != data["starN"] * 3:
+        print(f"  FAIL 模块级数量: 雨 JS={data['rainN']} PY={len(got['rain'])}")
+        return False
+    for i, jd in enumerate(data["rain"]):
+        pd = got["rain"][i]
+        for k in ("x", "y", "z", "v"):
+            if abs(jd[k] - pd[k]) > TOL:
+                print(f"  FAIL 雨滴[{i}].{k}: JS={jd[k]!r} PY={pd[k]!r}")
+                return False
+    for k in range(3):
+        # 星星的坐标存在 Float32Array 里，按单精度分辨率比（半径 820）
+        if abs(data["star0"][k] - got["stars"][0][k]) > 1e-3:
+            print(f"  FAIL 星[0][{k}]: JS={data['star0'][k]!r} PY={got['stars'][0][k]!r}")
+            return False
+    print(f"  ok  模块级        {rng_mod.MODULE_LEVEL_DRAWS} 个数后种子 {r.seed}，"
+          f"星 {len(got['stars'])} 雨 {len(got['rain'])} 逐值相等")
     return True
 
 
 def main():
     ref = js_reference()
-    ok = check_module_preroll(ref["_moduleSeed"])
+    ok = check_module_preroll(ref["_moduleSeed"], ref["_moduleData"])
     for name in JOBS:
         if name.startswith("_"):
             continue

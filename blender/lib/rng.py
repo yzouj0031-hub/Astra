@@ -104,9 +104,38 @@ TAU = math.pi * 2
 MODULE_LEVEL_DRAWS = 1100 * 2 + 1000 * 4
 MODULE_LEVEL_SEED = 2708464514
 
+STAR_COUNT = 1100
+STAR_RADIUS = 820
+RAIN_COUNT = 1000
+
+
+def module_level(rng):
+    """按原文重算模块级那两个循环，返回星空与雨滴。
+
+    watertown.js:500  星空：th=rr(0,TAU) 然后 ph=acos(rr(0.02,1))
+    watertown.js:560  雨滴：x, y, z, v 四个数，顺序不能换
+
+    与其空转 6200 个数，不如把它们算出来 —— 雨滴的位置和下落速度正是
+    parts/weather.py 要用的（原作的雨就长这样：每滴一条 0.7 米的线，
+    带 -0.08 的横向偏移，那是风）。
+    """
+    stars = []
+    for _ in range(STAR_COUNT):
+        th = rng.rr(0, 2 * math.pi)
+        ph = math.acos(rng.rr(0.02, 1))
+        stars.append((math.sin(ph) * math.cos(th) * STAR_RADIUS,
+                      math.cos(ph) * STAR_RADIUS,
+                      math.sin(ph) * math.sin(th) * STAR_RADIUS))
+
+    drops = []
+    for _ in range(RAIN_COUNT):
+        drops.append({"x": rng.rr(-22, 22), "y": rng.rr(0, 24),
+                      "z": rng.rr(-22, 22), "v": rng.rr(18, 24)})
+
+    return {"stars": stars, "rain": drops}
+
 
 def module_preroll(rng):
-    """把模块级那 6200 个数空转掉。返回消耗后的种子。"""
-    for _ in range(MODULE_LEVEL_DRAWS):
-        rng.rnd()
+    """只要把随机流推到正确位置、不关心星空雨滴时用这个。"""
+    module_level(rng)
     return rng.seed
