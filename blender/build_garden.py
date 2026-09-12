@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from blender.lib import materials, rng as rng_mod  # noqa: E402
+from blender.lib import detail, materials, rng as rng_mod  # noqa: E402
 from blender.lib.geo import BATCH_KEYS, Batch, to_blender  # noqa: E402
 from blender.lib.rng import Rng  # noqa: E402
 from blender.parts import lamps, site, town  # noqa: E402
@@ -44,8 +44,12 @@ def new_collection(scene, name):
     return col
 
 
-def build(scene, quiet=False):
-    """把整座镇子生成到当前场景，返回统计信息。"""
+def build(scene, quiet=False, bevel=True):
+    """把整座镇子生成到当前场景，返回统计信息。
+
+    bevel=True 时给建筑和石作加倒角（见 lib/detail.py）：现实里没有数学上的
+    完美尖边，每条边挂住一道细高光，是「看着像东西」和「看着像建模」的分界线。
+    """
     cols = {name: new_collection(scene, name)
             for name in ("Hall", "Plants", "Lamps", "Water", "Site", "Teahouse")}
 
@@ -88,6 +92,10 @@ def build(scene, quiet=False):
         emit(b, key, "Teahouse")
 
     build_water(cols["Water"])
+
+    if bevel:
+        stats["beveled"] = detail.refine_scene(
+            [cols["Hall"], cols["Teahouse"], cols["Lamps"], cols["Site"]], quiet=quiet)
     return stats
 
 

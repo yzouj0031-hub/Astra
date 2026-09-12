@@ -22,7 +22,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from blender import build_garden  # noqa: E402
-from blender.lib import materials  # noqa: E402
+from blender.lib import device, materials  # noqa: E402
 from blender.lib.geo import Batch, to_blender  # noqa: E402
 from blender.lib.rng import Rng  # noqa: E402
 from blender.lib import rng as rng_mod  # noqa: E402
@@ -41,6 +41,9 @@ CAMERAS = {
     # 上一版退到 74 米外塔是完整了，但背景只有一片山影、前景空着，
     # 是张标本照 —— 塔要站在镇子的上方才有意思
     "pagoda": ((-88.0, 8.0, 2.0), (-112.0, 27.0, 78.0), 40.0),
+    # 茶馆室内：全镇唯一有陈设的屋子（方桌、条凳、柜台、五只茶壶）。
+    # 普通民居的"铺面"只是一个 0.5 米深的深色凹龛，没有房间可拍。
+    "teahouse_in": ((21.0, 2.2, 13.6), (21.0, 1.3, 23.2), 24.0),
     # 全镇鸟瞰
     "overview": ((-86.0, 62.0, -74.0), (0.0, 6.0, 12.0), 35.0),
 }
@@ -161,13 +164,14 @@ def main():
     ap.add_argument("--rain", action="store_true", help="下雨：雨丝 + 更浓的雨雾")
     ap.add_argument("--mist", action="store_true", help="只要雾，不要雨丝")
     ap.add_argument("--drops", type=int, default=1000, help="雨丝条数（最多 1000）")
+    ap.add_argument("--plain", action="store_true", help="不加倒角，用来做前后对比")
     ap.add_argument("--out", default=None)
     args = ap.parse_args(argv)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
 
-    stats = build_garden.build(scene, quiet=True)
+    stats = build_garden.build(scene, quiet=True, bevel=not args.plain)
     print(f"  镇子：{stats['verts']} verts，灯笼 {stats['lanterns']} 盏，"
           f"随机流 {stats['draws']} 次取数")
 
@@ -179,7 +183,7 @@ def main():
                     args.drops if args.rain else 0)
 
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    device.configure(scene)      # 有独显就自动用上，没有就 CPU，日志里会写明
     scene.cycles.samples = args.samples
     scene.cycles.use_denoising = True
     scene.render.resolution_x = 1920

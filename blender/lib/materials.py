@@ -89,8 +89,126 @@ def vertex_color_material(name="M_VColor"):
 
 # ---------------------------------------------------------------- 石
 
+def _brick(nodes, vector, x, y, brick_w=0.62, row_h=0.30):
+    """一块砖石图案。返回节点，Color 是颜色、Fac 是缝（1=缝）。"""
+    n = nodes.new("ShaderNodeTexBrick")
+    n.location = (x, y)
+    n.offset = 0.5
+    n.squash = 1.0
+    _set(n, "Scale", 1.0)
+    _set(n, "Mortar Size", 0.012)
+    _set(n, "Mortar Smooth", 0.15)
+    _set(n, "Bias", 0.0)
+    _set(n, "Brick Width", brick_w)
+    _set(n, "Row Height", row_h)
+    _set(n, "Color1", (1.0, 1.0, 1.0, 1.0))
+    _set(n, "Color2", (0.86, 0.86, 0.86, 1.0))    # 石块之间轻微深浅差
+    _set(n, "Mortar", (0.42, 0.42, 0.42, 1.0))
+    n.inputs["Vector"].default_value = (0, 0, 0)
+    if vector:
+        vector[0].links.new(vector[1], n.inputs["Vector"])
+    return n
+
+
+def triplanar_brick(nt, coord_out, geometry_normal, x=-1200, y=-300,
+                    brick_w=0.62, row_h=0.30):
+    """三向投影的砖石图案。返回 (颜色输出, 缝输出)。
+
+    二维图案只认向量的 x/y，贴到竖直面上会拉成条纹。这里在 xy / yz / xz
+    三个平面各算一次，按法线的三个分量加权混合：地面取 xy，朝 y 的墙取 xz
+    （砖横着砌、一层层往上摞），朝 x 的墙取 yz。
+    """
+    nodes, links = nt.nodes, nt.links
+    sep = nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (x - 240, y)
+    links.new(coord_out, sep.inputs["Vector"])
+
+    planes = []
+    for i, (a, b) in enumerate((("X", "Y"), ("Y", "Z"), ("X", "Z"))):
+        comb = nodes.new("ShaderNodeCombineXYZ")
+        comb.location = (x - 60, y - i * 170)
+        links.new(sep.outputs[a], comb.inputs["X"])
+        links.new(sep.outputs[b], comb.inputs["Y"])
+        brick = _brick(nodes, None, x + 120, y - i * 170, brick_w, row_h)
+        links.new(comb.outputs["Vector"], brick.inputs["Vector"])
+        planes.append(brick)
+
+    # 权重 = |法线| 的三个分量，归一化
+    nsep = nodes.new("ShaderNodeSeparateXYZ")
+    nsep.location = (x + 120, y - 560)
+    links.new(geometry_normal, nsep.inputs["Vector"])
+
+    weights = []
+    for i, axis in enumerate("XYZ"):
+        a = nodes.new("ShaderNodeMath")
+        a.operation = "ABSOLUTE"
+        a.location = (x + 300, y - 560 - i * 100)
+        links.new(nsep.outputs[axis], a.inputs[0])
+        weights.append(a)
+
+    total = nodes.new("ShaderNodeMath")
+    total.operation = "ADD"
+    total.location = (x + 470, y - 620)
+    links.new(weights[0].outputs[0], total.inputs[0])
+    links.new(weights[1].outputs[0], total.inputs[1])
+    total2 = nodes.new("ShaderNodeMath")
+    total2.operation = "ADD"
+    total2.location = (x + 470, y - 740)
+    links.new(total.outputs[0], total2.inputs[0])
+    links.new(weights[2].outputs[0], total2.inputs[1])
+
+    norm = []
+    for i in range(3):
+        d = nodes.new("ShaderNodeMath")
+        d.operation = "DIVIDE"
+        d.location = (x + 640, y - 560 - i * 100)
+        links.new(weights[i].outputs[0], d.inputs[0])
+        links.new(total2.outputs[0], d.inputs[1])
+        norm.append(d)
+
+    # 法线朝 X -> 用 yz 面(planes[1])；朝 Y -> xz(planes[2])；朝 Z -> xy(planes[0])
+    order = [(norm[0], planes[1]), (norm[1], planes[2]), (norm[2], planes[0])]
+
+    def blend(socket_name, is_color):
+        parts = []
+        for i, (w, brick) in enumerate(order):
+            m = nodes.new("ShaderNodeVectorMath" if is_color else "ShaderNodeMath")
+            m.operation = "MULTIPLY"
+            m.location = (x + 820, y - i * 130 - (0 if is_color else 420))
+            links.new(brick.outputs[socket_name], m.inputs[0])
+            if is_color:
+                sc = nodes.new("ShaderNodeCombineXYZ")
+                sc.location = (x + 660, y - i * 130 + 60)
+                for ax in "XYZ":
+                    links.new(w.outputs[0], sc.inputs[ax])
+                links.new(sc.outputs["Vector"], m.inputs[1])
+            else:
+                links.new(w.outputs[0], m.inputs[1])
+            parts.append(m)
+        acc = parts[0]
+        for i in (1, 2):
+            add = nodes.new("ShaderNodeVectorMath" if is_color else "ShaderNodeMath")
+            add.operation = "ADD"
+            add.location = (x + 1000, y - i * 130 - (0 if is_color else 420))
+            links.new(acc.outputs[0], add.inputs[0])
+            links.new(parts[i].outputs[0], add.inputs[1])
+            acc = add
+        return acc.outputs[0]
+
+    return blend("Color", True), blend("Fac", False)
+
+
 def stone_material(name="M_Stone"):
-    """驳岸、石板路、台阶、古井。粗粝、微凹凸、湿处偏暗。"""
+    """驳岸、石板路、台阶。
+
+    关键是**石板缝**：这些面现在是一整片均匀的灰，而现实里它们是一块块砌的。
+    缝隙给出尺度感 —— 人一眼就能从石板大小判断出这堵墙有多高。
+    缝同时压暗颜色、压低高度（bump），两处一起做才像凹进去的，
+    只改颜色会像贴了张纸。
+
+    砖块图案走 Object 坐标，单位就是米，所以石板尺寸是可读的真实数字：
+    0.62 x 0.30 米，灰缝 2 厘米。
+    """
     mat, nodes, links = _fresh(name)
     if nodes is None:
         return mat
@@ -98,22 +216,37 @@ def stone_material(name="M_Stone"):
     _kill_specular(bsdf)
 
     col = _vcol(nodes)
-    grain = _noise(nodes, scale=38.0, detail=8.0, rough=0.6, y=-260)
-    blotch = _noise(nodes, scale=3.5, detail=4.0, y=-560)
+    coord = nodes.new("ShaderNodeTexCoord")
+    coord.location = (-2000, -300)
+    geom = nodes.new("ShaderNodeNewGeometry")
+    geom.location = (-2000, -700)
+    joint_color, joint_fac = triplanar_brick(
+        mat.node_tree, coord.outputs["Object"], geom.outputs["Normal"])
 
-    # 底色 x 大块深浅
+    grain = _noise(nodes, scale=38.0, detail=8.0, rough=0.6, y=-620)
+    blotch = _noise(nodes, scale=3.5, detail=4.0, y=-900)
+
+    # 底色 x 大块深浅 x 石板缝
     mix = nodes.new("ShaderNodeMix")
     mix.data_type = "RGBA"
     mix.blend_type = "MULTIPLY"
-    mix.location = (-520, 0)
+    mix.location = (-800, 0)
     _set(mix, "Factor", 0.35)
-    links.new(col.outputs["Color"], mix.inputs[6])       # A
-    links.new(blotch.outputs["Color"], mix.inputs[7])    # B
-    links.new(mix.outputs[2], bsdf.inputs["Base Color"])
+    links.new(col.outputs["Color"], mix.inputs[6])
+    links.new(blotch.outputs["Color"], mix.inputs[7])
+
+    seams = nodes.new("ShaderNodeMix")
+    seams.data_type = "RGBA"
+    seams.blend_type = "MULTIPLY"
+    seams.location = (-560, 0)
+    _set(seams, "Factor", 0.9)
+    links.new(mix.outputs[2], seams.inputs[6])
+    links.new(joint_color, seams.inputs[7])
+    links.new(seams.outputs[2], bsdf.inputs["Base Color"])
 
     # 粗糙度跟着颗粒走：0.72 ~ 0.95
     rough = nodes.new("ShaderNodeMapRange")
-    rough.location = (-520, -300)
+    rough.location = (-560, -420)
     _set(rough, "From Min", 0.0)
     _set(rough, "From Max", 1.0)
     _set(rough, "To Min", 0.72)
@@ -121,8 +254,17 @@ def stone_material(name="M_Stone"):
     links.new(grain.outputs["Fac"], rough.inputs["Value"])
     links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
 
-    bump = _bump(nodes, 0.35)
-    links.new(grain.outputs["Fac"], bump.inputs["Height"])
+    # 高度：颗粒 + 缝。缝要压得比颗粒深，才是"凹进去"而不是"画上去"
+    height = nodes.new("ShaderNodeMix")
+    height.data_type = "FLOAT"
+    height.blend_type = "MULTIPLY"
+    height.location = (-560, -640)
+    _set(height, "Factor", 0.75)
+    links.new(grain.outputs["Fac"], height.inputs[2])
+    links.new(joint_fac, height.inputs[3])
+
+    bump = _bump(nodes, 0.55)
+    links.new(height.outputs[0], bump.inputs["Height"])
     links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     return mat
 
@@ -187,8 +329,18 @@ def plaster_material(name="M_Plaster"):
     links.new(wash.outputs[2], stain.inputs[6])
     links.new(stain.outputs[2], bsdf.inputs["Base Color"])
 
-    bump = _bump(nodes, 0.12)
-    links.new(mottle.outputs["Fac"], bump.inputs["Height"])
+    # 高频细颗粒：抹灰面近看是有砂粒的，少了这层近景会像塑料
+    grit = _noise(nodes, scale=190.0, detail=4.0, rough=0.7, x=-980, y=-1150)
+    surface = nodes.new("ShaderNodeMix")
+    surface.data_type = "FLOAT"
+    surface.blend_type = "ADD"
+    surface.location = (-620, -1080)
+    _set(surface, "Factor", 0.45)
+    links.new(mottle.outputs["Fac"], surface.inputs[2])
+    links.new(grit.outputs["Fac"], surface.inputs[3])
+
+    bump = _bump(nodes, 0.22)
+    links.new(surface.outputs[0], bump.inputs["Height"])
     links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
     return mat
 

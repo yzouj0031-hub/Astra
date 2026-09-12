@@ -22,7 +22,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from blender import build_garden, render_still  # noqa: E402
-from blender.lib import materials  # noqa: E402
+from blender.lib import device, materials  # noqa: E402
 
 CAMERAS = render_still.CAMERAS
 TIMES = render_still.TIMES
@@ -75,8 +75,8 @@ def main():
     sun = bpy.data.objects["Sun"]
 
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"                     # 这台机器没有可用的 GPU 设备，
-    scene.cycles.samples = args.samples             # 见 tools/probe_gpu.py
+    device.configure(scene)      # 有独显就自动用上（见 lib/device.py）
+    scene.cycles.samples = args.samples
     scene.cycles.use_denoising = True
     scene.render.resolution_x = 1920
     scene.render.resolution_y = 1080
