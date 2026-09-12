@@ -2246,7 +2246,7 @@ function tick(){
   updateHarbor(dt,t);
   // 模式
   if(mode===MODE.RIDE)updateParkCamera(dt);
-  else if(mode===MODE.WALK) updateWalk(dt, t);
+  else if(mode===MODE.WALK) hitch?updateHitch(dt,t):updateWalk(dt, t);
   else if(mode===MODE.DRIVE) updateDrive(dt, t);
   else if(mode===MODE.SAIL) updateSail(dt, t);
   else if(mode===MODE.FLY) updateFly(dt, t);
@@ -5818,9 +5818,58 @@ function animateRemotePlayers(dt,t){
   r.avatar.body.position.y=Math.sin(t*1.5)*.012+(gait?Math.abs(Math.sin(r.phase))*.04:0);
  }
 }
+/* ---------- 搭朋友的车 ---------- */
+// 只贴位置，不碰物理：开车的人照旧本地模拟，乘客把自己每帧贴到对方广播的位姿上。
+// 于是没有权威交接、没有输入转发，两边的物理也不会打架。
+const HITCH_KINDS=new Set(['drive','sail','fly']);
+const HITCH_REACH=5.0;          // 走到多近能搭上
+const HITCH_SEAT=0.62;          // 坐在司机旁边，偏出去这么多米
+let hitch=null, hitchNear=null;
+
+function hitchable(r){
+ return r&&r.seen&&HITCH_KINDS.has(r.kind)&&r.region===region&&r.avatar.g.visible;
+}
+function findHitch(){
+ if(mode!==MODE.WALK||walk.swim||activeHarborBuilding)return null;
+ let best=null,bestD=HITCH_REACH;
+ for(const [id,r] of remotePlayers){
+  if(!hitchable(r))continue;
+  const d=Math.hypot(r.avatar.g.position.x-walk.x,r.avatar.g.position.z-walk.z);
+  if(d<bestD){best={id,r};bestD=d;}
+ }
+ return best;
+}
+function startHitch(pick){
+ if(!pick)return;
+ hitch={id:pick.id};
+ setMode(MODE.WALK);
+ showHint((touchUi()?'搭上了 · 点「下车」离开':'搭上了 · 按 F 下车')+' · 车归'+(pick.r.name||'对方')+'开');
+}
+function stopHitch(reason){
+ if(!hitch)return;
+ hitch=null;
+ groundPlayer();
+ walk.vx=walk.vz=0;walk.speed=0;
+ if(reason)showHint(reason);
+}
+// 乘客每帧被贴到司机的位姿上。司机没了/下车了/走进旅程了，就自动放人下来。
+function updateHitch(dt,t){
+ const r=remotePlayers.get(hitch.id);
+ if(!hitchable(r)){stopHitch('这趟车没了 · 你回到地面上');return;}
+ const p=r.avatar.g.position, side=r.heading+Math.PI/2;
+ walk.x=p.x+Math.cos(side)*HITCH_SEAT;
+ walk.z=p.z-Math.sin(side)*HITCH_SEAT;
+ walk.y=walk.groundY=p.y+(r.kind==='drive'?0.62:r.kind==='sail'?0.5:0.35);
+ walk.heading=r.heading;walk.speed=r.speed;walk.vx=walk.vz=0;
+ walk.bob+=dt*Math.min(6,r.speed)*0.4;
+ placeWalkCamera(0,0);
+}
+
 function localOnlinePose(){
  const traveling=journeys?.getPose();if(traveling)return traveling;
  let x=walk.x,y=walk.y,z=walk.z,heading=walk.heading,speed=walk.speed,kind=walk.swim?'swim':mode;
+ // 搭车时报 ride：别人看到的是坐在车里的人，不是一个以车速滑行的行人
+ if(hitch)return {x,y,z,heading,speed,kind:'ride',region};
  if(mode===MODE.DRIVE){x=car.x;y=car.y;z=car.z;heading=car.yaw;speed=Math.abs(car.spd);}
  else if(mode===MODE.SAIL){x=ship.x;y=waveHeight(ship.x,ship.z,performance.now()/1000)+.4;z=ship.z;heading=ship.yaw;speed=Math.abs(ship.spd);}
  else if(mode===MODE.FLY){x=plane.x;y=plane.y;z=plane.z;heading=plane.yaw;speed=plane.spd;}
@@ -6197,6 +6246,8 @@ function exitCar(){
  showHint(touchUi()?'下车 · 走到车边点「上车」':'下车 · 走近车身按 F 再上车');
 }
 function toggleVehicle(){
+ if(hitch){stopHitch(touchUi()?'下车了 · 走近点「搭车」再上':'下车了 · 走近按 F 再搭');return;}
+ if(hitchNear&&mode===MODE.WALK&&!vehicleNear&&!shipNear&&!planeNear){startHitch(hitchNear);return;}
  if(mode===MODE.DRIVE)exitCar();
  else if(mode===MODE.SAIL)leaveShip();
  else if(mode===MODE.FLY)leavePlane();
@@ -6383,9 +6434,10 @@ function updateActors(dt,t){
  shipNear=mode===MODE.WALK&&!activeHarborBuilding&&shipHullDistance(walk.x,walk.z)<3.6;
  planeNear=mode===MODE.WALK&&!activeHarborBuilding&&plane.water&&Math.hypot(walk.x-plane.x,walk.z-plane.z)<PLANE_BOARD_R;
  const canLeavePlane=mode===MODE.FLY&&plane.water&&plane.spd<6;
- const show = (vehicleNear || shipNear || planeNear || mode===MODE.DRIVE || canLeavePlane) && !document.querySelector('dialog[open]');
+ hitchNear=hitch?null:findHitch();
+ const show = (vehicleNear || shipNear || planeNear || hitchNear || hitch || mode===MODE.DRIVE || canLeavePlane) && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
- if(show) vehicleBtn.textContent=(mode===MODE.DRIVE?'下车':canLeavePlane?'下机':vehicleNear?'上车 · 老爷车':shipNear?'上船 · 帆船':'上机 · 水上飞机')+(innerWidth>700?' · F':'');
+ if(show) vehicleBtn.textContent=(hitch?'下车':mode===MODE.DRIVE?'下车':canLeavePlane?'下机':vehicleNear?'上车 · 老爷车':shipNear?'上船 · 帆船':planeNear?'上机 · 水上飞机':'搭 '+(hitchNear.r.name||'朋友')+' 的车')+(innerWidth>700?' · F':'');
  const jumpLabel=mode===MODE.FLY?'油门':walk.swim?'上岸':'跳';
  if(jumpBtn.textContent!==jumpLabel)jumpBtn.textContent=jumpLabel;
 }

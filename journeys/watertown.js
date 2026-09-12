@@ -180,11 +180,13 @@ function addRoof(parent,w,d,H,r,ox,oz,slateC,stripC,bt){
   // 瓦垄：每段坡面铺细条
   const segs=[]; for(let i=0;i<prof.length-1;i++){ const [z0,y0]=prof[i],[z1,y1]=prof[i+1]; segs.push({z:(z0+z1)/2,y:(y0+y1)/2+0.09,len:Math.hypot(z1-z0,y1-y0)+0.05,ang:Math.atan2(y1-y0,z1-z0)}); }
   const n=Math.max(2,Math.round(len/1.0));
+  // 瓦垄用八边圆柱而不是方条：小青瓦是弧面的，方棱在阳光下一眼假。
+  // 圆柱的长轴在 Y，要先转 90 度躺下再按坡度倾斜，所以是 PI/2 - 坡角。
   for(let k=0;k<=n;k++){
     const x=-len/2+0.12+(len-0.24)*k/n;
     for(const sg of segs){
-      box(bt.roof,stripC,0.13,0.1,sg.len, x,sg.y, sg.z, 0,-sg.ang,0,parent);
-      box(bt.roof,stripC,0.13,0.1,sg.len, x,sg.y,-sg.z, 0, sg.ang,0,parent);
+      bt.roof.add(G.cyl, parent.clone().multiply(M(x,sg.y, sg.z, 0.067,sg.len,0.067, Math.PI/2-sg.ang,0,0)), stripC);
+      bt.roof.add(G.cyl, parent.clone().multiply(M(x,sg.y,-sg.z, 0.067,sg.len,0.067, Math.PI/2+sg.ang,0,0)), stripC);
     }
   }
   // 正脊与两端翘起的脊饰
@@ -220,11 +222,17 @@ function addFront(parent,o,H,bt,upperOnly){
   const w=o.w, d=o.d, zf=d/2, wood=C.woodDk;
   const slots=Math.max(1,Math.floor((w-1.4)/2.5)), gap=(w-1.4)/slots;
   const xs=[]; for(let i=0;i<slots;i++) xs.push(-w/2+0.7+gap*(i+0.5));
+  // 窗要有进深。原来是一块板贴在墙面上、窗纸还浮在板前面，近看就是一张贴纸。
+  // 现在：先掏一个暗的洞壁，窗纸退进去，框做成四条边围出空心，窗棂再压在最外层。
   const win=(x,y)=>{
-    box(bt.wood,wood,1.32,1.52,0.14, x,y,zf+0.03, 0,0,0,parent);
-    box(bt.glow,C.glowWin,1.1,1.3,0.06, x,y,zf+0.08, 0,0,0,parent);
-    box(bt.wood,wood,0.05,1.3,0.06, x-0.2,y,zf+0.11, 0,0,0,parent); box(bt.wood,wood,0.05,1.3,0.06, x+0.2,y,zf+0.11, 0,0,0,parent);
-    box(bt.wood,wood,1.1,0.05,0.06, x,y-0.22,zf+0.11, 0,0,0,parent); box(bt.wood,wood,1.1,0.05,0.06, x,y+0.22,zf+0.11, 0,0,0,parent);
+    box(bt.misc,0x1a1512,1.18,1.38,0.18, x,y,zf-0.04, 0,0,0,parent);          // 洞壁（暗）
+    box(bt.glow,C.glowWin,1.12,1.32,0.05, x,y,zf-0.01, 0,0,0,parent);         // 窗纸，退在洞里
+    box(bt.wood,wood,1.34,0.12,0.14, x,y+0.72,zf+0.04, 0,0,0,parent);         // 上枋
+    box(bt.wood,wood,1.34,0.14,0.17, x,y-0.73,zf+0.05, 0,0,0,parent);         // 窗台，厚一点、探出来
+    box(bt.wood,wood,0.12,1.58,0.14, x-0.67,y,zf+0.04, 0,0,0,parent);         // 左框
+    box(bt.wood,wood,0.12,1.58,0.14, x+0.67,y,zf+0.04, 0,0,0,parent);         // 右框
+    box(bt.wood,wood,0.05,1.3,0.05, x-0.2,y,zf+0.06, 0,0,0,parent); box(bt.wood,wood,0.05,1.3,0.05, x+0.2,y,zf+0.06, 0,0,0,parent);
+    box(bt.wood,wood,1.1,0.05,0.05, x,y-0.22,zf+0.06, 0,0,0,parent); box(bt.wood,wood,1.1,0.05,0.05, x,y+0.22,zf+0.06, 0,0,0,parent);
   };
   if(o.floors===2){ for(const x of xs) win(x,4.9); }
   if(upperOnly){}

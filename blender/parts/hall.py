@@ -83,13 +83,17 @@ def add_roof(bt, parent, w, d, H, r, ox, oz, slate_c, strip_c):
                      "len": math.hypot(z1 - z0, y1 - y0) + 0.05,
                      "ang": math.atan2(y1 - y0, z1 - z0)})
     n = max(2, js_round(length / 1.0))
+    # 瓦垄用八边圆柱而不是方条：小青瓦是弧面的，方棱在阳光下一眼假。
+    # 圆柱长轴在 Y，要先转 90 度躺下再按坡度倾斜，所以是 pi/2 - 坡角。
     for k in range(n + 1):
         x = -length / 2 + 0.12 + (length - 0.24) * k / n
         for sg in segs:
-            box(bt["roof"], strip_c, 0.13, 0.1, sg["len"],
-                x, sg["y"], sg["z"], 0, -sg["ang"], 0, parent)
-            box(bt["roof"], strip_c, 0.13, 0.1, sg["len"],
-                x, sg["y"], -sg["z"], 0, sg["ang"], 0, parent)
+            bt["roof"].add("cyl", parent @ M(x, sg["y"], sg["z"],
+                                             0.067, sg["len"], 0.067,
+                                             math.pi / 2 - sg["ang"], 0, 0), strip_c)
+            bt["roof"].add("cyl", parent @ M(x, sg["y"], -sg["z"],
+                                             0.067, sg["len"], 0.067,
+                                             math.pi / 2 + sg["ang"], 0, 0), strip_c)
 
     # 正脊与两端翘起的脊饰
     box(bt["roof"], C["slateDk"], length + 0.4, 0.36, 0.62, 0, H + r + 0.1, 0, 0, 0, 0, parent)
@@ -145,13 +149,19 @@ def add_front(bt, parent, o, H, upper_only, reg):
     gap = (w - 1.4) / slots
     xs = [-w / 2 + 0.7 + gap * (i + 0.5) for i in range(slots)]
 
+    # 窗要有进深。原来是一块板贴在墙面上、窗纸还浮在板前面，近看就是一张贴纸。
+    # 现在：先掏一个暗的洞壁，窗纸退进去，框做成四条边围出空心，窗棂压在最外层。
     def win(x, y):
-        box(bt["wood"], wood, 1.32, 1.52, 0.14, x, y, zf + 0.03, 0, 0, 0, parent)
-        box(bt["glow"], C["glowWin"], 1.1, 1.3, 0.06, x, y, zf + 0.08, 0, 0, 0, parent)
-        box(bt["wood"], wood, 0.05, 1.3, 0.06, x - 0.2, y, zf + 0.11, 0, 0, 0, parent)
-        box(bt["wood"], wood, 0.05, 1.3, 0.06, x + 0.2, y, zf + 0.11, 0, 0, 0, parent)
-        box(bt["wood"], wood, 1.1, 0.05, 0.06, x, y - 0.22, zf + 0.11, 0, 0, 0, parent)
-        box(bt["wood"], wood, 1.1, 0.05, 0.06, x, y + 0.22, zf + 0.11, 0, 0, 0, parent)
+        box(bt["misc"], 0x1A1512, 1.18, 1.38, 0.18, x, y, zf - 0.04, 0, 0, 0, parent)
+        box(bt["glow"], C["glowWin"], 1.12, 1.32, 0.05, x, y, zf - 0.01, 0, 0, 0, parent)
+        box(bt["wood"], wood, 1.34, 0.12, 0.14, x, y + 0.72, zf + 0.04, 0, 0, 0, parent)
+        box(bt["wood"], wood, 1.34, 0.14, 0.17, x, y - 0.73, zf + 0.05, 0, 0, 0, parent)
+        box(bt["wood"], wood, 0.12, 1.58, 0.14, x - 0.67, y, zf + 0.04, 0, 0, 0, parent)
+        box(bt["wood"], wood, 0.12, 1.58, 0.14, x + 0.67, y, zf + 0.04, 0, 0, 0, parent)
+        box(bt["wood"], wood, 0.05, 1.3, 0.05, x - 0.2, y, zf + 0.06, 0, 0, 0, parent)
+        box(bt["wood"], wood, 0.05, 1.3, 0.05, x + 0.2, y, zf + 0.06, 0, 0, 0, parent)
+        box(bt["wood"], wood, 1.1, 0.05, 0.05, x, y - 0.22, zf + 0.06, 0, 0, 0, parent)
+        box(bt["wood"], wood, 1.1, 0.05, 0.05, x, y + 0.22, zf + 0.06, 0, 0, 0, parent)
 
     if o.get("floors") == 2:
         for x in xs:

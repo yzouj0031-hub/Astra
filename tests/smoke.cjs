@@ -30,7 +30,7 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getHitch:()=>hitch,getHitchNear:()=>hitchNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
  vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
@@ -693,7 +693,27 @@ function test(width,height){
  const leaving=remote.vehicle.g;
  a.removeRemotePlayer('smoke_peer');assert.equal(a.remotePlayers.size,0);assert(!a.scene.children.includes(remote.avatar.g));
  assert(!a.scene.children.includes(leaving),'人走了载具也要一起收走');
- console.log('Online game integration: actual frame-loop position publishing, exact spawn, smooth movement, teleport, remote vehicles and departure passed.');
+ // 搭朋友的车：联机里第一个"真的一起玩"的动作。刻意不碰物理 ——
+ // 开车的人照旧本地模拟，乘客每帧贴到对方广播的位姿上。
+ a.setMode('walk');a.walk.x=640;a.walk.z=-150;a.walk.y=a.walk.groundY=0;
+ const drive=(x,z,speed)=>a.upsertRemotePlayer({id:'pal',name:'阿友',color:1,
+   pose:{x,y:0,z,heading:0,speed,kind:'drive',region:'harbor'}});
+ drive(642,-150,0);a.animateRemotePlayers(.016,1);a.updateActors(.016,1);
+ assert(a.getHitchNear(),'走到朋友的车边应该能搭');
+ a.toggleVehicle();assert(a.getHitch(),'按一下就搭上');
+ assert.equal(a.localOnlinePose().kind,'ride','搭车时报 ride，别人看到的是坐车不是以车速滑行的行人');
+ for(let i=0;i<40;i++){drive(642+i*2,-150,14);a.animateRemotePlayers(.05,i*.05);a.tick();}
+ const seat=a.localOnlinePose();
+ assert(seat.x>700,'乘客跟着车走');assert(Math.abs(seat.z+150)<2,'坐在司机旁边');
+ drive(seat.x,-150,1);
+ a.upsertRemotePlayer({id:'pal',name:'阿友',color:1,pose:{x:seat.x,y:0,z:-150,heading:0,speed:1,kind:'walk',region:'harbor'}});
+ a.animateRemotePlayers(.016,1);a.tick();
+ assert(!a.getHitch(),'司机下车，乘客自动落地');
+ drive(seat.x,-150,10);a.animateRemotePlayers(.016,1);a.updateActors(.016,1);a.toggleVehicle();
+ assert(a.getHitch(),'再搭一次');
+ a.removeRemotePlayer('pal');a.tick();
+ assert(!a.getHitch(),'司机断线也要放人，不能把乘客卡在车上');
+ console.log('Online game integration: frame-loop publishing, spawn, movement, teleport, remote vehicles, riding along and departure passed.');
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);
