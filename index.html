@@ -2487,7 +2487,12 @@ function drawMap(){
 // Island residents: articulated figures, safe coastal walks and brief greetings.
 const residents=[];
 const residentSkin=[0xc88f67,0xe6b18b,0x9e684b,0xd69c79];
-const residentGeo={head:G.sph(.235,12,10),torso:G.cyl(.28,.32,.65,10),limb:G.cyl(.085,.10,.38,7),leg:G.cyl(.105,.12,.4,7),shoe:G.box(.21,.13,.36),hand:G.sph(.10,8,6),eye:G.sph(.024,6,5)};
+/* 全岛的人共用这一张几何表：80 个路人 + 玩家 + 联机头像。
+   分段数原来是躯干 10 边、头 12x10、四肢 7 边 —— 形状对，但轮廓是多边形，
+   看着就是「方的」。翻倍之后多出来的顶点很有限（一个人约 350 -> 620），
+   全场 80 人也才多两万出头，换来的是圆的轮廓。
+   比例也修了：原来躯干上窄下宽（0.28 -> 0.32）像个坛子，人是肩宽腰窄，反过来。 */
+const residentGeo={head:G.sph(.235,20,16),torso:G.cyl(.315,.255,.65,18),limb:G.cyl(.082,.098,.38,12),leg:G.cyl(.103,.118,.4,12),shoe:G.box(.21,.13,.36),hand:G.sph(.10,12,9),eye:G.sph(.024,8,6)};
 const residentMats=new Map();
 function humanMat(color){if(!residentMats.has(color))residentMats.set(color,new THREE.MeshStandardMaterial({color,roughness:.88}));return residentMats.get(color);}
 function makeResident(spec){
@@ -2495,7 +2500,8 @@ function makeResident(spec){
  const body=new THREE.Group();g.add(body);
  const skin=humanMat(residentSkin[spec.skin||0]),shirt=humanMat(spec.shirt),pants=humanMat(spec.pants||0x4a6269),hair=humanMat(0x3d302a);
  add(body,residentGeo.torso,shirt,0,1.18,0);
- add(body,G.cyl(.11,.11,.18,8),skin,0,1.57,0);
+ add(body,G.sph(.30,16,10),shirt,0,1.44,0).scale.set(1,.42,.86);   // 肩：躯干顶上压扁的一块，肩线不再是一刀切
+ add(body,G.cyl(.105,.115,.2,12),skin,0,1.57,0);                    // 脖子
  const head=new THREE.Group();head.position.y=1.79;body.add(head);
  add(head,residentGeo.head,skin,0,0,0);
  add(head,G.sph(.24,10,8),hair,0,.055,-.045).scale.set(1,.76,.92);
