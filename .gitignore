@@ -11,3 +11,6 @@ node_modules/
 renders/*.blend
 renders/*.blend1
 renders/sheet/
+renders/game/
+renders/ab_*.png
+renders/_*.png
