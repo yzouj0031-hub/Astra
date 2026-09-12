@@ -76,6 +76,9 @@ const G = {
   box:new T.BoxGeometry(1,1,1), cyl:new T.CylinderGeometry(1,1,1,8), cyl6:new T.CylinderGeometry(1,1,1,6),
   sph:new T.SphereGeometry(1,9,7), cone:new T.ConeGeometry(1,1,8), cone6:new T.ConeGeometry(1,1,6), plane:new T.PlaneGeometry(1,1),
   leg:new T.BoxGeometry(0.18,0.62,0.2).translate(0,-0.31,0),
+  // 胳膊和腿一样：几何预先下移，于是网格自身的原点就是肩关节/胯关节
+  arm:new T.BoxGeometry(0.145,0.56,0.16).translate(0,-0.28,0),
+  shoe:new T.BoxGeometry(0.2,0.1,0.28).translate(0,-0.05,0.03),
 };
 const _p=new T.Vector3(), _q=new T.Quaternion(), _s=new T.Vector3(), _e=new T.Euler();
 function M(px,py,pz, sx=1,sy=1,sz=1, rx=0,ry=0,rz=0){
@@ -748,31 +751,47 @@ const UMBS=[0xc67a3a,0x8c2f2f,0x3f5a6e,0xe9dcc0];
 function makePerson(opt){
   const g=new T.Group(); const tb=new Batch();
   const robe=new T.Color(opt.robe), dk=robe.clone().multiplyScalar(0.72);
-  tb.add(G.box,M(0,1.02,0, 0.52,0.7,0.32),robe);
-  tb.add(G.box,M(0,0.62,0, 0.56,0.42,0.36),dk);
-  tb.add(G.box,M(0,1.05,0, 0.58,0.1,0.36),0x2b2b2b);
-  tb.add(G.box,M(0,1.62,0, 0.34,0.36,0.32),opt.skin);
-  tb.add(G.box,M(0,1.79,-0.02, 0.37,0.12,0.35),0x1e1a18);
-  if(opt.hat==='straw'){ tb.add(G.cone,M(0,1.92,0, 0.66,0.28,0.66),0xb99a5e); }
-  else if(opt.hat==='bun'){ tb.add(G.sph,M(0,1.88,-0.08, 0.12,0.12,0.12),0x1e1a18); }
-  if(opt.umbrella){
-    tb.add(G.box,M(0.34,1.49,0.2, 0.14,0.55,0.14, 0.8,0,0),robe);
-    tb.add(G.box,M(-0.34,1.0,0, 0.14,0.6,0.14, -0.15,0,0),robe);
+  // 比例收一收：原来躯干 0.52 宽配 0.34 的头，方得像个箱子。
+  // 人的肩宽大约是头宽的 1.6 倍，这里按这个收。
+  tb.add(G.box,M(0,1.04,0, 0.44,0.68,0.27),robe);            // 上身
+  tb.add(G.box,M(0,0.62,0, 0.47,0.42,0.31),dk);              // 下摆
+  tb.add(G.box,M(0,1.06,0, 0.49,0.09,0.31),0x2b2b2b);        // 腰带
+  tb.add(G.box,M(0,1.60,0, 0.28,0.31,0.27),opt.skin);        // 头
+  tb.add(G.box,M(0,1.74,-0.02, 0.31,0.11,0.30),0x1e1a18);    // 头发
+  if(opt.hat==='straw'){ tb.add(G.cone,M(0,1.88,0, 0.60,0.26,0.60),0xb99a5e); }
+  else if(opt.hat==='bun'){ tb.add(G.sph,M(0,1.84,-0.08, 0.11,0.11,0.11),0x1e1a18); }
+  tb.add(G.box,M(0,1.41,0, 0.15,0.09,0.15),opt.skin);       // 脖子：头和肩之间留一段，不然像顶在躯干上
+  if(opt.umbrella){                                          // 伞是撑着的，跟着抬起的那条胳膊
     tb.add(G.cyl,M(0.36,2.1,0.4, 0.03,1.0,0.03),0x5a3a22);
     tb.add(G.cone,M(0.36,2.55,0.4, 0.98,0.32,0.98),opt.umbrella);
-  } else {
-    tb.add(G.box,M(0.34,1.0,0, 0.14,0.6,0.14, 0.15,0,0),robe);
-    tb.add(G.box,M(-0.34,1.0,0, 0.14,0.6,0.14, -0.15,0,0),robe);
   }
   const torso=tb.build(MAT.person); torso.castShadow=true; g.add(torso);
+
+  // 胳膊单独做成关节，才能跟着走路摆。原来它们焊在躯干那批几何里，
+  // 人一走只有腿在动，上半身像块板子在滑。
+  const sleeve=new T.MeshPhongMaterial({color:opt.robe,specular:0x000000,shininess:1});
   const lm=new T.MeshPhongMaterial({color:opt.pants||0x2a2d33,specular:0x000000,shininess:1});
-  const ll=new T.Mesh(G.leg,lm), rl=new T.Mesh(G.leg,lm);
-  ll.position.set(-0.13,0.66,0); rl.position.set(0.13,0.66,0); ll.castShadow=rl.castShadow=true; g.add(ll); g.add(rl);
-  return {g,torso,ll,rl,phase:rr(0,TAU)};
+  const shoeM=new T.MeshPhongMaterial({color:0x241d18,specular:0x000000,shininess:1});
+  const limb=(geo,mat,x,y)=>{const m=new T.Mesh(geo,mat);m.position.set(x,y,0);m.castShadow=true;g.add(m);return m;};
+  const la=limb(G.arm,sleeve,-0.27,1.33), ra=limb(G.arm,sleeve,0.27,1.33);
+  const ll=limb(G.leg,lm,-0.13,0.66),     rl=limb(G.leg,lm,0.13,0.66);
+  for(const [leg,shoe] of [[ll,new T.Mesh(G.shoe,shoeM)],[rl,new T.Mesh(G.shoe,shoeM)]]){
+    shoe.position.y=-0.62;shoe.castShadow=true;leg.add(shoe);   // 鞋挂在腿下面，跟着摆
+  }
+  if(opt.umbrella){ ra.rotation.x=-1.15; ra.rotation.z=-0.12; } // 举伞的那只手不参与摆臂
+  return {g,torso,ll,rl,la,ra,holding:!!opt.umbrella,phase:rr(0,TAU)};
 }
 function animPerson(p,speed,dt){
-  if(speed>0){ p.phase+=dt*speed*4.4; const s=Math.sin(p.phase); p.ll.rotation.x=s*0.62; p.rl.rotation.x=-s*0.62; p.torso.position.y=Math.abs(Math.cos(p.phase))*0.05; }
-  else { p.ll.rotation.x*=0.85; p.rl.rotation.x*=0.85; p.torso.position.y*=0.85; }
+  if(speed>0){
+    p.phase+=dt*speed*4.4; const s=Math.sin(p.phase);
+    p.ll.rotation.x=s*0.62; p.rl.rotation.x=-s*0.62;
+    // 手脚反向：迈左腿甩右手。举着伞的那只手不动。
+    if(p.la){ p.la.rotation.x=-s*0.5; if(!p.holding) p.ra.rotation.x=s*0.5; }
+    p.torso.position.y=Math.abs(Math.cos(p.phase))*0.05;
+  } else {
+    p.ll.rotation.x*=0.85; p.rl.rotation.x*=0.85; p.torso.position.y*=0.85;
+    if(p.la){ p.la.rotation.x*=0.85; if(!p.holding) p.ra.rotation.x*=0.85; }
+  }
 }
 
 /* ---------- 镇上的人 ---------- */
