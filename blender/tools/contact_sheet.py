@@ -72,7 +72,8 @@ def main():
             else:
                 d.rectangle([x, y + LABEL_H, x + CELL_W, y + LABEL_H + cell_h],
                             fill=MISSING)
-                label, color = f"{cam}_{t}  (缺)", (240, 160, 160)
+                # 标记用 ASCII：Consolas 没有中文字形，写中文会变方块
+                label, color = f"{cam}_{t}  [MISSING]", (240, 160, 160)
             d.text((x + 2, y + 3), label, fill=color, font=f)
 
     sheet.save(OUT)
