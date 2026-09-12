@@ -43,6 +43,12 @@ def apply_time(scene, sun, which):
     materials.set_emission_strength("M_Lantern", cfg["lantern"])
     materials.set_emission_strength("M_Glow", cfg["glow"])
 
+    if cfg.get("haze"):
+        color, start, depth, strength = cfg["haze"]
+        materials.setup_depth_haze(scene, color, start, depth, strength=strength)
+    else:
+        materials.clear_compositor(scene)
+
 
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []

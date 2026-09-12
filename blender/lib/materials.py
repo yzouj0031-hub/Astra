@@ -595,6 +595,98 @@ def gradient_world(scene, horizon, zenith, strength=1.0, name="World"):
     return world
 
 
+# ---------------------------------------------------------------- 空气雾
+
+def setup_depth_haze(scene, color, start=40.0, depth=280.0, intensity=0.0,
+                     falloff="QUADRATIC", strength=1.0):
+    """按距离压淡远处 —— 走 Mist 通道 + 合成器，不是体积雾。
+
+    为什么不用 Volume Scatter：体积雾会把每帧的渲染时间抬 1.5~2 倍，
+    而白天要的只是空气纵深，不是光锥。灯笼的光锥那种效果才需要真体积
+    （见 parts/weather.py 的雨雾，夜景/雨天才开）。
+
+    参数直接对应原作的 scene.fog（watertown.js:580/615）：
+        晴 near=40 far=320 色 0xc9d4d8
+    start 相当于 near，depth 相当于 far-near，strength 是雾的总权重。
+
+    **Blender 5.x 的合成器换了架构**：没有 scene.node_tree 和 Composite 节点了，
+    改成 scene.compositing_node_group（一个节点组，输出走 NodeGroupOutput），
+    而且 MixRGB/Math 这些合成器专用节点被通用的 ShaderNodeMix/ShaderNodeMath
+    取代。这里按新架构写，老版本走后面的兼容分支。
+    """
+    scene.view_layers[0].use_pass_mist = True
+
+    ms = scene.world.mist_settings
+    ms.use_mist = True
+    ms.start = start
+    ms.depth = depth
+    ms.falloff = falloff
+    ms.intensity = intensity      # 近处的雾底，通常给 0
+
+    if not hasattr(scene, "compositing_node_group"):
+        return _setup_haze_legacy(scene, color, strength)
+
+    ng = bpy.data.node_groups.get("Haze")
+    if ng is None:
+        ng = bpy.data.node_groups.new("Haze", "CompositorNodeTree")
+    ng.nodes.clear()
+    ng.interface.clear()
+    ng.interface.new_socket("Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+
+    rl = ng.nodes.new("CompositorNodeRLayers")
+    rl.location = (-500, 0)
+    rl.scene = scene
+
+    weight = ng.nodes.new("ShaderNodeMath")          # 雾权重 = Mist x strength
+    weight.operation = "MULTIPLY"
+    weight.location = (-260, -180)
+    weight.inputs[1].default_value = strength
+    ng.links.new(rl.outputs["Mist"], weight.inputs[0])
+
+    mix = ng.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.location = (0, 0)
+    mix.inputs[7].default_value = (*color, 1.0)      # B = 雾色
+    ng.links.new(weight.outputs["Value"], mix.inputs[0])
+    ng.links.new(rl.outputs["Image"], mix.inputs[6])
+
+    out = ng.nodes.new("NodeGroupOutput")
+    out.location = (260, 0)
+    ng.links.new(mix.outputs[2], out.inputs[0])
+
+    scene.compositing_node_group = ng
+    scene.use_nodes = True
+    return ng
+
+
+def _setup_haze_legacy(scene, color, strength):
+    """Blender 4.x 及更早：scene.node_tree + Composite 节点。"""
+    scene.use_nodes = True
+    nt = scene.node_tree
+    nt.nodes.clear()
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    comp = nt.nodes.new("CompositorNodeComposite")
+    weight = nt.nodes.new("CompositorNodeMath")
+    weight.operation = "MULTIPLY"
+    weight.inputs[1].default_value = strength
+    mix = nt.nodes.new("CompositorNodeMixRGB")
+    mix.inputs[2].default_value = (*color, 1.0)
+    nt.links.new(rl.outputs["Mist"], weight.inputs[0])
+    nt.links.new(weight.outputs[0], mix.inputs[0])
+    nt.links.new(rl.outputs["Image"], mix.inputs[1])
+    nt.links.new(mix.outputs[0], comp.inputs["Image"])
+    return nt
+
+
+def clear_compositor(scene):
+    """把合成器关掉（夜景不加雾时用）。"""
+    scene.use_nodes = False
+    if hasattr(scene, "compositing_node_group"):
+        scene.compositing_node_group = None
+    if scene.world:
+        scene.world.mist_settings.use_mist = False
+
+
 # ---------------------------------------------------------------- 场景设置
 
 def set_emission_strength(mat_name, value):
