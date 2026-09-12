@@ -715,6 +715,9 @@ const MAT={};
 function makeMaterials(){
   const ph=(o)=>new T.MeshPhongMaterial(Object.assign({vertexColors:true,specular:0x000000,shininess:1},o));
   MAT.wall=ph({}); MAT.roof=ph({}); MAT.wood=ph({}); MAT.stone=ph({}); MAT.foliage=ph({}); MAT.misc=ph({}); MAT.ground=ph({});
+  // 起名字：宿主会照着名字给它们套上程序化表面细节（见 regions.js 的 SURFACES）。
+  // 树叶和灯笼不起名 —— 它们不该有石头或木头的纹理。
+  for(const k of ['wall','roof','wood','stone','misc','ground'])MAT[k].name=k;
   MAT.glow=ph({emissive:0xffb86a,emissiveIntensity:0}); glowMat=MAT.glow;
   MAT.sign=Atlas.tex? new T.MeshPhongMaterial({map:Atlas.tex,specular:0x000000,shininess:1}) : ph({});
   MAT.person=ph({});

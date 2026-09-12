@@ -6467,7 +6467,9 @@ const journeys=window.AstraJourneys?.init({
  restore:s=>{scene.add(player.g);player.body.rotation.set(0,0,0);player.arms.forEach(a=>a.pivot.rotation.z=0);region=s.region;setMode(s.mode);Object.assign(walk,s.walk);Object.assign(ship,s.ship);if(s.plane)Object.assign(plane,s.plane);camera.position.copy(s.cameraPosition);camera.quaternion.copy(s.cameraQuaternion);if(Snd.isOn()!==s.sound)Snd.toggle();toggleResortAudio();updateRegionUi();clearInput();},
  goHome:id=>{if(id==='harbor')strollHarbor();else if(id==='park')parkEntry();else{focusRegion('island');setMode(MODE.WALK);}},
  renderMain:()=>renderer.render(scene,camera),
- makePeer:peer=>{const a=buildAvatar(remoteLook(peer.color));a.g.add(makeRemoteLabel(peer.name));return a;}
+ makePeer:peer=>{const a=buildAvatar(remoteLook(peer.color));a.g.add(makeRemoteLabel(peer.name));return a;},
+ // 旅程区域自己建材质，这里把海岛那套程序化表面细节借给它们用
+ surface:addSurfaceDetail
 });
 
 applySurfaceDetail();

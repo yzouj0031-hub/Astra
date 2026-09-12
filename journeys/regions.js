@@ -3,8 +3,34 @@
 const C=root.AstraJourneyCore;
 root.AstraRegionFactories=root.AstraRegionFactories||{};
 function rect(x,z,w,d,height=12){return {minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,height};}
+/* 表面细节：区域把材质起好名，这里统一套上主场景那套程序化贴图。
+   名字 -> [贴图种类, 一张铺多少米, 明暗, 起伏, 粗糙度]。
+   没起名的材质不动 —— 水面、天空、灯笼这些自带着色器的不该被贴图。 */
+// 数值比海岛那边保守：水乡不走色调映射（NoToneMapping），
+// ACES 那条压缩曲线不在，同样的 amt 反差会直接顶出来 ——
+// 第一版照抄海岛的 .85，路面立刻成了棋盘格。
+const SURFACES={
+ wall:  ['plaster',2.6,.42,.55,.4 ],
+ roof:  ['tile',   1.2,.55,.85,.5 ],
+ wood:  ['timber', 1.6,.5, .7, .5 ],
+ stone: ['slab',   1.1,.45,.75,.5 ],
+ ground:['grass',  2.6,.4, .6, .55],
+ misc:  ['plaster',2.0,.35,.4, .45],
+};
+function dressRegion(scene,surface){
+ if(!surface)return 0;
+ let n=0;const seen=new Set();
+ scene.traverse(o=>{
+  for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){
+   const plan=SURFACES[m.name];
+   if(!plan||seen.has(m))continue;
+   seen.add(m);surface(m,...plan);n++;
+  }
+ });
+ return n;
+}
 function createRegion(T,id,services){
- const {mobile,notify,stamp,progress,travel}=services;
+ const {mobile,notify,stamp,progress,travel,surface}=services;
  const meta=C.REGIONS[id];let scene,camera,world,solids=[],land=()=>true,ground=()=>0;
  let transport=false,phase=0,rain=id==='rainport',day=0,clock=0,active=true;
  const pos={...meta.spawn,y:0,heading:Math.PI,speed:0};
@@ -24,6 +50,7 @@ function createRegion(T,id,services){
   solids=world.obstacles.map(o=>({minX:o.x0,maxX:o.x1,minZ:o.z0,maxZ:o.z1,height:o.h||9.5}));
   land=(x,z)=>Math.abs(x)<175&&z>-95&&z<145&&!world.isWater(x,z);
   ground=world.groundY;world.player.g.visible=false;
+  dressRegion(scene,surface);
   // Start every walker on a legal surface, including the foot of the bridges.
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.per.g.position.set(p.x,ground(p.x,p.z),p.z);}}
  }else{

@@ -77,7 +77,7 @@ function init(host){
    if(id==='temple'&&!root.AstraCombat)await loadScript('journeys/combat.js');
    if(!root.AstraRegionFactories[id])await loadScript('journeys/'+id+'.js');
    // Build before replacing the old scene: a failed load leaves the previous region playable.
-   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel});
+   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel,surface:host.surface});
    next.restore(progress.positions[id]);
    if(!returnState){returnState=host.capture();savedRender={toneMapping:renderer.toneMapping,toneMappingExposure:renderer.toneMappingExposure,outputEncoding:renderer.outputEncoding,physicallyCorrectLights:renderer.physicallyCorrectLights,shadow:renderer.shadowMap.enabled,shadowType:renderer.shadowMap.type,pixelRatio:renderer.getPixelRatio()};host.suspend();}
    detach();active=next;quality=1;lowFrames=0;frameCount=frameTime=0;
