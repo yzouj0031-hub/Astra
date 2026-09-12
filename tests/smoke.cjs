@@ -658,6 +658,21 @@ function test(width,height){
  victim.p.g.position.set(hotel.x,4.25,doorZ);
  const crossing=a.resolveHarborWalk(hotel.x,doorZ+2,hotel.x,doorZ);
  assert(Math.hypot(crossing.x-hotel.x,crossing.z-doorZ)>1.1,'A person standing in the doorway remains solid');
+ // 撞到路人卡死：harborRecover 要找一个不和任何盒子重叠的落点，
+ // 在窄街上被墙和几个路人夹住时它会失败 —— 以前失败就原地返回，玩家当场钉死。
+ // 人是软障碍，挤不出去时可以从人身上穿过去；墙必须照旧挡人。
+ {
+  const soft=(x,z)=>({x,z,w:.6,d:.6,soft:true});
+  const me={x:640,z:-100};
+  const pinned=[{x:640,z:-99,w:8,d:.4},soft(639.5,-100.4),soft(640.5,-100.4),soft(640,-100.7)];
+  const out=a.sweepHarborMotion(me,{x:me.x,z:me.z-0.12},pinned);
+  assert(Math.hypot(out.x-me.x,out.z-me.z)>1e-3,'被墙和路人夹住时不能一动不动');
+  const boxed=[soft(639.4,-100),soft(640.6,-100),soft(640,-99.4),soft(640,-100.6)];
+  const out2=a.sweepHarborMotion(me,{x:me.x+0.12,z:me.z},boxed);
+  assert(Math.hypot(out2.x-me.x,out2.z-me.z)>1e-3,'四面被人围死也要能挤出去');
+  const wall=a.sweepHarborMotion({x:640,z:-100},{x:640,z:-101},[{x:640,z:-100.6,w:8,d:.4}]);
+  assert(wall.z>-100.5,'墙必须还是硬的，不能跟着人一起被放行');
+ }
  console.log('Collision regressions: rendered bumpers/wheels, reverse and diagonal contact, intermediate rotation, both cameras at walls, stationary/moving pedestrians and doorway bodies passed.');
  // The actual game loop must publish current movement, not merely construct an online client.
  a.strollHarbor();onlineSamples.length=0;a.keys.w=true;

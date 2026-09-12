@@ -5513,7 +5513,12 @@ function harborSweepHit(p,delta,r,radius=HARBOR_BODY){
  return {time:Math.max(0,enter),normal};
 }
 function sweepHarborMotion(start,end,rects,bounds,radius=HARBOR_BODY){
- let p=harborRecover(start,rects,bounds,radius);if(!p)return {...start};
+ let p=harborRecover(start,rects,bounds,radius);
+ // 人是软障碍。harborRecover 要找一个不和**任何**盒子重叠的落点，
+ // 在窄街上被墙和几个路人夹住时它会失败 —— 以前失败就原地返回，玩家当场钉死。
+ // 现在退一步：撤掉人，只按墙和车重新找。宁可从人身上挤过去，也不能卡住。
+ if(!p){const hard=rects.filter(r=>!r.soft);if(hard.length!==rects.length){rects=hard;p=harborRecover(start,rects,bounds,radius);}}
+ if(!p)return {...start};
  // Moving people or the tram can displace a stationary player; do not undo that recovery.
  const requested=harborClamp({x:p.x+end.x-start.x,z:p.z+end.z-start.z},bounds);
  let delta={x:requested.x-p.x,z:requested.z-p.z};
@@ -5529,8 +5534,10 @@ function sweepHarborMotion(start,end,rects,bounds,radius=HARBOR_BODY){
 // inside: 玩家正站在哪座大建筑里（没有就是 null）。按脚下高度筛人，街上和楼上互不干扰。
 function harborPeopleColliders(inside){
  const result=[],p=new THREE.Vector3(),base=inside?4.3+harborFloor*10:4.25;
- for(const v of harborVisitors){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
- for(const v of harborStaff){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6});}
+ // soft:true —— 正常情况下人照样挡路（尺寸不变），只有在挤得出不去、
+ // 否则就要原地钉死的时候，才允许从人身上穿过去。见 sweepHarborMotion。
+ for(const v of harborVisitors){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6,soft:true});}
+ for(const v of harborStaff){v.p.g.getWorldPosition(p);if(Math.abs(p.y-base)>1.2)continue;result.push({x:p.x,z:p.z,w:.6,d:.6,soft:true});}
  return result;
 }
 function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true,includeEdges=true){
