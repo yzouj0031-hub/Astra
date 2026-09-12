@@ -10,3 +10,4 @@ dist/
 node_modules/
 renders/*.blend
 renders/*.blend1
+renders/sheet/
