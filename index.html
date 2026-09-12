@@ -2196,6 +2196,100 @@ function placeFlyCamera(dt){
   camera.up.set(bank*Math.cos(plane.yaw),1,-bank*Math.sin(plane.yaw)).normalize();
   camera.lookAt(plane.x, plane.y+1.1, plane.z);
 }
+/* ---------- 泛光 ----------
+   亮的地方往周围溢一圈光 —— 灯、窗、白墙的高光、水面反光。现实里镜头和眼睛
+   都有这个现象，少了画面就发干。这是 Three.js 作品观感里最标志性的一笔。
+
+   架构上有一条硬约束：**基准图一个像素都不能碰**。
+   原因是这个场景的色彩管线是混的 —— 渲到离屏缓冲时 three 把 outputEncoding
+   当线性处理（源码里它只在渲染目标为 null 时才生效），而天空和海面是自写的
+   ShaderMaterial、压根不走 three 的编码链，写进去的已经是编码好的值。
+   一张图里混着两种像素，任何全屏统一再编码都会毁掉其中一半
+   （实测：原样过一遍离屏 143 -> 122，补上 sRGB 编码又变成 164）。
+
+   所以：场景照常直接画到画布，再把画布拷进纹理做泛光，最后用加法叠回去。
+   加法对色彩空间不敏感 —— 叠的是一点光，而基准图完全没动过。
+   手机上默认关掉：多几趟全屏绘制，中低端机划不来。 */
+// strength .85 时平均亮度被抬了 19 点，整片墙都在发光。
+// 阈值提到 .88、强度降到 .30：只有真正亮的地方（灯、窗、被太阳直射的白墙）溢光。
+const BLOOM={on:!isSmall, strength:0.30, threshold:0.88, radius:1.2};
+let bloomSrc=null, brightRT=null, blurRT=null, bloomQuad=null, bloomCam=null, bloomMats=null, bloomSize={w:0,h:0};
+
+function bloomSetup(){
+ if(bloomMats)return;
+ bloomCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+ const vert='varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }';
+ const make=(frag,extra)=>new THREE.ShaderMaterial(Object.assign({vertexShader:vert,fragmentShader:frag,depthTest:false,depthWrite:false},extra||{}));
+ bloomMats={
+  // 取亮部：低于阈值的压掉，高于的留下，边界柔和过渡
+  bright:make('uniform sampler2D tSrc; uniform float uThreshold; varying vec2 vUv;\n'+
+   'void main(){ vec3 c=texture2D(tSrc,vUv).rgb; float l=dot(c,vec3(0.2126,0.7152,0.0722));\n'+
+   ' float k=smoothstep(uThreshold,uThreshold+0.22,l); gl_FragColor=vec4(c*k,1.0); }'),
+  // 九抽样高斯，横竖各来一次
+  blur:make('uniform sampler2D tSrc; uniform vec2 uDir; varying vec2 vUv;\n'+
+   'void main(){ float w[5]; w[0]=0.227027; w[1]=0.194594; w[2]=0.121621; w[3]=0.054054; w[4]=0.016216;\n'+
+   ' vec3 sum=texture2D(tSrc,vUv).rgb*w[0];\n'+
+   ' for(int i=1;i<5;i++){ vec2 o=uDir*float(i); sum+=texture2D(tSrc,vUv+o).rgb*w[i]; sum+=texture2D(tSrc,vUv-o).rgb*w[i]; }\n'+
+   ' gl_FragColor=vec4(sum,1.0); }'),
+  // 叠加：只加光，不改原图
+  add:make('uniform sampler2D tBloom; uniform float uStrength; varying vec2 vUv;\n'+
+   'void main(){ gl_FragColor=vec4(texture2D(tBloom,vUv).rgb*uStrength,1.0); }',
+   {blending:THREE.AdditiveBlending,transparent:true}),
+ };
+ bloomQuad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),bloomMats.bright);
+}
+
+function bloomResize(){
+ const r=renderer.getPixelRatio();
+ const w=Math.max(4,Math.floor(innerWidth*r)), h=Math.max(4,Math.floor(innerHeight*r));
+ if(bloomSize.w===w&&bloomSize.h===h)return;
+ bloomSize={w,h};
+ bloomSrc?.dispose();brightRT?.dispose();blurRT?.dispose();
+ // 画布的拷贝目标。r128 还没有 FramebufferTexture，用 DataTexture 顶上。
+ bloomSrc=new THREE.DataTexture(new Uint8Array(w*h*4),w,h,THREE.RGBAFormat);
+ bloomSrc.minFilter=bloomSrc.magFilter=THREE.LinearFilter;
+ bloomSrc.needsUpdate=true;
+ const opts={minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,depthBuffer:false};
+ brightRT=new THREE.WebGLRenderTarget(Math.max(2,w>>1),Math.max(2,h>>1),opts);
+ blurRT=new THREE.WebGLRenderTarget(Math.max(2,w>>1),Math.max(2,h>>1),opts);
+}
+
+function drawQuad(mat,target,clear){
+ bloomQuad.material=mat;
+ renderer.setRenderTarget(target||null);
+ if(clear)renderer.clear();
+ renderer.render(bloomQuad,bloomCam);
+}
+
+const bloomOrigin=new THREE.Vector2(0,0);
+/* 主渲染入口。关掉泛光时就是原来那一句 renderer.render。 */
+function renderScene(sc,cam){
+ renderer.setRenderTarget?.(null);            // 精简 renderer（测试替身）没有这个方法
+ renderer.render(sc,cam);                     // 基准图：原样画到画布，不经我的手
+ if(!BLOOM.on||!renderer.copyFramebufferToTexture)return;
+ try{
+  bloomSetup();bloomResize();
+  renderer.copyFramebufferToTexture(bloomOrigin,bloomSrc);   // 拷画布，不重渲场景
+  const px=1/brightRT.width, py=1/brightRT.height;
+  bloomMats.bright.uniforms.tSrc={value:bloomSrc};
+  bloomMats.bright.uniforms.uThreshold={value:BLOOM.threshold};
+  drawQuad(bloomMats.bright,brightRT,true);
+  for(let pass=0;pass<2;pass++){
+   const spread=BLOOM.radius*(1+pass*1.6);
+   bloomMats.blur.uniforms.tSrc={value:brightRT.texture};
+   bloomMats.blur.uniforms.uDir={value:new THREE.Vector2(px*spread,0)};
+   drawQuad(bloomMats.blur,blurRT,true);
+   bloomMats.blur.uniforms.tSrc={value:blurRT.texture};
+   bloomMats.blur.uniforms.uDir={value:new THREE.Vector2(0,py*spread)};
+   drawQuad(bloomMats.blur,brightRT,true);
+  }
+  bloomMats.add.uniforms.tBloom={value:brightRT.texture};
+  bloomMats.add.uniforms.uStrength={value:BLOOM.strength};
+  const keep=renderer.autoClear;renderer.autoClear=false;
+  drawQuad(bloomMats.add,null,false);         // 加法叠回画布
+  renderer.autoClear=keep;
+ }catch(e){ BLOOM.on=false; }                 // 出任何岔子就退回无泛光，别把游戏搞挂
+}
 
 function tick(){
   requestAnimationFrame(tick);
@@ -2320,7 +2414,7 @@ function tick(){
   updateActors(dt,t);
   onlineWorld?.update(dt,t);
   if(Math.floor(t*8)!==mapFrame){mapFrame=Math.floor(t*8);drawMap();}
-  renderer.render(scene, camera);
+  renderScene(scene, camera);
 }
 
 addEventListener("resize", ()=>{
@@ -2330,16 +2424,22 @@ addEventListener("resize", ()=>{
   camera.fov = fitFov();          // 转屏之后水平视野要跟着补回来
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  if(bloomMats)bloomResize();
   placeToggle();
   if(!joy.active) joyRelease();
 });
 
 // Atmosphere, landmarks, local memories and quiet affordances.
 const periodNames=['morning','sunset','night'];
+/* 布光：主光必须压过环境光，物体才有明暗面。
+   原来三档都是一比一（晨光 .72 对 .68、日落 .62 对 .60、星夜 .20 对 .54），
+   是彻底的平光 —— 没有形体、没有方向，再多贴图和后期也救不回来。
+   现在提到 8:1 上下，并且环境光让位给环境贴图（它已经在提供天空的漫射了）。
+   注意 updateAtmosphere 每帧都按这张表写 sun/hemi/fill，改构造函数里的初值没用。 */
 const periods=[
- {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xb7d0cb,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:.72,ambient:.52,fill:.16,mood:0xffffff,stars:0,dir:[.42,.62,.30]},
- {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xc9ac9c,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:.62,ambient:.46,fill:.14,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48]},
- {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x142b40,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.20,ambient:.44,fill:.10,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3]}
+ {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xb7d0cb,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.95,ambient:.20,fill:.05,mood:0xffffff,stars:0,dir:[.42,.62,.30]},
+ {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xc9ac9c,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.70,ambient:.19,fill:.05,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48]},
+ {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x142b40,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.42,ambient:.24,fill:.06,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3]}
 ];
 let periodIndex=0;
 try{const saved=localStorage.getItem('windward-period-v2');if(periodNames.includes(saved)) periodIndex=periodNames.indexOf(saved);}catch{}
@@ -2469,7 +2569,7 @@ $('help-button').onclick=()=>openDialog($('help-dialog'));
 $('help-done').onclick=()=>$('help-dialog').close();
 let photoURL=null;
 function takePhoto(){
- renderer.render(scene,camera);
+ renderScene(scene,camera);
  const c=document.createElement('canvas');c.width=1600;c.height=Math.round(1600*innerHeight/innerWidth)+156;
  // Prevent extreme portraits consuming excessive mobile memory.
  c.height=Math.min(c.height,2600);
@@ -6516,7 +6616,7 @@ const journeys=window.AstraJourneys?.init({
  suspend:()=>{clearInput();if(Snd.isOn())Snd.toggle();if(parkModule.sound.isOn())parkModule.sound.toggle();},
  restore:s=>{scene.add(player.g);player.body.rotation.set(0,0,0);player.arms.forEach(a=>a.pivot.rotation.z=0);region=s.region;setMode(s.mode);Object.assign(walk,s.walk);Object.assign(ship,s.ship);if(s.plane)Object.assign(plane,s.plane);camera.position.copy(s.cameraPosition);camera.quaternion.copy(s.cameraQuaternion);if(Snd.isOn()!==s.sound)Snd.toggle();toggleResortAudio();updateRegionUi();clearInput();},
  goHome:id=>{if(id==='harbor')strollHarbor();else if(id==='park')parkEntry();else{focusRegion('island');setMode(MODE.WALK);}},
- renderMain:()=>renderer.render(scene,camera),
+ renderMain:()=>renderScene(scene,camera),
  makePeer:peer=>{const a=buildAvatar(remoteLook(peer.color));a.g.add(makeRemoteLabel(peer.name));return a;},
  // 旅程区域自己建材质，这里把海岛那套程序化表面细节借给它们用
  surface:addSurfaceDetail
