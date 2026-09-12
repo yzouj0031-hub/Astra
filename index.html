@@ -249,6 +249,9 @@ body[data-period="night"] #vignette{background:linear-gradient(180deg,#07132322,
 #brake-button{position:fixed;right:26px;bottom:296px;z-index:27;width:68px;height:68px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:12px;display:none;box-shadow:0 5px 24px #052e3455}
 @media(max-width:900px){body[data-mode=walk] #jump-button,body[data-mode=fly] #jump-button,body[data-mode=fly] #brake-button{display:block}}
 @media(max-width:560px){#jump-button{width:66px;height:66px;right:18px;bottom:198px;font-size:12px}#brake-button{width:60px;height:60px;right:18px;bottom:276px;font-size:11px}}
+/* 横屏：屏幕矮，上面那些 bottom:200~290px 会把按钮顶到半屏高，拇指够不着。
+   放到下缘一圈，并排让开摇杆。必须排在 max-width 规则之后才盖得住。 */
+@media(max-height:540px){#jump-button{width:62px;height:62px;right:20px;bottom:20px;font-size:12px}#brake-button{width:56px;height:56px;right:92px;bottom:24px;font-size:11px}#vehicle-interact{bottom:22px;padding:10px 17px;font-size:12px}#castbtn{width:62px;height:62px;right:96px;bottom:20px;font-size:12px}}
 #greet-person{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:28;padding:13px 22px;border:1px solid #fff0cd66;border-radius:30px;background:#f1e8d2;color:#285056;box-shadow:0 5px 24px #052e3440;font-size:14px;white-space:nowrap}
 #resident-speech{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:27;width:min(390px,calc(100vw - 40px));padding:20px 24px;background:#f1e8d2f5;color:#285056;border-radius:18px;box-shadow:0 12px 36px #092d3c30;pointer-events:none}
 #resident-speech b{font-size:13px;font-weight:500;color:#64786e}#resident-speech p{font:16px/1.9 "Microsoft YaHei",sans-serif;margin-top:9px}
@@ -1673,6 +1676,17 @@ const MODE_INFO = {
   drive:{n:"开车兜风", s:innerWidth<700?"左侧摇杆油门转向 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"},
   fly:{n:"驾机翱翔", s:innerWidth<700?"摇杆往回拉抬头 · 按住「油门」/「收油门」":"W / S 拉起俯冲 · A / D 压坡度 · Shift 加油门 · 空格收油门 · F 下机"}
 };
+/* 竖屏补偿视野。three 的 fov 是**垂直**视角：手机一竖，水平视野就被压得很窄，
+   人物顶满屏幕、前面的路看不见。这里按宽高比把垂直视角放大，让水平视野维持在
+   16:9 的水准；封顶 78 度，再大就鱼眼了。横屏和桌面（>=16:9）原样不动。 */
+let baseFov=58;
+function fitFov(base){
+ if(base!=null)baseFov=base;
+ const a=camera.aspect||innerWidth/innerHeight;
+ if(a>=16/9)return baseFov;
+ const halfWide=Math.tan(baseFov*Math.PI/360)*(16/9);
+ return Math.min(78, 360/Math.PI*Math.atan(halfWide/Math.max(0.35,a)));
+}
 function setMode(m){
   const prev = mode;
   if(activeHarborBuilding)closeHarborInterior();
@@ -1691,7 +1705,7 @@ function setMode(m){
   creel.classList.toggle("show", m===MODE.FISH);
   camera.rotation.set(0,0,0);
   camera.up.set(0,1,0);
-  camera.fov = (m===MODE.VIEW) ? 55 : (m===MODE.SAIL ? 62 : m===MODE.DRIVE ? 64 : m===MODE.FLY ? 68 : 58);
+  camera.fov = fitFov((m===MODE.VIEW) ? 55 : (m===MODE.SAIL ? 62 : m===MODE.DRIVE ? 64 : m===MODE.FLY ? 68 : 58));
   camera.updateProjectionMatrix();
   joyRelease();
   if(m!==MODE.FISH) resetFishing();
@@ -2311,6 +2325,7 @@ addEventListener("resize", ()=>{
   camera.clearViewOffset();
   if(mode===MODE.VIEW && innerWidth>850) camera.setViewOffset(innerWidth,innerHeight,-innerWidth*.10,0,innerWidth,innerHeight);
   camera.aspect = innerWidth/innerHeight;
+  camera.fov = fitFov();          // 转屏之后水平视野要跟着补回来
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   placeToggle();
