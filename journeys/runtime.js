@@ -76,8 +76,13 @@ function init(host){
   try{
    if(id==='temple'&&!root.AstraCombat)await loadScript('journeys/combat.js');
    if(!root.AstraRegionFactories[id])await loadScript('journeys/'+id+'.js');
+   // 三个地区的树都是外部 glTF。这里 await 到手才建场景 —— 加载失败就抛到下面的 catch：
+   // 控制台报错 + 旅行地图上写出原因，而不是悄悄给你看旧的锥体树。
+   if(!root.AstraFoliage)await loadScript('journeys/foliage.js');
+   if(!root.AstraTreeAssets)await loadScript('journeys/assets.js');
+   const trees=await root.AstraTreeAssets.load(T);
    // Build before replacing the old scene: a failed load leaves the previous region playable.
-   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel,surface:host.surface});
+   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel,surface:host.surface,trees});
    next.restore(progress.positions[id]);
    if(!returnState){returnState=host.capture();savedRender={toneMapping:renderer.toneMapping,toneMappingExposure:renderer.toneMappingExposure,outputEncoding:renderer.outputEncoding,physicallyCorrectLights:renderer.physicallyCorrectLights,shadow:renderer.shadowMap.enabled,shadowType:renderer.shadowMap.type,pixelRatio:renderer.getPixelRatio()};host.suspend();}
    detach();active=next;quality=1;lowFrames=0;frameCount=frameTime=0;
@@ -86,7 +91,10 @@ function init(host){
    renderer.physicallyCorrectLights=false;renderer.outputEncoding=id==='watertown'?T.LinearEncoding:T.sRGBEncoding;renderer.toneMapping=id==='watertown'?T.NoToneMapping:T.ACESFilmicToneMapping;renderer.toneMappingExposure=id==='temple'?1.05:1.2;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
    renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.5));renderer.setSize(innerWidth,innerHeight);
    active.scene.add(host.avatar.g);host.avatar.g.visible=true;host.avatar.g.scale.setScalar(1);
-   if(id==='temple'){active.weapon=active.world.hero.weapon.clone(true);active.weapon.position.set(0,-.28,.12);active.weapon.visible=false;host.avatar.arms[1].elbow.add(active.weapon);}
+   // 玩家换成蒙皮模型后，程序化骨架整个藏起来了，剑挂在它的肘上会跟着看不见 —— 挂到手骨上
+   if(id==='temple'){active.weapon=active.world.hero.weapon.clone(true);active.weapon.visible=false;
+    if(host.avatar.hand){active.weapon.position.set(0,.06,.02);host.avatar.hand.add(active.weapon);}
+    else{active.weapon.position.set(0,-.28,.12);host.avatar.arms[1].elbow.add(active.weapon);}}
    $('journey-title').textContent=next.meta.name;$('journey-description').textContent=next.meta.subtitle;
    $('journey-weather').hidden=id==='temple';$('journey-weather').textContent=next.rain?'停雨':'落雨';
    $('journey-stops').textContent='';
@@ -168,6 +176,12 @@ function init(host){
    active.update(dt,input);updateCamera(dt);updatePeers(dt);
   }
   poseAvatar(host.avatar,active.pos,dt,time);host.avatar.g.visible=!(active.firstPerson&&!active.overview)&&(!active.transport||active.id==='watertown');
+  // 蒙皮模型：姿势由动画片段定。下面那段给程序化骨架摆胳膊的代码照跑，动的是藏起来的骨架，无害
+  if(host.avatar.animate){
+   const fighter=active.fighting&&active.world.game.player;
+   host.avatar.animate({speed:active.pos.speed||0,top:4.3,sit:!!(active.transport&&active.id==='watertown'),fighting:!!active.fighting,
+    action:fighter&&fighter.action!=='idle'?fighter.action:null,actionFrac:fighter?C.clamp(fighter.actionTime/(fighter.duration||1),0,1):undefined},dt);
+  }
   if(active.weapon)active.weapon.visible=active.fighting;
   if(active.fighting){
    const a=host.avatar,p=active.world.game.player,f=C.clamp(p.actionTime/(p.duration||1),0,1),swing=Math.sin(f*Math.PI);

@@ -30,8 +30,13 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getHitch:()=>hitch,getHitchNear:()=>hitchNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
- vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getHitch:()=>hitch,getHitchNear:()=>hitchNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT,pickPlayerClip,playerClipRate,PLAYER_CLIPS};\nsetMode(MODE.VIEW);');
+ // 60 秒是防死循环的闸，不是性能断言；原来的 20 秒是在更快的机器上定的，这台机器上连未改动的 index.html 都跑不进去。
+ // 真正管「index.html 不能无限涨」的是下面那条 40 秒断言。
+ const initStart=performance.now();vm.runInContext(exported,c,{timeout:60000});const initMs=performance.now()-initStart;
+ assert(initMs<=40000,`${width}x${height}: index.html 解析+初始化用了 ${(initMs/1000).toFixed(1)} 秒，超过 40 秒上限`);
+ console.log(`${width}x${height}: init ${(initMs/1000).toFixed(1)}s`);
+ assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
  const outward={x:-Math.sin(a.fish.yaw),z:-Math.cos(a.fish.yaw)};
@@ -528,6 +533,23 @@ function test(width,height){
  assert(!a.walk.tps&&!a.player.g.visible,'First person hides the avatar');
  assert(Math.abs(a.camera.position.x-a.walk.x)<1e-6&&Math.abs(a.camera.position.z-a.walk.z)<1e-6,'First-person camera sits on the character');
  a.toggleCameraView();assert(a.walk.tps);
+ // glTF 玩家模型选片段：Node 里加载不了模型，这里只测「状态 → 片段」这张表
+ {
+  const pick=s=>a.pickPlayerClip({speed:0,top:8.5,...s});
+  assert.equal(pick({}),'idle','Standing still idles');
+  assert.equal(pick({speed:3}),'walk','A half-pushed stick walks');
+  assert.equal(pick({speed:8.5}),'jog','Normal movement jogs');
+  assert.equal(pick({speed:16.5}),'sprint','Shift sprints');
+  assert.equal(pick({speed:4.3,top:4.3}),'jog','Journey regions scale by their own top speed');
+  assert.equal(pick({speed:7,top:4.3}),'sprint','Journey running sprints');
+  assert.equal(pick({swim:true,speed:3}),'swim');assert.equal(pick({swim:true}),'swimIdle');
+  assert.equal(pick({air:true,speed:9}),'air');assert.equal(pick({climb:true}),'air');
+  assert.equal(pick({sit:true,speed:12}),'sit','Riding along sits even though the car moves');
+  assert.equal(pick({fighting:true,speed:3}),'fight');
+  assert.equal(pick({fighting:true,action:'heavy'}),'attack');assert.equal(pick({fighting:true,action:'dodge'}),'dodge');
+  for(const key of ['idle','walk','jog','sprint','swim','swimIdle','air','sit','fight','attack','dodge','heal'])assert(a.PLAYER_CLIPS[key],`Clip for ${key}`);
+  for(const speed of [0,1,5,8.5,12,20])for(const key of ['walk','jog','sprint','swim']){const r=a.playerClipRate({speed,top:8.5},key);assert(r>=.6&&r<=1.3,`${key} rate at ${speed} m/s stays sane (${r})`);}
+ }
  // Indoors the camera pulls in and stays inside the room.
  nodes.get('harbor-building').value='museum';a.goHarborBuilding();a.updateHarbor(.05,150);
  a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;

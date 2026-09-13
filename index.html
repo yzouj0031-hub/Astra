@@ -785,62 +785,29 @@ const frondGeo = new THREE.PlaneGeometry(9.5, 2.2, 5, 1);
   }
   frondGeo.computeVertexNormals();
 }
-function palm(x, z, s){
-  if(Math.abs(x)<8 && z < -65 && z > -125)x=(x<0?-1:1)*13;
-  const g = new THREE.Group();
-  const y = terrainH(x, z);
-  g.position.set(x, y, z);
-  g.rotation.y = Math.random()*6.28;
-  s = s || (0.85 + Math.random()*0.5);
-  g.scale.setScalar(s);
-  // 弯曲的树干
-  const lean = (Math.random()-0.5)*0.5, lean2 = (Math.random()-0.5)*0.5;
-  let px=0, py=0, pz=0;
-  const H = 11 + Math.random()*5;
-  for(let i=0;i<7;i++){
-    const t=(i+1)/7;
-    const nx = lean*t*t*7, ny = H*t, nz = lean2*t*t*7;
-    strut(g, px,py,pz, nx,ny,nz, 0.44-0.2*t, i%2?M.bark:M.bark2);
-    px=nx; py=ny; pz=nz;
-  }
-  const crown = new THREE.Group();
-  crown.position.set(px, py, pz);
-  g.add(crown);
-  const nf = 7 + (Math.random()*3|0);
-  for(let i=0;i<nf;i++){
-    const a = i/nf*6.28 + Math.random()*0.3;
-    const f = new THREE.Mesh(frondGeo, i%2?M.frond:M.frond2);
-    f.position.set(Math.cos(a)*3.6, -0.5 - Math.random()*0.5, Math.sin(a)*3.6);
-    f.rotation.y = -a;
-    f.rotation.z = -0.30 - Math.random()*0.3;
-    f.castShadow = true;
-    crown.add(f);
-  }
-  for(let i=0;i<3;i++){
-    add(crown, G.sph(0.42,8,6), M.bark2,
-        Math.cos(i*2.1)*0.9, -0.9, Math.sin(i*2.1)*0.9);
-  }
-  scene.add(g);
-  addObs(x, z, 1.3*s);
-  return {g, crown, phase:Math.random()*6.28};
-}
-const palms = [];
+/* 静屿的植被。棕榈和灌木统一由 journeys/foliage.js 从 glTF 实例化
+   （六地共用一套：烟雨渡、雨港、静山寺、静屿、星辉乐园都走它），
+   这里只记落点和碰撞，几何等模型到了再建 —— 模型是外部文件，必须异步取。
 
-function bush(x,z,s){
+   拿不到模型**不退回**旧的圆柱棕榈：规则是响亮报错，不是悄悄给你看占位几何。
+   见文件末尾的 plantWorldVegetation()。
+
+   x 的那段夹取原样保留 —— 它是把跨海栈桥那条走廊让出来，和植被长什么样无关。 */
+const vegSpots = {palm:[], bush:[]};
+function palmSpot(x, z){
   if(Math.abs(x)<8 && z < -65 && z > -125)x=(x<0?-1:1)*13;
-  const g = new THREE.Group();
-  g.position.set(x, terrainH(x,z), z);
-  s = s || (0.7+Math.random()*0.8);
-  g.scale.setScalar(s);
-  for(let i=0;i<4;i++){
-    const b = add(g, G.ico(1.5,0), i%2?M.leaf:M.leaf2,
-      (Math.random()-0.5)*2.2, 0.8+Math.random()*0.7, (Math.random()-0.5)*2.2);
-    b.scale.set(1,0.72,1);
-    b.rotation.set(Math.random(),Math.random(),Math.random());
-  }
-  scene.add(g);
-  addObs(x,z,1.6*s);
+  const s = 0.85 + Math.random()*0.5;
+  vegSpots.palm.push({x, y:terrainH(x,z), z, scale:s, rot:Math.random()*6.28, lean:0, phase:Math.random()*6.28});
+  addObs(x, z, 1.3*s);
 }
+function bushSpot(x, z){
+  if(Math.abs(x)<8 && z < -65 && z > -125)x=(x<0?-1:1)*13;
+  const s = 0.7 + Math.random()*0.8;
+  vegSpots.bush.push({x, y:terrainH(x,z), z, scale:s, rot:Math.random()*6.28, lean:0, phase:Math.random()*6.28});
+  addObs(x, z, 1.6*s);
+}
+
+
 function rock(x,z,s){
   if(Math.abs(x)<8 && z < -65 && z > -125)x=(x<0?-1:1)*13;
   const g = new THREE.Group();
@@ -870,10 +837,10 @@ for(let i=0;i<155;i++){
   const h = terrainH(x,z);
   if(h < 1.6 || h > 30 || Math.hypot(x+22,z+30)<10) continue;
   const d = Math.hypot(x,z);
-  if(d > R-14 && Math.random()<0.62) palms.push(palm(x,z));
-  else if(Math.random()<0.5) bush(x,z);
-  else if(Math.random()<0.35) palms.push(palm(x,z));
-  else bush(x,z);
+  if(d > R-14 && Math.random()<0.62) palmSpot(x,z);
+  else if(Math.random()<0.5) bushSpot(x,z);
+  else if(Math.random()<0.35) palmSpot(x,z);
+  else bushSpot(x,z);
 }
 for(let i=0;i<52;i++){
   const a = Math.random()*6.28;
@@ -2301,12 +2268,9 @@ function tick(){
 
   seaUniforms.uTime.value = t;
 
-  // 棕榈随风摆
-  for(let i=0;i<palms.length;i++){
-    const p = palms[i];
-    p.crown.rotation.z = Math.sin(t*0.9 + p.phase)*0.055;
-    p.crown.rotation.x = Math.cos(t*0.75 + p.phase)*0.045;
-  }
+  // 植被的风现在在顶点着色器里推（journeys/foliage.js），这里只推进时间
+  if(islandFoliage) islandFoliage.tick(t);
+  if(parkFoliage) parkFoliage.tick(t);
   // 篝火
   camp.flame.scale.set(0.85+Math.sin(t*11)*0.18, 0.9+Math.sin(t*9.3)*0.22, 0.85+Math.cos(t*10.1)*0.18);
   camp.flame2.scale.set(0.9+Math.sin(t*13)*0.2, 0.95+Math.cos(t*12)*0.2, 0.9+Math.sin(t*14)*0.2);
@@ -2490,7 +2454,7 @@ const moon=new THREE.Mesh(G.sph(16,24,16),moonMat);moon.position.set(-460,520,-6
 
 // Batch static scenery by material. Palms' crowns, boats, birds and fire remain animated.
 scene.updateMatrixWorld(true);
-const moving=new Set([sky,sea,island,boat.g,bobber,hookedFish.g,camp.flame,camp.flame2,beamPivot,moon,stars,...palms.map(p=>p.crown),...dinghies.map(d=>d.g),...gulls.map(g=>g.g),...clouds.map(c=>c.g),...schools.flatMap(s=>s.members.map(m=>m.f.g))]);
+const moving=new Set([sky,sea,island,boat.g,bobber,hookedFish.g,camp.flame,camp.flame2,beamPivot,moon,stars,...dinghies.map(d=>d.g),...gulls.map(g=>g.g),...clouds.map(c=>c.g),...schools.flatMap(s=>s.members.map(m=>m.f.g))]);
 const batches=new Map();
 scene.traverse(o=>{
  if(!o.isMesh || o.children.length || Array.isArray(o.material) || o.material.transparent || !o.geometry.attributes.normal) return;
@@ -3073,26 +3037,17 @@ const barkGeo = G.cyl(.42,.62,4.2,8);
 const leafGeos = [G.sph(2.6,12,9), G.cone(2.9,6.4,10), G.sph(2.1,12,9)];
 const leafMats = [M.leafA, M.leafB, M.leafC];
 
+/* 乐园的树只记落点，几何由 journeys/foliage.js 从 glTF 实例化（六地共用一套）。
+   碰撞和挡相机的球照旧同步登记，位置和以前一模一样。
+   落点是园区局部坐标 —— 整个园区挂在一个缩放过的 Group 下面。 */
+const parkTreeSpots = [];
 function tree(x,z,s,kind){
-  const g = new THREE.Group();
-  g.position.set(x,0,z);
-  g.scale.setScalar(s||1);
-  const t = addMesh(g, barkGeo, M.bark, 0, 2.1, 0);
-  t.receiveShadow = true;
-  const k = kind===undefined ? (Math.random()*3|0) : kind;
-  if(k===1){
-    addMesh(g, leafGeos[1], leafMats[1], 0, 6.6, 0).receiveShadow = true;
-    addMesh(g, G.cone(2.2,4.6,10), M.leafC, 0, 9.2, 0);
-  }else{
-    addMesh(g, leafGeos[0], leafMats[k%3], 0, 5.6, 0).receiveShadow = true;
-    addMesh(g, leafGeos[2], leafMats[(k+1)%3], 1.5, 7.4, .7);
-    addMesh(g, leafGeos[2], leafMats[(k+2)%3], -1.4, 7.0, -.9);
-  }
-  scene.add(g);
   const sc = s || 1;
+  parkTreeSpots.push({x, y:0, z, scale:sc, rot:Math.random()*6.28, lean:0, phase:Math.random()*6.28,
+    kind: kind===undefined ? (Math.random()*3|0) : kind});
   addObstacle(x, z, 1.5*sc);
-  addBlocker(x, 6.2*sc, z, 3.4*sc);   // 树冠，防止相机钻进去
-  return g;
+  addBlocker(x, 6.2*sc, z, 3.4*sc);   // 树冠：防止相机穿进去
+  return null;
 }
 
 function lamp(x,z){
@@ -4998,7 +4953,7 @@ const Sound = (function(){
 PARK.onDrop = ()=>Sound.drop();
 
 
-return {root:scene,state:PARK,rides,obstacles,walkers,idlers,makePerson,glows:glowMats,sound:Sound,animate(dt,t){for(const a of animators)a(dt,t,1);}};
+return {root:scene,state:PARK,rides,obstacles,walkers,idlers,makePerson,glows:glowMats,sound:Sound,mats:M,treeSpots:parkTreeSpots,animate(dt,t){for(const a of animators)a(dt,t,1);}};
 })();
 const resortOrigin=new THREE.Vector3(0,5,-510),resortScale=.65;
 const resortWorldPoint=(x,y,z)=>new THREE.Vector3(x*resortScale,5+y*resortScale,-510+z*resortScale);
@@ -5312,6 +5267,40 @@ function applySurfaceDetail(){
  // 沙滩与草地是顶点着色的地形，细节乘在上面
  addSurfaceDetail(island.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
  addSurfaceDetail(parkShoreMesh.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
+
+ /* ---- 下面这批是查出来的漏网之鱼 ----
+    做法：遍历整个场景，按材质汇总覆盖面积，再看谁身上没有 userData.surfKind。
+    结果很意外 —— 漏得最狠的不是港口，是星辉乐园：整片草地、347 个白色构件、
+    所有钢架，一个都没上。原因是乐园是个 IIFE，材质表 M 关在闭包里，
+    上面那张 plan 里的 M 指的是海岛那张表，够不着乐园的（同名不同物）。
+    现在把 parkModule.mats 露出来接上。
+
+    另外五座地标的墙色写在各自 spec 里、走 humanMat(spec.color)，也不在 HM 中，
+    整批漏掉 —— 港区最大的五栋楼，墙面一格纹理都没有。 */
+ const P=parkModule.mats;
+ for(const [m,kind,metres,amt,bump,rough] of [
+   [P.grass,"grass",2.2,.5,.9,.5],   [P.grass2,"grass",2.2,.5,.9,.5],
+   [P.path,"slab",2.2,.8,.8,.5],     [P.plaza,"slab",2.4,.8,.8,.5],
+   [P.cream,"plaster",2.4,.8,.8,.45],[P.white,"plaster",2.4,.6,.6,.4],
+   [P.wood,"timber",2.4,.85,.9,.5],  [P.woodDk,"timber",2.4,.85,.9,.5],
+   [P.bark,"timber",1.6,.9,1.2,.6],
+   // 钢架和油漆件只给很轻的一层：金属抹上灰泥纹会假，但全无起伏又太干净
+   [P.steelA,"slab",1.8,.22,.35,.3], [P.steelB,"slab",1.8,.22,.35,.3],
+   [P.steelDk,"slab",1.8,.25,.4,.3], [P.gold,"slab",1.6,.18,.3,.25],
+   [P.red,"plaster",1.8,.3,.45,.35], [P.crimson,"plaster",1.8,.3,.45,.35],
+   [P.blue,"plaster",1.8,.3,.45,.35],[P.skyblue,"plaster",1.8,.3,.45,.35],
+   [P.yellow,"plaster",1.8,.3,.45,.35],[P.orange,"plaster",1.8,.3,.45,.35],
+   [P.green,"plaster",1.8,.3,.45,.35],[P.mint,"plaster",1.8,.3,.45,.35],
+   [P.purple,"plaster",1.8,.3,.45,.35],[P.pink,"plaster",1.8,.3,.45,.35],
+ ]) addSurfaceDetail(m,kind,metres,amt,bump,rough);
+
+ // 树皮和叶子：海岛那张表里的，之前 plan 只写了木材和岩石
+ addSurfaceDetail(M.bark,"timber",1.4,.9,1.3,.6);
+ addSurfaceDetail(M.bark2,"timber",1.4,.9,1.3,.6);
+ for(const m of [M.frond,M.frond2,M.leaf,M.leaf2]) addSurfaceDetail(m,"grass",1.1,.55,.8,.5);
+
+ // 五座地标的墙。从 harborSpecs 现取颜色，加楼不会漏
+ for(const spec of harborSpecs) addSurfaceDetail(humanMat(spec.color),"plaster",2.4,.9,.9,.45,4.15);
 }
 
 const HM={stone:humanMat(0xc4b396),cream:humanMat(0xe0ceb0),darkstone:humanMat(0x847d70),brick:humanMat(0x9c6150),roof:humanMat(0x475c5b),wood:humanMat(0x694e37),floor:humanMat(0xc9b390),paper:humanMat(0xeee2c7),iron:humanMat(0x303e40),red:humanMat(0x894933),green:humanMat(0x526b54),blue:humanMat(0x466875)};
@@ -6007,6 +5996,66 @@ function buildAvatar(look){
 const player=buildAvatar({skin:0xe6b18b,shirt:0x2f4b63,pants:0x2b3038,hair:0x2a221c});
 player.g.name='玩家角色';player.g.visible=false;scene.add(player.g);
 
+/* ---------- 玩家的 glTF 模型 ----------
+   上面那具程序化骨架不删：npm test 的 Node 环境加载不了 glTF，测试和联机里别人的人偶都还靠它。
+   浏览器里模型到手之后把骨架藏掉、模型挂进同一个 player.g，姿势改由动画片段驱动 ——
+   位置、朝向、蹭车挂点这些照旧写在 player.g 上，外面的代码不用改。
+   模型和动画来源见 assets/LICENSES.md，加工流程见 scripts/prepare-player-assets.mjs。 */
+const PLAYER_CLIPS={idle:'Idle_Loop',walk:'Walk_Loop',jog:'Jog_Fwd_Loop',sprint:'Sprint_Loop',swimIdle:'Swim_Idle_Loop',swim:'Swim_Fwd_Loop',
+ air:'Jump_Loop',sit:'Sitting_Idle_Loop',fight:'Sword_Idle',attack:'Sword_Attack',dodge:'Roll',heal:'Interact'};
+const PLAYER_ONCE=['attack','dodge','heal'];
+// 游泳片段不是贴着原点趴平的，是整个人浮在上面：抬 .35 时实测骨盆高出水面 .52、上背 .90、头 1.20，
+// 像块板子漂在水面上。压到 -.45 又太深：相对脚下水面骨盆 -.35、上背 +.03、头 +.33，追尾镜头里只剩个脑袋。
+// 取 -.30：骨盆 -.20（腿在水里）、上背 +.18、头 +.48。
+const SWIM_LIFT=-.30;
+/* 选哪条片段只看状态、不碰 three，测试直接调。
+   top 是这个地方「不按跑」时的最高速度：主世界 8.5，旅行地区 4.3 —— 同一个比例两边都对得上：
+   正常移动是慢跑，按住跑是冲刺，摇杆推一半是走。 */
+function pickPlayerClip(s){
+ if(s.action)return {attack:'attack',heavy:'attack',dodge:'dodge',heal:'heal'}[s.action]||'fight';
+ if(s.fighting)return 'fight';
+ if(s.sit)return 'sit';
+ if(s.swim)return s.speed>.6?'swim':'swimIdle';
+ if(s.air||s.climb||s.dive)return 'air';
+ if(s.speed<.3)return 'idle';
+ const r=s.speed/s.top;
+ return r<.45?'walk':r<1.25?'jog':'sprint';
+}
+// 片段播放速度跟着实际移动速度走，脚才不打滑；夹住上下限，免得慢到像定格、快到像抽搐
+function playerClipRate(s,key){
+ const r=s.speed/s.top,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+ if(key==='walk')return clamp(r/.35,.6,1.3);
+ if(key==='jog')return clamp(r,.75,1.25);
+ if(key==='sprint')return clamp(r/1.95,.8,1.2);
+ if(key==='swim')return clamp(s.speed/SWIM_SPD,.7,1.3);
+ return 1;
+}
+function attachPlayerModel(a,res){
+ const model=res.scene;
+ const box=new THREE.Box3().setFromObject(model),k=2.02/(box.max.y-box.min.y),foot=-box.min.y*k;
+ model.scale.setScalar(k);model.position.y=foot;   // 总身高照骨架的 2.02 米：座位、碰撞、蹭车挂点都按它写死
+ model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;}});   // 蒙皮网格的包围盒是绑定姿势的，跑起来会被误裁
+ const mixer=new THREE.AnimationMixer(model),actions={};
+ for(const [key,name] of Object.entries(PLAYER_CLIPS)){
+  const clip=res.animations.find(c=>c.name===name);
+  if(!clip)throw new Error('玩家动画里缺 '+name+'，assets/player/anims.glb 可能是旧版本。');
+  actions[key]=mixer.clipAction(clip);
+  if(PLAYER_ONCE.includes(key)){actions[key].setLoop(THREE.LoopOnce);actions[key].clampWhenFinished=true;}
+ }
+ a.body.visible=false;a.g.add(model);
+ a.model=model;a.hand=model.getObjectByName('hand_r');
+ let current=null;
+ a.animate=(s,dt)=>{
+  const key=pickPlayerClip(s),act=actions[key];
+  if(key!==current){const prev=current&&actions[current];act.reset().play();if(prev)act.crossFadeFrom(prev,.18,false);current=key;}
+  // 打斗动作的进度归战斗逻辑管（actionTime/duration），片段跟着它定帧，不自己计时
+  if(PLAYER_ONCE.includes(key)&&s.actionFrac!==undefined){act.paused=true;act.time=s.actionFrac*act.getClip().duration;}
+  else act.timeScale=playerClipRate(s,key);
+  mixer.update(dt);
+  model.position.y=foot+(key==='swim'||key==='swimIdle'?SWIM_LIFT:0);
+ };
+}
+
 const remotePlayers=new Map();
 const REMOTE_LOOKS=[
  {skin:0xd9a27d,shirt:0x8a4e55,pants:0x303a49,hair:0x2d2020},
@@ -6179,6 +6228,7 @@ function animatePlayer(dt,t){
  if(!show)return;
  player.g.position.set(walk.x, walk.groundY, walk.z);
  player.g.rotation.y=walk.heading;
+ if(player.animate){player.animate({speed:hitch?0:walk.speed,top:WALK_SPD,swim:walk.swim,air:walk.air,climb:!!walk.climb,dive:walk.dive,sit:!!hitch},dt);return;}
  // 游泳、跳跃、爬上岸各有各的姿势
  if(walk.swim||walk.air||walk.climb){ poseInAir(t); return; }
  player.body.rotation.y=0;
@@ -6728,6 +6778,82 @@ const journeys=window.AstraJourneys?.init({
 });
 
 applySurfaceDetail();
+
+/* ============================================================
+   静屿与星辉乐园的植被：外部 glTF
+   ============================================================
+   六地共用 journeys/foliage.js 那一套实例化 + 顶点着色器的风。
+   落点在建场景时就记好了（palmSpot/bushSpot、乐园的 tree()），碰撞也已经登记，
+   所以不管模型来不来，走路和行人寻路都是一样的；这里只负责把几何补上。
+
+   必须异步：模型是 assets/trees/ 下的外部文件。**从 file:// 直接双击打开会失败** ——
+   浏览器按跨域规则拦掉 XHR/fetch。这时候按规则响亮报错：控制台一条，画面上一条，
+   不退回旧的圆柱棕榈。要看到树就起本地服务，或者用 npm run package:game 出的单文件版
+   （那个把模型也 base64 内嵌了，双击照样是完整的六地）。 */
+let islandFoliage=null, parkFoliage=null;
+/* 手机端按比例抽稀。碰撞体是建场景时就登记好的、两边一样，所以少掉的树
+   不会变成"看不见但撞得到"——它们本来就只是装饰，挡路的是同一批碰撞体。
+   累加器式选取，比取模均匀。 */
+function thinSpots(list, keep){
+ if(keep>=1) return list;
+ const out=[]; let acc=0;
+ for(const sp of list){ acc+=keep; if(acc>=1){ acc-=1; out.push(sp); } }
+ return out;
+}
+// 植被和玩家模型都要 assets.js，两边并发请求时共用同一次加载，别插两个 <script>
+const scriptLoads={};
+function needScript(src, globalName){
+ if(window[globalName]) return Promise.resolve();
+ return scriptLoads[src]||(scriptLoads[src]=new Promise((res,rej)=>{
+  const el=document.createElement('script'); el.src=src; el.onload=res;
+  el.onerror=()=>rej(new Error('取不到 '+src));
+  document.head.appendChild(el);
+ }));
+}
+// 玩家模型和植被各自加载、各自报错：树没来不该拖住人，人没来也不该拖住树
+(async()=>{
+ try{
+  await needScript('journeys/assets.js','AstraTreeAssets');
+  attachPlayerModel(player,await window.AstraTreeAssets.loadPlayer(THREE));
+ }catch(error){
+  console.error('[Astra] 玩家角色模型加载失败：',error);
+  showHint('玩家角色模型没能加载，现在显示的是旧的简易人偶。直接双击打开 index.html 时浏览器会拦掉模型文件的请求 —— '
+   +'请改用 python START_GAME.py 或 npm run dev 起本地服务，或打开 npm run package:game 生成的单文件版。');
+ }
+})();
+(async()=>{
+ try{
+  await needScript('journeys/foliage.js','AstraFoliage');
+  await needScript('journeys/assets.js','AstraTreeAssets');
+  const assets=await window.AstraTreeAssets.load(THREE);
+
+  // 静屿：海边棕榈 + 灌木丛。srgb:true —— 主世界是 sRGB 输出。
+  islandFoliage=window.AstraFoliage.create(THREE,scene,{srgb:true,assets});
+  const PALMS=['PalmTree_1','PalmTree_2','PalmTree_3','PalmTree_4','PalmTree_5'];
+  const byPart=new Map();
+  vegSpots.palm.forEach((sp,i)=>{const k=PALMS[i%PALMS.length];(byPart.get(k)||byPart.set(k,[]).get(k)).push(sp);});
+  for(const [part,items] of byPart) islandFoliage.plant(part,thinSpots(items,isSmall?0.5:1),{height:13});
+  if(vegSpots.bush.length) islandFoliage.plant('Bush',thinSpots(vegSpots.bush,isSmall?0.45:1),{height:2.4,shadow:false});
+
+  // 星辉乐园：园区挂在缩放过的 Group 下，落点是园区局部坐标，直接种进那个 Group。
+  const parkSpots=parkModule.treeSpots;
+  if(parkSpots.length){
+   parkFoliage=window.AstraFoliage.create(THREE,parkModule.root,{srgb:true,assets});
+   const PARK_TREES=['NormalTree_1','BirchTree_1','NormalTree_3','MapleTree_2','NormalTree_5','BirchTree_2'];
+   const g2=new Map();
+   parkSpots.forEach((sp,i)=>{const k=PARK_TREES[sp.kind!==undefined?(sp.kind+i)%PARK_TREES.length:i%PARK_TREES.length];(g2.get(k)||g2.set(k,[]).get(k)).push(sp);});
+   // 乐园的树实测占了近百万三角形（169 棵 x 约 5900），是主世界最大的一块植被开销。
+   // 手机端砍到四成；桌面端仍偏重，后面要补一轮按距离降级的 LOD。
+   for(const [part,items] of g2) parkFoliage.plant(part,thinSpots(items,isSmall?0.4:1),{height:9});
+  }
+ }catch(error){
+  console.error('[Astra] 静屿与星辉乐园的植被加载失败：',error);
+  showHint('树木没能加载。直接双击打开 index.html 时浏览器会拦掉模型文件的请求 —— '
+   +'请改用 python START_GAME.py 或 npm run dev 起本地服务，'
+   +'或打开 npm run package:game 生成的单文件版。');
+ }
+})();
+
 scheduleEnvironment();   // 开局先把环境光挂上
 /* 色调映射：整套调色板是按 sRGB 挑的十六进制，却被当成线性值送进光照，所以颜色
    又淡又灰——石头是灰白的，草坡也是灰白的。这里在映射之前先把它还原回线性，浓度

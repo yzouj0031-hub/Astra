@@ -20,7 +20,14 @@ const server = createServer(async (request, response) => {
   }
   const path = new URL(request.url, 'http://127.0.0.1').pathname;
   const regionAsset = /^\/journeys\/[a-z-]+\.(js|css|txt)$/.exec(path);
-  const route = routes.get(path) || (regionAsset ? [path.slice(1), regionAsset[1] === 'css' ? 'text/css; charset=utf-8' : regionAsset[1] === 'js' ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8'] : null);
+  // 烟雨渡的树：assets/trees/ 下的模型、贴图和清单，外加 journeys/vendor 里的 GLTFLoader。
+  // 照旧走白名单 —— 不开目录遍历，层级和扩展名都写死。
+  const treeAsset = /^\/assets\/trees\/(?:(?:tex|cards)\/)?[a-z0-9_.-]+\.(glb|json|png|jpg)$/.exec(path);
+  const TREE_TYPES = { glb: 'model/gltf-binary', json: 'application/json', png: 'image/png', jpg: 'image/jpeg' };
+  const route = routes.get(path)
+    || (regionAsset ? [path.slice(1), regionAsset[1] === 'css' ? 'text/css; charset=utf-8' : regionAsset[1] === 'js' ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8'] : null)
+    || (treeAsset ? [path.slice(1), TREE_TYPES[treeAsset[1]]] : null)
+    || (path === '/journeys/vendor/GLTFLoader.js' ? ['journeys/vendor/GLTFLoader.js', 'text/javascript; charset=utf-8'] : null);
   if (!route) { response.writeHead(404).end('Not found'); return; }
   try {
     const body = await readFile(resolve(root, route[0]));

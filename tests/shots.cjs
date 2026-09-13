@@ -22,6 +22,10 @@ const SHOTS = [
   { name: 'watertown-dusk', url: GAME + '?journey=watertown', wait: 11000 },
   { name: 'watertown-noon', url: GAME + '?journey=watertown', wait: 11000, times: 3 },
   { name: 'rainport', url: GAME + '?journey=rainport', wait: 11000 },
+  // 静屿和星辉乐园是主场景里的区域，不走 ?journey=，点左上角的区域按钮切过去。
+  // 这两块之前一次都没拍过 —— 乐园其实是整个游戏里面积最大的一片。
+  { name: 'island', url: GAME, wait: 5000, click: '#region-island', after: 3500 },
+  { name: 'park',   url: GAME, wait: 5000, click: '#region-park',   after: 3500 },
 ];
 
 (async () => {
@@ -36,9 +40,12 @@ const SHOTS = [
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     page.on('pageerror', e => problems.push(`${shot.name} pageerror: ${e.message}`));
     page.on('console', m => { if (m.type() === 'error') problems.push(`${shot.name} console: ${m.text()}`); });
-    await page.goto(shot.url, { waitUntil: 'load' });
+    // 单文件版有 7MB 多的内嵌资源，swiftshader 下光解析就要半分钟以上，
+    // 默认 30 秒的 goto 超时不够。
+    await page.goto(shot.url, { waitUntil: 'load', timeout: 180000 });
     await page.waitForFunction(() => document.body.dataset.mode, null, { timeout: 60000 });
     await page.waitForTimeout(shot.wait);
+    if (shot.click) { await page.click(shot.click); await page.waitForTimeout(shot.after || 3000); }
     for (let i = 0; i < (shot.times || 0); i++) {
       await page.click('#journey-menu-toggle').catch(() => {});
       await page.click('#journey-day');

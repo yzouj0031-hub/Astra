@@ -12,7 +12,8 @@ const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
 const range=(a,b)=>a+(b-a)*rnd();
 const C={navy:0x263c52,blue:0x344d65,blue2:0x3c5469,teal:0x336a72,coral:0xb96661,cream:0xb5b7a1,wood:0x664c49,dark:0x142833,trim:0x718a8d,amber:0xffce87,pink:0xff7b89,cyan:0x81e5df};
 
-function createWorld(scene,{mobile=false}={}){
+function createWorld(scene,{mobile=false,trees=null}={}){
+  const TREES=trees;
   seed=314159;
   const colliders=[],batches=new Map(),matCache=new Map(),glows=[],reflections=[];
   const boxGeo=new T.BoxGeometry(1,1,1),cylGeo=new T.CylinderGeometry(1,1,1,10),dummy=new T.Object3D();
@@ -137,8 +138,31 @@ function createWorld(scene,{mobile=false}={}){
   for(const x of [-15.5,15.5])for(const z of [-37,-6,35,45]){
     box(x,.6,z,1.2,.2,2.4,C.wood);box(x+Math.sign(x)*.5,1.02,z,.13,.8,2.4,C.wood);for(const dz of [-.8,.8])box(x,.28,z+dz,.75,.5,.1,C.dark);obstacle(x,z,1.3,2.5);
   }
-  function tree(x,z,s=1){cyl(x,2*s,z,.14*s,4*s,0x697c77);const foliage=mesh(new T.IcosahedronGeometry(1,1),material(0x315c65),x,4*s,z);foliage.scale.set(1.25*s,2.3*s,1.25*s);box(x,.32,z,1.7*s,.6,1.7*s,0x596f73);obstacle(x,z,1.6*s,1.6*s);}
+  /* 行道树。有外部模型就只记落点，几何交给 journeys/foliage.js 实例化；
+     拿不到模型（npm test 的 Node 环境没有 XHR）才退回原来那套圆柱加多面体。
+     树池那圈石沿两条路都保留 —— 它是街景的一部分，也是碰撞体。 */
+  const treeSpots=[];
+  function tree(x,z,s=1){
+    box(x,.32,z,1.7*s,.6,1.7*s,0x596f73);            // 树池石沿
+    obstacle(x,z,1.6*s,1.6*s);
+    if(TREES){ treeSpots.push({x,y:.17,z,scale:s,rot:(x*0.7+z*0.31)%6.283,lean:0,phase:(x*0.13+z*0.29)%6.283}); return; }
+    cyl(x,2*s,z,.14*s,4*s,0x697c77);
+    const foliage=mesh(new T.IcosahedronGeometry(1,1),material(0x315c65),x,4*s,z);
+    foliage.scale.set(1.25*s,2.3*s,1.25*s);
+  }
   for(const z of [-47,-29,-10,8,30,46,62]){tree(-49,z,1.1);tree(49,z,.95);}
+  /* 行道树交给共用的植被模块实例化。srgb:true —— 雨港是 sRGB 输出，
+     和烟雨渡那套 Linear 管线不一样，贴图要打 sRGB 标记（见 foliage.js 的说明）。
+     夜港的街树用针叶和杂树掺着来，一棵一种地轮。 */
+  let foliage=null;
+  if(TREES&&treeSpots.length){
+    // 夜港：压暗压冷，原色的黄绿在这片深蓝里会跳出来
+    foliage=window.AstraFoliage.create(T,scene,{srgb:true,assets:TREES,tint:0x6a7d82});
+    const PARTS=['PineTree_1','NormalTree_3','PineTree_2','NormalTree_5'];
+    const groups=new Map();
+    treeSpots.forEach((sp,i)=>{const k=PARTS[i%PARTS.length];(groups.get(k)||groups.set(k,[]).get(k)).push(sp);});
+    for(const [part,items] of groups) foliage.plant(part,items,{height:7.4});
+  }
   // Scattered wet paving catches the shop lights.
   for(let i=0;i<42;i++){const x=(i%2?1:-1)*range(12,30),z=range(-62,62);const puddle=mesh(new T.CircleGeometry(range(.5,1.3),14),new T.MeshStandardMaterial({color:i%3?0x405967:0x755362,roughness:.06,metalness:.55,transparent:true,opacity:.6,depthWrite:false}),x,.19,z,-Math.PI/2);puddle.scale.y=range(1.4,3.2);}
   // Seaside lighthouse, with its own connected headland.
@@ -213,6 +237,7 @@ function createWorld(scene,{mobile=false}={}){
     for(const n of npcs){n.z+=n.dir*n.speed*dt;if(n.z>48){n.z=48;n.dir=-1;}if(n.z<-48){n.z=-48;n.dir=1;}n.g.position.set(n.x,.15,n.z);n.g.rotation.y=n.dir>0?0:Math.PI;const step=Math.sin(t*4+n.phase)*.38;n.g.userData.legs[0].rotation.x=step;n.g.userData.legs[1].rotation.x=-step;}
     setRain(rainOn);
     if(rainOn){const cx=focus.x,cz=focus.z;for(let i=0;i<rainCount;i++){const a=rainSeeds[i],y=((a[1]-t*17)%50+50)%50,o=i*6,x=a[0]+cx+(50-y)*.1,z=a[2]+cz;rainCoords[o]=x;rainCoords[o+1]=y;rainCoords[o+2]=z;rainCoords[o+3]=x+.14;rainCoords[o+4]=y-a[3];rainCoords[o+5]=z;}rainGeo.attributes.position.needsUpdate=true;}
+    if(foliage)foliage.tick(t);
     stars.material.opacity=.5*(1-day);moon.material.color.set(day?0xf2d7ac:0xffe8bd);
   }
   return {colliders,track,tram,player,npcs,waterMat,setRain,update,glows,materialCount:matCache.size};

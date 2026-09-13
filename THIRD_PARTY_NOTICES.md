@@ -1,8 +1,21 @@
 # Third-party notices
 
+## 烟雨渡的树模型
+
+`assets/trees/` 的几何与贴图出自 Quaternius 的 Ultimate Stylized Nature Pack，
+CC0 1.0（公共领域）。出处、加工方式，以及自制的柳条贴图，见
+[`assets/LICENSES.md`](./assets/LICENSES.md)。
+
+## 玩家角色
+
+`assets/player/` 的模型、服装、发型与动画出自 Quaternius 的 Universal Base Characters、
+Modular Character Outfits – Fantasy 和 Universal Animation Library，CC0 1.0（公共领域）。
+出处与加工方式见 [`assets/LICENSES.md`](./assets/LICENSES.md)。
+
 ## Three.js r128
 
-Embedded in `index.html`.
+Embedded in `index.html`. `journeys/vendor/GLTFLoader.js` 取自同一版本的
+`examples/js/loaders/GLTFLoader.js`，同为下述 MIT 许可。
 
 Copyright © 2010–2021 Three.js Authors
 

@@ -1,17 +1,29 @@
 // Adapted from the user-supplied source for Astra. Three.js is provided by the host (r128).
-window.AstraRegionFactories.watertown=function(THREE){
+window.AstraRegionFactories.watertown=function(THREE,opts){
 /* ============================================================
    烟雨渡 · 一座可以走进去的江南水乡
-   单文件 Three.js 世界。所有几何体由代码拼出，不加载任何外部资源。
+   建筑、桥、船、人还是由代码拼出来的。
+   树不是：柳树和杂树用 assets/trees/ 里的 glTF 模型（见 journeys/assets.js）。
    ============================================================ */
 'use strict';
 const IS_NODE = true;
 const T = THREE;
 const NODE_ENV={aspect:1,makeCanvas:(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;},makeRenderer:()=>({shadowMap:{},setPixelRatio(){},setSize(){}}),ready(){}};
 
+/* 宿主加载好的树模型。拿不到就退回旧的球体树 —— 那只该发生在 npm test 的
+   Node 环境（没有 XHR，加载不了 glTF）。浏览器里 runtime.js 会先 await 成功
+   才创建区域，加载失败直接报错、进不来，不会静默给你看旧树。 */
+const TREES=(opts&&opts.trees)||null;
+
 /* ---------- 随机：固定种子，每次打开都是同一座镇子 ---------- */
 let _seed = 20260906;
 function rnd(){ _seed = (_seed * 1664525 + 1013904223) >>> 0; return _seed / 4294967296; }
+/* 旧路线每棵柳树要抽 372 个随机数（沿岸那些少抽一个 lean，是 371）去拼球和枝条，
+   老樟树是 49 个。换成 glTF 之后只需要几个，可是宝塔、远山、菜畦还排在同一条
+   随机序列的后面 —— 少抽就会把它们全挪位置，"每次打开都是同一座镇子"就破了。
+   所以抽完自己要用的，再把种子按原来的步数推到位。数目是实测的，不是估的。 */
+const WILLOW_DRAWS=372, CAMPHOR_DRAWS=49;
+function skipTo(used,total){ for(let i=used;i<total;i++) rnd(); }
 const rr = (a,b)=>a+(b-a)*rnd();
 const ri = (a,b)=>Math.floor(rr(a,b+1));
 const pick = arr=>arr[Math.floor(rnd()*arr.length)];
@@ -351,8 +363,23 @@ function buildBanks(){
   for(const x of [L.branch.x0-0.15,L.branch.x1+0.15]){ box(B.stone,dk,0.5,1.5,86, x,-0.6,49); box(B.stone,stoneC,0.9,0.16,86, x,0.1,49); }
 }
 
-/* ---------- 树 ---------- */
+/* ---------- 树 ----------
+   有模型就只记一个落点，几何交给 plantTrees() 实例化；
+   没有模型（Node 测试）才走下面那套球体加枝条的老路线。 */
+const treeSpots=[];
 function buildWillow(x,z,scale=1,bank=false){
+  if(TREES){
+    const rot=rr(0,TAU);
+    const lean=bank?(z>0?0.16:-0.16):rr(-0.08,0.08);
+    const variant=Math.floor(rnd()*3);        // DeadTree_1..3 当枝干骨架
+    const phase=rr(0,TAU);                    // 吹风的相位，每棵不一样
+    if(!cullWillow()){
+      treeSpots.push({kind:'willow',x,y:hillY(x,z),z,scale:scale*(bank?1.18:1),rot,lean,variant,phase,bank});
+      obstacles.push({x0:x-0.5,x1:x+0.5,z0:z-0.5,z1:z+0.5});
+    }
+    skipTo(bank?3:4, bank?WILLOW_DRAWS-1:WILLOW_DRAWS);
+    return;
+  }
   const y=hillY(x,z); const parent=M(x,y,z,scale,scale,scale,0,rr(0,TAU),0);
   const lean=bank?(z>0?0.16:-0.16):rr(-0.08,0.08);
   const top=bank?6.6:5.4;
@@ -365,6 +392,14 @@ function buildWillow(x,z,scale=1,bank=false){
   obstacles.push({x0:x-0.5,x1:x+0.5,z0:z-0.5,z1:z+0.5});
 }
 function buildCamphor(x,z,scale=1){ // 广场上的老樟树
+  if(TREES){
+    const rot=rr(0,TAU), phase=rr(0,TAU);
+    // 广场这棵是全镇最大的一棵树，用主力杂树里最高的那个变体，再放大一点
+    treeSpots.push({kind:'camphor',x,y:0,z,scale:scale*1.45,rot,lean:0,variant:0,phase,bank:false});
+    obstacles.push({x0:x-0.9,x1:x+0.9,z0:z-0.9,z1:z+0.9});
+    skipTo(2,CAMPHOR_DRAWS);
+    return;
+  }
   const parent=M(x,0,z,scale,scale,scale);
   box(B.foliage,C.trunk,1.3,4.5,1.3, 0,2.2,0, 0,0,0,parent);
   for(let i=0;i<5;i++){ const a=i/5*TAU; box(B.foliage,C.trunk,0.5,3.4,0.5, Math.cos(a)*1.2,5.2,Math.sin(a)*1.2, 0,Math.cos(a)*0.55,-Math.sin(a)*0.55,parent); }
@@ -372,6 +407,269 @@ function buildCamphor(x,z,scale=1){ // 广场上的老樟树
   obstacles.push({x0:x-0.9,x1:x+0.9,z0:z-0.9,z1:z+0.9});
 }
 
+/* 杂树：山脚和镇外那些。占的是原来 buildWillow 的调用位置，
+   所以随机数也要抽到同样的步数（见 skipTo 上面的注释）。 */
+function buildTree(x,z,scale=1){
+  if(TREES){
+    const rot=rr(0,TAU), variant=Math.floor(rnd()*7), phase=rr(0,TAU);
+    if(!cullTree()){
+      treeSpots.push({kind:'tree',x,y:hillY(x,z),z,scale,rot,lean:0,variant,phase,bank:false});
+      obstacles.push({x0:x-0.5,x1:x+0.5,z0:z-0.5,z1:z+0.5});
+    }
+    skipTo(3,WILLOW_DRAWS);
+    return;
+  }
+  buildWillow(x,z,scale,false);
+}
+
+/* ============================================================
+   树：把落点变成实例
+   ============================================================ */
+/* 实例化、风、卡片这些都搬到了 journeys/foliage.js，六地共用一份。
+   srgb:false —— 烟雨渡是 NoToneMapping + LinearEncoding，贴图要原样通过。
+   scene 在这个文件更靠后才建出来，所以延迟到第一次用时再创建。 */
+let FOL=null;
+const fol=()=>FOL||(FOL=window.AstraFoliage.create(T,scene,{srgb:false,assets:TREES}));
+// 柳树骨架用裸枝干，柳条自己挂；杂树用带叶片贴图的主力树和桦树。
+const WILLOW_PARTS=['DeadTree_1','DeadTree_2','DeadTree_3'];
+// 红枫排在前面且占四成：参考图里的主角就是一棵低处分叉、冠散成片的红枫。
+// （上一轮我把 MapleTree 当成"秋天的红色、江南不对"排除掉了，是判断错了。）
+const TREE_PARTS=['MapleTree_1','MapleTree_2','MapleTree_3','MapleTree_5',
+                  'NormalTree_1','NormalTree_2','NormalTree_3','NormalTree_5',
+                  'BirchTree_1','BirchTree_2'];
+// 层叠松的枝干借用柳树那几根斜干，松针盘另外挂
+const PINE_PARTS=['DeadTree_2','DeadTree_3'];
+const BAMBOO_PARTS=['Bamboo','Bamboo_Mid'];
+// 目标高度，米。最终高度是它再乘各自落点的 scale（沿岸柳 1.06–1.30，
+// 杂树 0.8–1.4，广场老樟树 1.6），所以柳约 7–8.6m、杂树 5.9–10.4m、老樟树 11.2m。
+//
+// 数值是对着改前的截图定的：旧的球体树冠最宽能到 5.8m，而这些模型的树冠只有 3~4m
+// 宽，同样高度看上去就小一圈 —— 第一版按 6.2m 做，山脚那片明显比原来矮小。
+// 所以把高度提上来补回体量。这三个数是调大小的唯一旋钮。
+const TARGET_H={willow:6.6,tree:7.4,camphor:7.0,pine:8.2};
+
+/* 手机端的减法。跟其它地区一致，由宿主把 mobile 传进来（regions.js）。
+   目标是把三角形压到桌面端的一半以下 —— 可是静态的镇子本身就占 28 万，
+   桌面端合计 92 万，一半是 46 万，留给树的只剩不到 18 万（桌面端树占 64 万）。
+   所以株数和每株的卡片数都要砍，光砍株数不够。 */
+const MOBILE=!!(opts&&opts.mobile);
+const LOD=MOBILE
+  // 手机端砍的是**株数**，不是每株的完成度。柳条一度减到 8 条，枝干露出来，
+  // 一棵柳看着像挂了几根绿丝的枯树 —— 宁可少种几棵，也不要种一片破的。
+  // 柳只剩十来棵，每棵多挂十几片卡片才几千个三角形，占不了预算。
+  ? {extraWillow:6,  keepWillow:0.42, keepTree:0.19, bamboo:4,  pines:2, shrubs:0,
+     tips:12, frondPer:2, bambooCards:4, padLevels:[0.40,0.62,0.80], padBase:4, padStack:2}
+  : {extraWillow:17, keepWillow:1,    keepTree:1,    bamboo:18, pines:7, shrubs:46,
+     tips:18, frondPer:2, bambooCards:7, padLevels:[0.34,0.46,0.57,0.68,0.79,0.89], padBase:5, padStack:2};
+
+/* 手机端按比例扔掉一部分树。**在落点阶段就扔**，不是只跳过渲染 ——
+   否则碰撞体还在，手机上会撞到看不见的树。
+   广场那棵老樟树永远留着：少一棵柳没人看得出来，少了那棵樟树广场就空了。
+   累加器式选取（每次加 keep，跨过整数就留一棵），比取模均匀。 */
+let _cullW=0,_cullT=0;
+const cullWillow=()=>MOBILE&&(((_cullW++)*LOD.keepWillow)%1>=LOD.keepWillow);
+const cullTree=()=>MOBILE&&(((_cullT++)*LOD.keepTree)%1>=LOD.keepTree);
+
+/* 竹、松、灌木是照参考图补进来的，用**自己的随机流**定位，不碰主序列 ——
+   主序列后面还排着雨丝、路人和乌篷船的位置，在这儿多抽几个数就会把它们全挪走。 */
+let _vseed=0x9e3779b9;
+function vrnd(){ _vseed=(_vseed*1664525+1013904223)>>>0; return _vseed/4294967296; }
+const vrr=(a,b)=>a+(b-a)*vrnd();
+// 落点得避开水面和已有的碰撞体（房子、桥、树、井…），免得竹子长在屋里
+function clearOf(x,z,r){
+  if(Math.abs(x)>165||z<-92||z>142) return false;
+  if(isWater(x,z)) return false;
+  for(const o of obstacles) if(x>o.x0-r&&x<o.x1+r&&z>o.z0-r&&z<o.z1+r) return false;
+  return true;
+}
+function findSpot(tries,gen,r){
+  for(let i=0;i<tries;i++){ const p=gen(); if(clearOf(p.x,p.z,r)) return p; }
+  return null;
+}
+
+/* 沿河的柳原来只有 10 棵 —— 老布局的步长是 24~40 米，一棵管二十多米河岸，
+   而烟雨渡的招牌恰恰是柳荫夹河。补到 25~30 棵。
+
+   **不动原来那一组**：步长和种子全保持原样，另开一组用 vrnd 那条独立随机流撒，
+   所以镇子的其余部分一个数都不会挪。落点走 clearOf，已有的柳和房子都会被避开，
+   不会两棵挤在一起。x 的排除区间照抄老循环 —— 那几段是桥头、渡口和茶馆门口。 */
+function plantExtraWillows(target){
+  const bankFree=(x,s)=>!(s===1&&x>40&&x<86)&&!(s===1&&x>-14&&x<30)&&!(s===1&&Math.abs(x+34)<14);
+  let added=0;
+  for(let i=0;i<target*14&&added<target;i++){
+    const s=vrnd()<0.5?1:-1, x=vrr(-122,122);
+    if(!bankFree(x,s)) continue;
+    const z=s*vrr(6.9,7.4);
+    if(!clearOf(x,z,2.4)) continue;
+    treeSpots.push({kind:'willow',x,y:hillY(x,z),z,scale:vrr(0.9,1.1)*1.18,
+      rot:vrr(0,TAU),lean:z>0?0.16:-0.16,variant:Math.floor(vrnd()*3),phase:vrr(0,TAU),bank:true});
+    obstacles.push({x0:x-0.5,x1:x+0.5,z0:z-0.5,z1:z+0.5});
+    added++;
+  }
+  return added;
+}
+
+function plantTrees(){
+  if(!TREES||!treeSpots.length) return;
+  plantExtraWillows(LOD.extraWillow);
+  // 按「部件 + 种类」分组，不能只按部件：广场那棵老樟树用的也是 NormalTree_1，
+  // 和挑到同一个变体的杂树混在一组的话，目标高度会取到先进来的那一个。
+  const groups=new Map();
+  for(const s of treeSpots){
+    const part=s.kind==='willow'?WILLOW_PARTS[s.variant%WILLOW_PARTS.length]
+             :s.kind==='camphor'?'NormalTree_1'
+             :TREE_PARTS[s.variant%TREE_PARTS.length];
+    const key=part+'|'+s.kind;
+    (groups.get(key)||groups.set(key,{part,spots:[]}).get(key)).spots.push(s);
+  }
+
+  const fronds=[];                             // 所有柳条实例，最后合成一个 InstancedMesh
+  for(const {part,spots} of groups.values()){
+    const flat=TREES.parts[part];
+    // 按目标高度归一化，而不是直接用模型的自然高矮：原包里五个变体从 3m 到 7.6m 不等，
+    // 直接用会让一部分杂树缩成灌木 —— 第一版就是这样，山脚那片明显比原来的球体树小一号。
+    // 归一化之后，形状的变化还在（五种树形），大小的变化交给落点自己的 scale。
+    const norm=TARGET_H[spots[0].kind]/flat.height;
+    const tips=spots[0].kind==='willow'?fol().branchTips(flat.meshes[0].geometry,LOD.tips):null;
+
+    for(const {geometry,matName} of flat.meshes){
+      fol().instance(fol().shareGeometry(geometry),
+        fol().windMat(TREES.materialFor(matName,false),'leaf'),
+        spots.map(s=>({m:M(s.x,s.y,s.z, s.scale*norm,s.scale*norm,s.scale*norm, s.lean,s.rot,0),
+          phase:s.phase, sway:0})),{shadow:true});
+    }
+
+    if(!tips||!tips.length) continue;
+    for(const s of spots){
+      const k=s.scale*norm;
+      const base=M(s.x,s.y,s.z, k,k,k, s.lean,s.rot,0);
+      for(let i=0;i<tips.length;i++){
+        const t=tips[i];
+        // 每个挂点挂两片，稍微错开 —— 一片一个挂点的话枝干露太多，像棵死树挂了彩带。
+        for(let j=0;j<LOD.frondPer;j++){
+          const n=i*2+j;
+          // 柳条从挂点垂下来：长度随挂点高度走，越高的枝垂得越长。
+          // 但不能垂到地里去 —— 挂点高度减去一点余量就是上限。
+          const len=Math.min((2.0+t.y*0.50)*(0.82+((n*0.37)%1)*0.42), Math.max(0.8,t.y-0.55));
+          // 往树冠外侧再推一点，柳条才挂在冠缘而不是贴着枝干
+          const out=1.10+j*0.16;
+          // 条子底端往外甩一点，整棵才是个钟形的冠，不是一排直挂的帘子。
+          // ry 用挂点的方位角（取负是为了对上 three 绕 Y 旋转的方向），
+          // rz 先转、把向下的条子扳向 +X，再由 ry 把这个外倾转到挂点所在的方位。
+          const a=Math.atan2(t.z,t.x), tilt=0.16+((n*0.23)%1)*0.20;
+          fronds.push({
+            m:base.clone().multiply(M(t.x*out,t.y,t.z*out, 1,len,1, 0,-a,tilt)),
+            phase:s.phase+n*0.41, col:n%4,
+          });
+        }
+      }
+    }
+  }
+
+  // 柳条：一段竖着的窄条，上边贴在挂点上往下垂。分六段是为了能弯，不是为了细。
+  if(fronds.length) fol().instance(fol().crossStrip(1.7,6),fol().cardMat('willow','frond'),fronds,{});
+
+  plantUnderstory();
+}
+
+/* 两片十字交叉的卡片：单片平面侧着看会整条消失，而柳条/竹叶是绕着株身一圈的，
+   总有一批正好转到侧面。交叉之后从任何角度都有面朝着你。 */
+function plantUnderstory(){
+  const bamboo=new Map(), pines=new Map();
+  const bambooCards=[], pads=[], shrubs=[];
+  const push=(map,part,item)=>{ (map.get(part)||map.set(part,[]).get(part)).push(item); };
+
+  // ---- 竹丛：墙根、巷道外侧和山脚 ----
+  for(let i=0;i<LOD.bamboo;i++){
+    const spot=findSpot(40,()=>{
+      if(vrnd()<0.55) return {x:vrr(-132,132), z:(vrnd()<0.5?1:-1)*vrr(17,36)};
+      const a=vrr(0,TAU), r=vrr(24,52);
+      return {x:L.hill.x+Math.cos(a)*r, z:L.hill.z+Math.sin(a)*r};
+    },1.8);
+    if(!spot) continue;
+    const y=hillY(spot.x,spot.z);
+    const culms=2+Math.floor(vrnd()*3);
+    for(let c=0;c<culms;c++){
+      const tall=vrnd()<0.62;
+      const part=tall?BAMBOO_PARTS[0]:BAMBOO_PARTS[1];
+      const flat=TREES.parts[part];
+      const k=(tall?vrr(6.2,9.4):vrr(3.0,4.6))/flat.height;
+      const px=spot.x+vrr(-1.2,1.2), pz=spot.z+vrr(-1.2,1.2);
+      const phase=vrr(0,TAU);
+      const m=M(px,y,pz, k,k,k, vrr(-0.06,0.06),vrr(0,TAU),0);
+      push(bamboo,part,{m,phase,sway:0});
+      // 叶子挂在竿子上半段。整簇随竿子晃，所以摆幅按挂点的世界高度给（见 addWind 的 aSway）。
+      fol().bandPoints(flat.meshes[0].geometry,LOD.bambooCards,0.45,0.97).forEach((t,n)=>{
+        const s=vrr(0.9,1.4);
+        bambooCards.push({
+          m:m.clone().multiply(M(t.x,t.y,t.z, s,s,s, 0,vrr(0,TAU),0)),
+          phase:phase+n*0.5, col:n%4, sway:0.02+t.y*k*0.016,
+        });
+      });
+    }
+    obstacles.push({x0:spot.x-1.4,x1:spot.x+1.4,z0:spot.z-1.4,z1:spot.z+1.4});
+  }
+
+  // ---- 层叠松：山坡上的点景，不该满地都是 ----
+  for(let i=0;i<LOD.pines;i++){
+    const spot=findSpot(40,()=>{
+      const a=vrr(0,TAU), r=vrr(14,46);
+      return {x:L.hill.x+Math.cos(a)*r, z:L.hill.z+Math.sin(a)*r};
+    },2.2);
+    if(!spot) continue;
+    const part=PINE_PARTS[Math.floor(vrnd()*PINE_PARTS.length)];
+    const flat=TREES.parts[part];
+    const k=vrr(TARGET_H.pine*0.82,TARGET_H.pine*1.15)/flat.height;
+    const phase=vrr(0,TAU);
+    const m=M(spot.x,hillY(spot.x,spot.z),spot.z, k,k,k, vrr(-0.10,0.10),vrr(0,TAU),0);
+    push(pines,part,{m,phase,sway:0});
+    // 针盘分六层，越高越小，层与层之间留空 —— 迎客松就是靠这些空隙成立的。
+    // 每个方位叠两片、角度略错开：一张卡片只是一根带针的枝，单片太薄，
+    // 第一版一棵只有十九片，远看还是一棵挂了几点绿的枯树。
+    LOD.padLevels.forEach((f,li)=>{
+      const py=flat.height*f, crown=(1-f)*3.0+0.9, n=LOD.padBase+(li%3);
+      for(let j=0;j<n;j++){
+        const a=vrr(0,TAU)+j*TAU/n;
+        for(let d=0;d<LOD.padStack;d++){
+          const len=crown*vrr(0.85,1.25);
+          pads.push({
+            // rz 先把往外伸的盘压低一点（松枝是下垂的），再由 ry 转到该去的方位
+            m:m.clone().multiply(M(Math.cos(a)*0.18,py+d*0.12,Math.sin(a)*0.18,
+              len,1,len, 0,-(a+d*0.26),vrr(-0.18,-0.04))),
+            phase:phase+li*0.7+j*0.3, col:(li+j+d)%4, sway:0.006+f*0.012,
+          });
+        }
+      }
+    });
+    obstacles.push({x0:spot.x-0.8,x1:spot.x+0.8,z0:spot.z-0.8,z1:spot.z+0.8});
+  }
+
+  // ---- 细叶灌木：驳岸脚下和山坡，矮丛不挡路，所以不进 obstacles ----
+  const bush=TREES.parts.Bush;
+  for(let i=0;i<LOD.shrubs;i++){
+    const spot=findSpot(24,()=>{
+      const r=vrnd();
+      if(r<0.42) return {x:vrr(-128,128), z:(vrnd()<0.5?1:-1)*vrr(8.6,13)};
+      if(r<0.75){ const a=vrr(0,TAU), d=vrr(18,56); return {x:L.hill.x+Math.cos(a)*d, z:L.hill.z+Math.sin(a)*d}; }
+      return {x:vrr(-140,140), z:(vrnd()<0.5?1:-1)*vrr(20,60)};
+    },0.9);
+    if(!spot) continue;
+    const k=vrr(0.9,2.1)/bush.height;
+    shrubs.push({m:M(spot.x,hillY(spot.x,spot.z),spot.z, k,k,k, 0,vrr(0,TAU),0), phase:vrr(0,TAU), sway:0});
+  }
+
+  const F=fol();
+  const put=(map,kind)=>{ for(const [part,items] of map)
+    for(const {geometry,matName} of TREES.parts[part].meshes)
+      F.instance(F.shareGeometry(geometry),F.windMat(TREES.materialFor(matName,false),kind),items,{shadow:true}); };
+  put(bamboo,'culm'); put(pines,'leaf');
+  if(shrubs.length) for(const {geometry,matName} of bush.meshes)
+    F.instance(F.shareGeometry(geometry),F.windMat(TREES.materialFor(matName,false),'leaf'),shrubs,{shadow:false});
+  if(bambooCards.length) F.instance(F.crossCard(0.55,1.1),F.cardMat('bamboo','card'),bambooCards,{});
+  if(pads.length) F.instance(F.pinePad(),F.cardMat('pine','card'),pads,{});
+}
+
+/* 中心对齐的十字卡片（竹叶那种从节上散开的叶簇，不是垂下来的） */
 /* ---------- 宝塔（山顶） ---------- */
 function buildPagoda(x,z){
   const y=hillY(x,z); const parent=M(x,y,z);
@@ -692,8 +990,9 @@ function layoutTown(){
   buildPlaza(); buildGate(1,23); buildTeahouse(); buildCamphor(-7,19,1.1);
   // 柳树
   for(let x=-122;x<=122;x+=rr(24,40)){ for(const s of [1,-1]){ if(rnd()<0.8&&!(s===1&&x>40&&x<86)&&!(s===1&&x>-14&&x<30)&&!(s===1&&Math.abs(x+34)<14)) buildWillow(x+rr(-3,3),s*rr(6.9,7.4),rr(0.9,1.1),true); } }
-  for(let i=0;i<40;i++){ const a=rr(0,TAU), r=rr(30,58); const x=L.hill.x+Math.cos(a)*r, z=L.hill.z+Math.sin(a)*r; if(z>26) buildWillow(x,z,rr(0.8,1.3)); }
-  for(let i=0;i<30;i++){ const x=rr(-160,180), z=pick([1,-1])*rr(44,140); if(!(x>100&&x<175&&z>30&&z<62)) buildWillow(x,z,rr(0.9,1.4)); }
+  // 山脚和镇外是杂树；柳树只沿河 —— 柳是水边的树，漫山遍野种柳不对。
+  for(let i=0;i<40;i++){ const a=rr(0,TAU), r=rr(30,58); const x=L.hill.x+Math.cos(a)*r, z=L.hill.z+Math.sin(a)*r; if(z>26) buildTree(x,z,rr(0.8,1.3)); }
+  for(let i=0;i<30;i++){ const x=rr(-160,180), z=pick([1,-1])*rr(44,140); if(!(x>100&&x<175&&z>30&&z<62)) buildTree(x,z,rr(0.9,1.4)); }
   buildPagoda(L.hill.x,L.hill.z);
   buildMountains(); buildFields();
   // 灯笼：广场、牌坊、渡口
@@ -1135,7 +1434,7 @@ function makeRenderer(){
 }
 function resize(){ if(IS_NODE) return; camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); }
 function init(){
-  buildAtlas(); makeMaterials(); layoutTown(); buildWater(); buildStreaks(); scene.add(buildGround()); commitBatches();
+  buildAtlas(); makeMaterials(); layoutTown(); buildWater(); buildStreaks(); scene.add(buildGround()); commitBatches(); plantTrees();
   spawnNPCs(); spawnBoats(); spawnPlayer();
   renderer=makeRenderer();
   camera.aspect=IS_NODE?NODE_ENV.aspect:window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
@@ -1145,6 +1444,7 @@ function init(){
 }
 function step(dt){
   S.t+=dt; S.dayT=(S.dayT+dt/S.dayLen)%1;
+  if(FOL) FOL.tick(S.t);
   updatePlayer(dt); updateNPCs(dt); updateBoats(dt);
   updateEnv(dt,S.pano?_focus.set(PANO.x,0,PANO.z):_focus.set(P.x,P.y,P.z)); updateRain(dt,S.pano?camera.position.x:P.x,S.pano?camera.position.z:P.z); updateTeahouse(dt); updateCamera(dt); UI.update(dt); updateAudio(dt);
 }
@@ -1154,7 +1454,7 @@ function frame(now){
   step(dt); renderer.render(scene,camera); UI.afterFrame(); requestAnimationFrame(frame);
 }
 init();
-return {scene,camera,S,P,cam,BOAT,TH,input,player,pboat,npcs,obstacles,groundY,isWater,inWaterRaw,blocked,board,land,nearDock,canLand,nearestNPC,inTeahouse,LINES,sunDir,skyGroup,
+return {scene,camera,S,P,cam,BOAT,TH,input,player,pboat,npcs,obstacles,treeSpots,groundY,isWater,inWaterRaw,blocked,board,land,nearDock,canLand,nearestNPC,inTeahouse,LINES,sunDir,skyGroup,
 updatePlayer,updateNPCs,updateBoats,updateEnv,updateRain,updateTeahouse,updateCamera,placeBoat};
 
 };
