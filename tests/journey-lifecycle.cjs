@@ -21,7 +21,7 @@ const document={body,head:new El('head'),createElement:()=>new El(),getElementBy
 nodes.set('world-regions',new El('world-regions'));
 const saved=new Map();const storage={getItem:k=>saved.get(k)||null,setItem:(k,v)=>saved.set(k,v)};
 const s={THREE:T,document,console,performance,matchMedia:()=>({matches:false}),navigator:{maxTouchPoints:0},innerWidth:1280,innerHeight:720,devicePixelRatio:1,localStorage:storage,URL,Date,window:null};s.window=s;s.addEventListener=(k,f)=>(handlers.get(k)||handlers.set(k,[]).get(k)).push(f);
-vm.createContext(s);for(const f of ['core','regions','combat','rainport','watertown','temple','runtime'])vm.runInContext(fs.readFileSync(path.join(root,'journeys',f+'.js'),'utf8'),s,{filename:f+'.js'});
+vm.createContext(s);for(const f of ['core','regions','foliage','combat','rainport','watertown','temple','runtime'])vm.runInContext(fs.readFileSync(path.join(root,'journeys',f+'.js'),'utf8'),s,{filename:f+'.js'});
 const baseScene=new T.Scene(),geometry=new T.BoxGeometry(1,1,1);let sharedDisposed=false;geometry.addEventListener('dispose',()=>sharedDisposed=true);
 const avatar=()=>{const g=new T.Group(),body=new T.Group();g.add(body);body.add(new T.Mesh(geometry,new T.MeshBasicMaterial()));return {g,body,arms:[0,1].map(()=>({pivot:new T.Group(),elbow:new T.Group()})),legs:[0,1].map(()=>({pivot:new T.Group(),knee:new T.Group()}))};};
 const player=avatar();baseScene.add(player.g);let renders=0,captures=0,restores=0,suspends=0;

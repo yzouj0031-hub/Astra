@@ -1,5 +1,6 @@
 // Adapted from the user-supplied source for Astra. Three.js is provided by the host (r128).
-window.AstraRegionFactories.temple=function(THREE,{mobile:touchMode=false}={}){
+window.AstraRegionFactories.temple=function(THREE,{mobile:touchMode=false,trees=null}={}){
+const TREES=trees;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#7e9389');
@@ -175,19 +176,39 @@ for(let i=0;i<35;i++){
   const a=rand(0,Math.PI*2),r=rand(18,35);const rock=mesh(G.rock,i%2?M.stoneDark:M.stone,scene,Math.cos(a)*r,-.4,Math.sin(a)*r,rand(.8,3),rand(.8,2.8),rand(.8,3),true);rock.rotation.set(rand(0,1),rand(0,3),rand(0,1));
 }
 // Instanced pines and peaks keep the wooded valley inexpensive on phones.
-const treeCount=95;
-const trunks=new THREE.InstancedMesh(G.cylinder,M.trunk,treeCount);
-const crowns=new THREE.InstancedMesh(G.cone,M.tree,treeCount*4);
-for(let i=0;i<treeCount;i++){
-  const a=rand(0,Math.PI*2),r=rand(22,67),x=Math.cos(a)*r,z=Math.sin(a)*r,h=rand(6,15),lean=rand(-.07,.07);
-  dummy.position.set(x,h*.33-1,z);dummy.scale.set(.15,h*.7,.15);dummy.rotation.set(0,0,lean);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);
-  for(let j=0;j<4;j++){
-    dummy.position.set(x+lean*h*.3,h*(.4+j*.16)-1,z);const w=h*(.26-j*.042);
-    dummy.scale.set(w,h*.32,w);dummy.rotation.set(0,rand(0,6),0);dummy.updateMatrix();crowns.setMatrixAt(i*4+j,dummy.matrix);
-    tint.setHSL(.37,.16,rand(.13,.23));crowns.setColorAt(i*4+j,tint);
+const treeCount=touchMode?52:95;
+/* 山谷的林子。有外部模型就交给 journeys/foliage.js（六地共用那一套），
+   拿不到（npm test 的 Node 环境没有 XHR）才退回原来的圆柱加锥体。
+   松林是这里的底色，所以针叶占多数，掺一点杂树。 */
+let foliage=null;
+if(TREES){
+  // 山谷原来那套锥体树是很暗的墨绿（#29453a）。换成模型后整片亮了一截，
+  // 谷地从沉静变得发白，所以压回暗绿。
+  foliage=window.AstraFoliage.create(THREE,scene,{srgb:true,assets:TREES,tint:0x76907a});
+  const PARTS=['PineTree_1','PineTree_2','PineTree_4','PineTree_1','NormalTree_3'];
+  const groups=new Map();
+  for(let i=0;i<treeCount;i++){
+    const a=rand(0,Math.PI*2),r=rand(22,67);
+    const sp={x:Math.cos(a)*r,y:-1,z:Math.sin(a)*r,scale:rand(.75,1.5),
+      rot:rand(0,6.283),lean:rand(-.07,.07),phase:rand(0,6.283)};
+    const k=PARTS[i%PARTS.length];
+    (groups.get(k)||groups.set(k,[]).get(k)).push(sp);
   }
+  for(const [part,items] of groups) foliage.plant(part,items,{height:9.5});
+}else{
+  const trunks=new THREE.InstancedMesh(G.cylinder,M.trunk,treeCount);
+  const crowns=new THREE.InstancedMesh(G.cone,M.tree,treeCount*4);
+  for(let i=0;i<treeCount;i++){
+    const a=rand(0,Math.PI*2),r=rand(22,67),x=Math.cos(a)*r,z=Math.sin(a)*r,h=rand(6,15),lean=rand(-.07,.07);
+    dummy.position.set(x,h*.33-1,z);dummy.scale.set(.15,h*.7,.15);dummy.rotation.set(0,0,lean);dummy.updateMatrix();trunks.setMatrixAt(i,dummy.matrix);
+    for(let j=0;j<4;j++){
+      dummy.position.set(x+lean*h*.3,h*(.4+j*.16)-1,z);const w=h*(.26-j*.042);
+      dummy.scale.set(w,h*.32,w);dummy.rotation.set(0,rand(0,6),0);dummy.updateMatrix();crowns.setMatrixAt(i*4+j,dummy.matrix);
+      tint.setHSL(.37,.16,rand(.13,.23));crowns.setColorAt(i*4+j,tint);
+    }
+  }
+  scene.add(trunks,crowns);
 }
-scene.add(trunks,crowns);
 for(let i=0;i<25;i++){
   const a=i/25*Math.PI*2,r=rand(62,92);
   const peak=mesh(G.rock,i%3?M.mountain:M.distant,scene,Math.cos(a)*r,rand(5,10),Math.sin(a)*r,rand(8,17),rand(19,40),rand(8,17));peak.rotation.y=rand(0,3);
@@ -363,6 +384,6 @@ function animateFighter(f,a,dt,t){
   if(a.hurt>0)f.body.rotation.z+=Math.sin(t*43)*.055;
 }
 
-return {scene,camera,hero,warden,mainTemple,sideTemple,otherTemple,tell,tellMaterial,targetMark,binding,slash,slashMaterial,waveMeshes,particles,particleGroup,glows,motes,burst,animateFighter,rotateToward,sunlight};
+return {scene,camera,foliage,hero,warden,mainTemple,sideTemple,otherTemple,tell,tellMaterial,targetMark,binding,slash,slashMaterial,waveMeshes,particles,particleGroup,glows,motes,burst,animateFighter,rotateToward,sunlight};
 
 };

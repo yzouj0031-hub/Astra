@@ -30,8 +30,13 @@ function test(width,height){
  const sandbox={THREE:three,document,innerWidth:width,innerHeight:height,devicePixelRatio:1,requestAnimationFrame:()=>{},addEventListener:(k,f)=>(events[k]??=[]).push(f),setTimeout:()=>0,clearTimeout:()=>{},matchMedia:()=>({matches:false}),localStorage:{getItem:()=>null,setItem:()=>{}},performance,console,URL,Date};sandbox.window=sandbox;
  const onlineSamples=[];sandbox.AstraOnline={init:options=>({update:()=>onlineSamples.push(options.getPose())})};
  const c=vm.createContext(sandbox);vm.runInContext(scripts[1],c);
- const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getHitch:()=>hitch,getHitchNear:()=>hitchNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT};\nsetMode(MODE.VIEW);');
- vm.runInContext(exported,c,{timeout:20000});assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
+ const exported=scripts[2].replace('\nsetMode(MODE.VIEW);','globalThis.api={setMode,MODE,walk,ship,fish,keys,castPress,castRelease,updateWalk,updateSail,updateFishing,updateAtmosphere,selectPeriod,drawMap,terrainH,DOCK_DIR,DOCK_ANG,scene,camera,ctrl,clearInput,seaUniforms,periods,residents,updateResidents,greetResident,residentCanGreet,residentGroundClear,parkModule,animateResort,focusRegion,parkEntry,rideAttraction,leaveParkRide,updateParkCamera,worldWalkHeight,resortInstances,harborBuildings,harborFacadeCount,harborVisitors,harborShips,harborStreetObstacles,harborStalls,harborRoutes,harborStaff,animateHarborLife,strollHarbor,focusHarbor,visitHarbor,goHarborBuilding,harborInteract,updateHarbor,exitHarborBuilding,resolveHarborWalk,sweepHarborMotion,harborCollisionWorld,harborRectContains,harborPeopleColliders,stepHarborCrowd,harborNearbySolids,harborStationaryPeople,harborBuildingAt,syncHarborInterior,harborLandmarks,getHarborState:()=>({active:activeHarborBuilding,floor:harborFloor,nearby:harborNearby}),tick,localOnlinePose,upsertRemotePlayer,removeRemotePlayer,animateRemotePlayers,remotePlayers,car,roadster,player,carRect,vehicleHalfExtents,CAR_TOP,CAR_DISCS,CAR_DISC_R,CAR_HALF_WIDTH,CAR_HALF_LENGTH,CAR_R,vehicleDiscRects,chaseBlocked,updateDrive,updateActors,updateWalkCamera:placeChaseCamera,enterCar,exitCar,toggleVehicle,toggleCameraView,resolveVehicle,carGroundY,carExitSpot,pickMode,CAR_R,getVehicleNear:()=>vehicleNear,getShipNear:()=>shipNear,shipStepOff,leaveShip,boardShip,shipHullDistance,summonShip,DOCK_SHORE,shoreRadius,playerJump,jumpAction,waterDepth,seaAt,updateSplash,WADE,worldWalkHeight2:worldWalkHeight,obstacles,plane,seaplane,updateFly,boardPlane,leavePlane,planeStepOff,updateMooredPlane,planeGroundAt,planeOverLand,airHazards,resortWorldPoint,lighthousePos,getPlaneNear:()=>planeNear,getHitch:()=>hitch,getHitchNear:()=>hitchNear,PLANE_BOARD_R,getThrottleHeld:()=>throttleHeld,setBrakeHeld:v=>{brakeHeld=v},PLANE_STALL,PLANE_ROTATE,PLANE_CEIL,PLANE_EDGE,PLANE_FLOAT,pickPlayerClip,playerClipRate,PLAYER_CLIPS,hunt,seekers,startHunt,stopHunt,updateHunt,seekerSees,playerNoise,seekPath,nearestNode,resolveActorWalk,getSeekNodes:()=>seekNodes,getSeekSpots:()=>seekHideSpots};\nsetMode(MODE.VIEW);');
+ // 60 秒是防死循环的闸，不是性能断言；原来的 20 秒是在更快的机器上定的，这台机器上连未改动的 index.html 都跑不进去。
+ // 真正管「index.html 不能无限涨」的是下面那条 40 秒断言。
+ const initStart=performance.now();vm.runInContext(exported,c,{timeout:60000});const initMs=performance.now()-initStart;
+ assert(initMs<=40000,`${width}x${height}: index.html 解析+初始化用了 ${(initMs/1000).toFixed(1)} 秒，超过 40 秒上限`);
+ console.log(`${width}x${height}: init ${(initMs/1000).toFixed(1)}s`);
+ assert.deepEqual(errors,[],errors.join('\n'));assert(renders>0,'Initial render reached');const a=c.api;assert(a,'API initialized');assert.equal(body.dataset.region,'harbor','Opens directly in the street');a.focusRegion('island');
  for(const mode of Object.values(a.MODE)){a.setMode(mode);assert.equal(body.dataset.mode,mode);}
  a.setMode('fish');a.updateFishing(.016,1);
  const outward={x:-Math.sin(a.fish.yaw),z:-Math.cos(a.fish.yaw)};
@@ -528,6 +533,23 @@ function test(width,height){
  assert(!a.walk.tps&&!a.player.g.visible,'First person hides the avatar');
  assert(Math.abs(a.camera.position.x-a.walk.x)<1e-6&&Math.abs(a.camera.position.z-a.walk.z)<1e-6,'First-person camera sits on the character');
  a.toggleCameraView();assert(a.walk.tps);
+ // glTF 玩家模型选片段：Node 里加载不了模型，这里只测「状态 → 片段」这张表
+ {
+  const pick=s=>a.pickPlayerClip({speed:0,top:8.5,...s});
+  assert.equal(pick({}),'idle','Standing still idles');
+  assert.equal(pick({speed:3}),'walk','A half-pushed stick walks');
+  assert.equal(pick({speed:8.5}),'jog','Normal movement jogs');
+  assert.equal(pick({speed:16.5}),'sprint','Shift sprints');
+  assert.equal(pick({speed:4.3,top:4.3}),'jog','Journey regions scale by their own top speed');
+  assert.equal(pick({speed:7,top:4.3}),'sprint','Journey running sprints');
+  assert.equal(pick({swim:true,speed:3}),'swim');assert.equal(pick({swim:true}),'swimIdle');
+  assert.equal(pick({air:true,speed:9}),'air');assert.equal(pick({climb:true}),'air');
+  assert.equal(pick({sit:true,speed:12}),'sit','Riding along sits even though the car moves');
+  assert.equal(pick({fighting:true,speed:3}),'fight');
+  assert.equal(pick({fighting:true,action:'heavy'}),'attack');assert.equal(pick({fighting:true,action:'dodge'}),'dodge');
+  for(const key of ['idle','walk','jog','sprint','swim','swimIdle','air','sit','fight','attack','dodge','heal'])assert(a.PLAYER_CLIPS[key],`Clip for ${key}`);
+  for(const speed of [0,1,5,8.5,12,20])for(const key of ['walk','jog','sprint','swim']){const r=a.playerClipRate({speed,top:8.5},key);assert(r>=.6&&r<=1.3,`${key} rate at ${speed} m/s stays sane (${r})`);}
+ }
  // Indoors the camera pulls in and stays inside the room.
  nodes.get('harbor-building').value='museum';a.goHarborBuilding();a.updateHarbor(.05,150);
  a.walk.yaw=0;a.walk.vx=a.walk.vz=0;a.keys.w=true;
@@ -729,6 +751,76 @@ function test(width,height){
  a.removeRemotePlayer('pal');a.tick();
  assert(!a.getHitch(),'司机断线也要放人，不能把乘客卡在车上');
  console.log('Online game integration: frame-loop publishing, spawn, movement, teleport, remote vehicles, riding along and departure passed.');
+
+ // ---- Hide and seek: the seekers have to actually search ----
+ assert.equal(a.getSeekNodes().length,0,'The patrol graph is not built until a round starts');
+ a.startHunt();
+ const seekGraph=a.getSeekNodes(),seekSpots=a.getSeekSpots(),S=a.seekers;
+ assert(seekGraph.length>400&&seekSpots.length>150,`Graph built (${seekGraph.length} seekGraph, ${seekSpots.length} search targets)`);
+ assert.equal(seekGraph.filter(n=>n.links.length===0).length,0,'No stranded seekGraph');
+ const seekSeed=a.nearestNode(900,-130,null,0);
+ assert.equal(seekSpots.filter(n=>!a.seekPath(seekSeed,n)).length,0,'Every search target is reachable from the spawn');
+ for(const b of a.harborLandmarks){
+  const up=seekGraph.find(n=>n.b===b&&n.floor===1);
+  assert(up&&a.seekPath(seekSeed,up),b.name+' upper floor is reachable, so seekers can search it');
+ }
+ const put=(s,x,z,yaw)=>{s.x=x;s.z=z;s.floor=0;s.yaw=yaw;s.viewYaw=yaw;s.path=null;s.target=null;s.state='patrol';s.lastSeen=null;s.heard=null;s.scan=0;};
+ const away=()=>S.slice(1).forEach(s=>{s.x=200;s.z=200;});   // 手机端只有 2 个搜查员
+ const scenario=fn=>{a.startHunt();a.hunt.phase='hunt';S.forEach(s=>s.state='patrol');const r=fn();a.stopHunt();return r;};
+
+ // Sight: a facade blocks it, facing away blocks it, open and facing does not.
+ assert(scenario(()=>{
+  const b=a.harborLandmarks.find(x=>x.id==='hotel');a.walk.x=b.x;a.walk.z=b.z;
+  put(S[0],b.x,b.z+b.d/2+16,Math.PI);return !a.seekerSees(S[0]);}),'A facade hides the player from a seeker outside');
+ assert(scenario(()=>{a.walk.x=650;a.walk.z=-120;put(S[0],650,-152,0);return a.seekerSees(S[0]);}),
+  'In the open, facing the player, the seeker sees them');
+ assert(scenario(()=>{a.walk.x=650;a.walk.z=-120;put(S[0],650,-152,Math.PI);return !a.seekerSees(S[0]);}),
+  'Facing away, the same player is not seen');
+
+ // Hearing: sprinting carries, standing still does not.
+ assert(scenario(()=>{
+  put(S[0],650,-135,Math.PI);away();a.walk.x=650;a.walk.z=-120;a.walk.speed=16;
+  for(let i=0;i<40;i++){a.updateHunt(.1,i*.1);if(S[0].state==='investigate')return true;if(!a.hunt.on)break;}
+  return false;}),'A sprinting player is heard by a seeker whose back is turned');
+ assert(scenario(()=>{
+  put(S[0],650,-135,Math.PI);away();a.walk.x=650;a.walk.z=-120;a.walk.speed=0;
+  for(let i=0;i<40;i++){a.updateHunt(.1,i*.1);if(S[0].state==='investigate')return false;if(!a.hunt.on)break;}
+  return true;}),'Standing still makes no noise to investigate');
+ assert(a.playerNoise()===0,'A stationary player is silent');
+
+ // Memory and coordination: they head for where you were, not where you are.
+ assert(scenario(()=>{
+  a.walk.x=650;a.walk.z=-120;a.walk.speed=0;put(S[0],650,-150,0);S.slice(1).forEach((s,i)=>put(s,700+i*40,-300,0));
+  a.updateHunt(.1,1);
+  if(S[0].state!=='chase'||!a.hunt.alert)return false;
+  a.walk.x=900;a.walk.z=-480;                        // vanish
+  let closest=999;
+  for(let i=0;i<120;i++){a.updateHunt(.1,2+i*.1);if(!a.hunt.on)break;closest=Math.min(closest,Math.hypot(S[0].x-650,S[0].z+120));}
+  return closest<8;}),'After losing sight the seeker searches the last known position');
+
+ // A whole round, and seekers never end a frame inside the scenery.
+ const round=setup=>{
+  a.startHunt();setup();let clipped=0,indoors=0;
+  for(let f=0;f<1800;f++){
+   a.updateHunt(.1,f*.1);
+   if(!a.hunt.on)return {end:f*.1,caught:a.hunt.caught,clipped,indoors};
+   for(const s of S){
+    if(a.harborBuildingAt(s.x,s.z))indoors++;
+    const fix=a.resolveActorWalk(s.x,s.z,s.x,s.z,{floor:s.floor,radius:.7});
+    if(Math.hypot(fix.x-s.x,fix.z-s.z)>.3)clipped++;
+   }
+  }
+  a.stopHunt();return {end:180,caught:false,clipped,indoors};
+ };
+ const open=round(()=>{a.walk.x=650;a.walk.z=-120;a.walk.speed=0;});
+ assert(open.caught,'Standing in the middle of the boulevard gets you found');
+ assert.equal(open.clipped,0,'Seekers never end a frame inside the scenery');
+ const buried=round(()=>{a.walk.x=435;a.walk.z=-400;a.walk.speed=0;});
+ assert(!buried.caught,'Hiding deep inside a building survives the round');
+ assert(buried.indoors>200,`Seekers walk indoors to search (${buried.indoors} frames)`);
+ a.stopHunt();a.focusRegion('harbor');
+ console.log(`Hide and seek: ${seekGraph.length}-node patrol graph built on demand, every target and upper floor reachable, `+
+  `occlusion/field-of-view/hearing/memory/shared alert, found in the open at ${open.end.toFixed(0)}s, survived while hidden, no clipping.`);
  let meshes=0,visible=0;a.scene.traverse(o=>{if(o.isMesh){meshes++;if(o.visible)visible++;}});
  console.log(`Mesh objects ${meshes}; directly visible ${visible}.`);
  console.log(`${width}x${height}: scene initialized (${meshes} meshes), all 6 modes, fishing state changes, boat departure, input reset, 3 lighting presets passed.`);

@@ -30,7 +30,7 @@ function dressRegion(scene,surface){
  return n;
 }
 function createRegion(T,id,services){
- const {mobile,notify,stamp,progress,travel,surface}=services;
+ const {mobile,notify,stamp,progress,travel,surface,trees}=services;
  const meta=C.REGIONS[id];let scene,camera,world,solids=[],land=()=>true,ground=()=>0;
  let transport=false,phase=0,rain=id==='rainport',day=0,clock=0,active=true;
  const pos={...meta.spawn,y:0,heading:Math.PI,speed:0};
@@ -40,13 +40,15 @@ function createRegion(T,id,services){
   camera=new T.PerspectiveCamera(57,1,.1,380);
   const hemi=new T.HemisphereLight('#b9d4db','#2b3440',.35);scene.add(hemi);
   const sun=new T.DirectionalLight('#c8deec',.15);sun.position.set(-35,60,20);scene.add(sun);
-  world=api.createWorld(scene,{mobile});solids=world.colliders;land=api.isLand;ground=()=>.17;
+  world=api.createWorld(scene,{mobile,trees});solids=world.colliders;land=api.isLand;ground=()=>.17;
   world.player.visible=false;
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.g.position.set(p.x,.17,p.z);}}
   world.setRain(true);
   world.lightCycle=()=>{hemi.intensity=.35+day*.5;sun.intensity=.15+day*.65;scene.background.set(day?'#58757d':'#102d3e').convertSRGBToLinear();scene.fog.color.copy(scene.background);};
  }else if(id==='watertown'){
-  world=factory(T);scene=world.scene;camera=world.camera;
+  // trees 是宿主加载好的 glTF 树（journeys/assets.js）。浏览器里 runtime.js 会先 await
+  // 成功才走到这儿；拿不到只会发生在 npm test 的 Node 环境，那边退回旧的球体树。
+  world=factory(T,{trees,mobile});scene=world.scene;camera=world.camera;
   solids=world.obstacles.map(o=>({minX:o.x0,maxX:o.x1,minZ:o.z0,maxZ:o.z1,height:o.h||9.5}));
   land=(x,z)=>Math.abs(x)<175&&z>-95&&z<145&&!world.isWater(x,z);
   ground=world.groundY;world.player.g.visible=false;
@@ -54,7 +56,7 @@ function createRegion(T,id,services){
   // Start every walker on a legal surface, including the foot of the bridges.
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.per.g.position.set(p.x,ground(p.x,p.z),p.z);}}
  }else{
-  world=factory(T,{mobile});scene=world.scene;camera=world.camera;
+  world=factory(T,{mobile,trees});scene=world.scene;camera=world.camera;
   world.hero.root.visible=false;
   // Floor height follows the actual temple plinth and the front steps.
   ground=(x,z)=>Math.abs(x)<9.1&&z>=-25.2&&z<=-16.6?1.2:Math.abs(x)<3.6&&z>-16.6&&z<-14.4?C.clamp((-z-14.4)/2.2,0,1)*1.2:0;
@@ -91,6 +93,7 @@ function createRegion(T,id,services){
   people(){return id==='rainport'?world.npcs.map(n=>({x:n.g.position.x,z:n.g.position.z})):id==='watertown'?world.npcs.map(n=>({x:n.x,z:n.z})):(!world.fighting?[{x:world.game.boss.x,z:world.game.boss.z,radius:1.1}]:[]);},
   update(dt,input){
    if(!active)return;clock+=dt;phase+=dt;
+   world.foliage?.tick(clock);   // 山寺的林子跟着风摆
    const old={x:pos.x,z:pos.z};
    const ix=input.x,iz=input.z,mag=Math.min(1,Math.hypot(ix,iz));
    const dx=Math.cos(region.yaw)*ix+Math.sin(region.yaw)*iz,dz=-Math.sin(region.yaw)*ix+Math.cos(region.yaw)*iz;
