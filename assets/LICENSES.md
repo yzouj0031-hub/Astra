@@ -78,6 +78,22 @@ CC0 允许这些修改，也允许不署名。
   删掉整段不变且等于静息值的轨道
 - 结果：`player.glb` 1.80MB，`anims.glb` 0.59MB（原件三个包合计 420MB）
 
+## vehicles/ · 载具
+
+**几何是本项目自己建的**，不是第三方模型：`blender/tools/build_roadster.py` 等脚本在 Blender 里
+按截面放样、沿路径扫出车身和翼子板，不用方盒拼。能不登录下载、又带真实贴图的老式车和水上飞机
+没有找到（带贴图的都在 Sketchfab，要登录），所以自建。
+
+贴图来自 **Poly Haven**，**CC0 1.0**（<https://polyhaven.com/license>），降到 512² 后打包进 GLB：
+
+| 贴图 | 用在哪 | 来源 |
+| --- | --- | --- |
+| `brown_leather` | 座椅 | <https://polyhaven.com/a/brown_leather> |
+| `rough_linen` | 敞篷车帆布篷、飞机蒙皮 | <https://polyhaven.com/a/rough_linen> |
+| `teak_veneer` | 仪表板、木桨、翼间支柱 | <https://polyhaven.com/a/teak_veneer> |
+
+原件在不入库的 `assets/_src/vehicles/tex/`。车漆、镀铬、铝件不贴图，是纯材质参数。
+
 ## journeys/vendor/GLTFLoader.js
 
 Three.js r128 的 `examples/js/loaders/GLTFLoader.js`，Copyright © 2010–2021

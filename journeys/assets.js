@@ -148,6 +148,23 @@ function loadPlayer(T) {
  return playerCache;
 }
 
+/* 载具：assets/vehicles/ 下 Blender 自建的模型（见 blender/tools/build_*.py）。
+   静态网格可以直接 clone(true) 共享几何，一个文件缓存一份，调用方自己克隆。 */
+const vehicleCache = new Map();
+function loadVehicle(T, name) {
+ if (vehicleCache.has(name)) return vehicleCache.get(name);
+ const p = (async () => {
+  await ensureLoader(T);
+  const url = (root.AstraVehicleAssetData && root.AstraVehicleAssetData[name]) || 'assets/vehicles/' + name;
+  const gltf = await new Promise((resolve, reject) => {
+   new T.GLTFLoader().load(url, resolve, undefined, () => reject(new Error('载具模型 ' + name + ' 加载失败。' + OFFLINE_HINT)));
+  });
+  return gltf.scene;
+ })().catch(error => { vehicleCache.delete(name); throw error; });
+ vehicleCache.set(name, p);
+ return p;
+}
+
 let cache = null;
 
 /** 加载烟雨渡的树。成功返回 {parts, frond}，失败抛错 —— 不返回 null。 */
@@ -231,6 +248,6 @@ function load(T) {
  return cache;
 }
 
-root.AstraTreeAssets = { load, loadPlayer };
+root.AstraTreeAssets = { load, loadPlayer, loadVehicle };
 
 })(typeof window === 'undefined' ? globalThis : window);

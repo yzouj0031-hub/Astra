@@ -214,7 +214,7 @@ body.chrome-off #intro,body.chrome-off #toolbar,body.chrome-off #island-map,body
 #boot{background:linear-gradient(150deg,#285760,#102f37);gap:20px}
 #boot p{letter-spacing:.25em;color:#e9dfcbaa}
 #joy{border-color:#f2e9d340;background:#123b4322}#joy-knob{background:#efe2beaa;box-shadow:none}
-@media(min-width:1000px){#joy.show{display:none}}
+@media(min-width:1000px){html:not(.touch) #joy.show{display:none}}
 @media(max-width:850px){#intro{top:23%;left:25px}#intro h1{font-size:29px}#intro p{font-size:10px}#brand{left:25px;top:27px}#brand .cn{font-size:37px}#toolbar{right:22px;top:28px;gap:5px}.pill{padding:10px 12px}#place-caption{display:none}#readout{left:25px;bottom:168px}#uitoggle{right:20px}}
 @media(max-width:560px){#brand{top:22px;left:22px;gap:11px}#brand .en{font-size:8px}#brand .tagline{font-size:9px}#toolbar{top:95px;right:18px;flex-direction:column;align-items:flex-end}.pill{font-size:10px}#intro{top:25%;left:24px}#intro h1{font-size:27px;line-height:1.6}#intro .eyebrow{font-size:8px;margin-bottom:12px}#intro p{max-width:160px}#dock{bottom:calc(16px + env(safe-area-inset-bottom));border-radius:21px;padding:9px}#readout{bottom:160px;font-size:9px}#readout b{font-size:11px}.mode{padding:11px 0;font-size:11px}.mode .mode-icon{font-size:19px}#castbtn{width:68px;height:68px;right:18px;bottom:290px;font-size:12px}#fishui{bottom:180px;width:min(300px,85vw)}#creel{left:22px;bottom:310px}#hint{bottom:180px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
@@ -262,6 +262,7 @@ body[data-seek=chase] .seek-bar i{background:#ef7a63}
 #jump-button{position:fixed;right:26px;bottom:206px;z-index:27;width:78px;height:78px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:13px;display:none;box-shadow:0 5px 24px #052e3455}
 #brake-button{position:fixed;right:26px;bottom:296px;z-index:27;width:68px;height:68px;border-radius:50%;border:1px solid #ffe6b866;background:#1b3a45cc;color:#f6ecd6;font-size:12px;display:none;box-shadow:0 5px 24px #052e3455}
 @media(max-width:900px){body[data-mode=walk] #jump-button,body[data-mode=fly] #jump-button,body[data-mode=fly] #brake-button{display:block}}
+html.touch body[data-mode=walk] #jump-button,html.touch body[data-mode=fly] #jump-button,html.touch body[data-mode=fly] #brake-button,html.touch body[data-mode=drive] #jump-button,html.touch body[data-mode=drive] #brake-button{display:block}
 @media(max-width:560px){#jump-button{width:66px;height:66px;right:18px;bottom:198px;font-size:12px}#brake-button{width:60px;height:60px;right:18px;bottom:276px;font-size:11px}}
 /* 横屏：屏幕矮，上面那些 bottom:200~290px 会把按钮顶到半屏高，拇指够不着。
    放到下缘一圈，并排让开摇杆。必须排在 max-width 规则之后才盖得住。 */
@@ -416,13 +417,18 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.3, 4000);
 const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:"high-performance", preserveDrawingBuffer:true});
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 ? 1.35 : 1.65));
+/* 触屏设备：看的是指针是不是手指，不看屏幕宽度。横着拿的手机宽 844~932 像素，
+   原来按 innerWidth<700 判断，横屏手机拿到的是桌面版：没有油门按钮、提示写着按 Shift。
+   Node 测试环境里没有 navigator，matchMedia 是桩，两边都要兜住。 */
+const touchDevice = (typeof matchMedia==='function' && matchMedia('(pointer:coarse)').matches) || (typeof navigator!=='undefined' && navigator.maxTouchPoints>0);
+if(touchDevice) document.documentElement?.classList?.add('touch');
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 || touchDevice ? 1.35 : 1.65));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 $("stage").appendChild(renderer.domElement);
 const dom = renderer.domElement;
-const isSmall = innerWidth < 700;
+const isSmall = innerWidth < 700 || (touchDevice && Math.min(innerWidth, innerHeight) < 700);
 
 const SUN_DIR = new THREE.Vector3(0.42, 0.62, 0.30).normalize();
 
@@ -1186,6 +1192,8 @@ const PLANE_STEP_SIDE=3.4, PLANE_STEP_REACH=5.2, PLANE_BOARD_R=PLANE_STEP_SIDE+P
 const PLANE_CRUISE=0.68, PLANE_EDGE=1200;   // 有浪的海面到 1800 就没了，别飞到能看见接缝的地方
 const plane = {x:656, z:-60, y:0, yaw:0, pitch:0, roll:0, spd:0, vy:0, thr:0, spin:0,
                water:true, camYaw:0, camPitch:0.14, camDist:17, warn:0};
+// 竖屏手机横向视野窄，照桌面的跟车距离，车和飞机在画面里只剩火柴盒大 —— 拉近一些
+if(touchDevice&&innerHeight>innerWidth){car.camDist=8;plane.camDist=13;ship.camDist=13;}
 let throttleHeld=false, brakeHeld=false;   // 手机上按住「油门」/「收油门」
 
 /* ---------- 输入 ---------- */
@@ -1637,7 +1645,7 @@ let hintTmr=null;
 // 触屏和键盘的提示分开写。注意这些 showHint 是在 setMode 之后发的，
 // 会盖掉 setMode 里那条 —— 所以这里也必须分两套，否则手机上会看到
 // 「Shift 加油门」「按 F 下车」这种做不到的指示。
-const touchUi=()=>innerWidth<700;
+const touchUi=()=>touchDevice||innerWidth<700;
 function showHint(txt){
   hintEl.textContent=txt; hintEl.classList.add("show");
   clearTimeout(hintTmr); hintTmr=setTimeout(()=>hintEl.classList.remove("show"), 2200);
@@ -1653,12 +1661,12 @@ const modeBtns = {
 };
 const MODE_INFO = {
   ride:{n:"游乐设施乘坐",s:"拖动环顾 · 结束乘坐回到地面"},
-  view:{n:"环岛俯瞰", s:innerWidth<700?"拖动环岛 · 双指缩放":"拖动环岛 · 滚轮缩放 · R 自动环绕"},
-  walk:{n:"岛上漫步", s:innerWidth<700?"左侧摇杆移动 · 「跳」跳跃与上岸":"WASD 移动 · 空格跳跃 · 走进海里就游泳 · Shift 奔跑 · V 切视角"},
-  sail:{n:"扬帆出海", s:innerWidth<700?"左侧摇杆驾驶 · 停在哪里就在哪里下船":"W / S 前进后退 · A / D 转舵 · F 下船，停在哪下在哪"},
+  view:{n:"环岛俯瞰", s:touchUi()?"拖动环岛 · 双指缩放":"拖动环岛 · 滚轮缩放 · R 自动环绕"},
+  walk:{n:"岛上漫步", s:touchUi()?"左侧摇杆移动 · 「跳」跳跃与上岸":"WASD 移动 · 空格跳跃 · 走进海里就游泳 · Shift 奔跑 · V 切视角"},
+  sail:{n:"扬帆出海", s:touchUi()?"左侧摇杆驾驶 · 停在哪里就在哪里下船":"W / S 前进后退 · A / D 转舵 · F 下船，停在哪下在哪"},
   fish:{n:"码头垂钓", s:"抛竿 → 咬钩提竿 → 按住收线"},
-  drive:{n:"开车兜风", s:innerWidth<700?"左侧摇杆油门转向 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"},
-  fly:{n:"驾机翱翔", s:innerWidth<700?"摇杆往回拉抬头 · 按住「油门」/「收油门」":"W / S 拉起俯冲 · A / D 压坡度 · Shift 加油门 · 空格收油门 · F 下机"}
+  drive:{n:"开车兜风", s:touchUi()?"左侧摇杆转向 · 按住「油门」「刹车」 · 右侧拖动看车":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车"},
+  fly:{n:"驾机翱翔", s:touchUi()?"摇杆往回拉抬头 · 按住「油门」/「收油门」":"W / S 拉起俯冲 · A / D 压坡度 · Shift 加油门 · 空格收油门 · F 下机"}
 };
 /* 竖屏补偿视野。three 的 fov 是**垂直**视角：手机一竖，水平视野就被压得很窄，
    人物顶满屏幕、前面的路看不见。这里按宽高比把垂直视角放大，让水平视野维持在
@@ -1713,7 +1721,7 @@ function setMode(m){
       ship.camYaw = 0; ship.camPitch = 0.16;
       region = regionAt(ship.x, ship.z);
     }
-    showHint(innerWidth<700?"推摇杆前进 · 左右转舵 · 点「下船」上岸":"W 前进 · S 后退 · A / D 转舵 · 按 F 下船");
+    showHint(touchUi()?"推摇杆前进 · 左右转舵 · 点「下船」上岸":"W 前进 · S 后退 · A / D 转舵 · 按 F 下船");
   }else if(m===MODE.FISH){
     fish.yaw = -Math.PI/2 - DOCK_ANG; fish.pitch = -0.24;
     resetFishing();
@@ -1725,13 +1733,13 @@ function setMode(m){
       car.camYaw=car.yaw+Math.PI; car.camPitch=0.10;
       walk.x=car.x; walk.z=car.z; walk.vx=walk.vz=0;
     }
-    showHint(innerWidth<700?"推摇杆前进 · 左右转向 · 点「下车」离开":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车");
+    showHint(touchUi()?"按住「油门」前进 · 摇杆左右转向 · 按住「刹车」减速倒车 · 点「下车」离开":"W / S 油门刹车 · A / D 转向 · 空格手刹 · F 下车");
   }else if(m===MODE.FLY){
     if(prev!==MODE.FLY){
       plane.camYaw=0; plane.camPitch=0.14;
       region=regionAt(plane.x,plane.z);
     }
-    showHint(innerWidth<700?"按住「油门」滑跑 · 速度够了往回拉摇杆抬机头":"Shift 加油门滑跑，速度够了拉 W 起飞 · 落水后按 F 下机");
+    showHint(touchUi()?"按住「油门」滑跑 · 速度够了往回拉摇杆抬机头":"Shift 加油门滑跑，速度够了拉 W 起飞 · 落水后按 F 下机");
   }else if(m===MODE.VIEW){
     ctrl.tTarget.set(0, 10, 0); ctrl.tDist = innerWidth<560?540:350;
   }
@@ -2847,7 +2855,7 @@ function updateResidents(dt,t){
   if(residentCanGreet(n)){const d=Math.hypot(walk.x-p.x,walk.z-p.z);if(d<nearDist){nearDist=d;nearestResident=n;}}
  }
  greetButton.hidden=!nearestResident;
- if(nearestResident)greetButton.textContent='和'+nearestResident.name+'打招呼'+(innerWidth>700?' · E':'');
+ if(nearestResident)greetButton.textContent='和'+nearestResident.name+'打招呼'+(!touchUi()?' · E':'');
  if(t>speechUntil||mode!==MODE.WALK)speech.hidden=true;
 }
 
@@ -5970,7 +5978,7 @@ function updateHarbor(dt,t){
   for(const e of b.exhibitPoints)if(e.floor===harborFloor&&Math.hypot(walk.x-e.x,walk.z-e.z)<7)harborNearby={type:'exhibit',text:e.text};
  }
  const button=$('harbor-interact');button.hidden=!harborNearby;
- if(harborNearby)button.textContent='阅读展牌'+(innerWidth>700?' · E':'');
+ if(harborNearby)button.textContent='阅读展牌'+(!touchUi()?' · E':'');
  if(mode!==MODE.WALK&&activeHarborBuilding)endHarborInterior();
 }
 $('region-harbor').onclick=focusHarbor;$('harbor-walk').onclick=strollHarbor;$('harbor-go').onclick=goHarborBuilding;$('harbor-exit').onclick=exitHarborBuilding;$('harbor-interact').onclick=harborInteract;
@@ -6105,8 +6113,10 @@ function removeRemotePlayer(id){const r=remotePlayers.get(id);if(!r)return;scene
 const REMOTE_CAR_PAINT=[0x7a3b3b,0x2f4a41,0x3b4a72,0x6b5a2f];
 function buildRemoteVehicle(kind,color){
  if(kind==='drive'){
-  const car=buildCar(REMOTE_CAR_PAINT[Math.abs(color|0)%REMOTE_CAR_PAINT.length]);
+  const paint=REMOTE_CAR_PAINT[Math.abs(color|0)%REMOTE_CAR_PAINT.length];
+  const car=buildCar(paint);
   car.lamp?.parent?.remove(car.lamp);   // 车头灯不要：每台远端车都挂一盏点光源会把灯位吃光
+  if(roadsterModel)fitCarModel(car,roadsterModel.clone(true),paint);
   return car;
  }
  if(kind==='sail')return buildSailboat();
@@ -6423,6 +6433,35 @@ roadster.g.position.set(car.x,car.y,car.z);
 roadster.g.rotation.y=car.yaw;
 scene.add(roadster.g);
 
+/* ---------- 老爷车的 glTF 模型 ----------
+   模型是 Blender 里自建的（blender/tools/build_roadster.py），尺寸就是游戏单位，车头朝 +Z，
+   四个轮子是独立节点 wheel_FL/FR/RL/RR、原点在轮心。换模型不换车：碰撞、驾驶、座位全照旧，
+   只把方盒车身藏起来，模型的轮子挂进原来的转向（mount 转 Y）和滚动（hub 转 X）节点。
+   Node 测试环境加载不了 glTF，那里仍是方盒车（测试检查的车身包围盒也就还是它的）。 */
+let roadsterModel=null;
+function fitCarModel(c,model,paint){
+ const wheels=[];
+ model.traverse(o=>{
+  if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}
+  if(/^wheel_[FR][LR]$/.test(o.name))wheels.push(o);
+ });
+ if(paint!==undefined){   // 朋友的车按房间颜色上漆；模型里漆色是线性值，十六进制要先转
+  const swapped=new Map();
+  model.traverse(o=>{if(o.isMesh&&o.material&&o.material.name==='Paint'){
+   if(!swapped.has(o.material)){const m=o.material.clone();m.color.setHex(paint).convertSRGBToLinear();swapped.set(o.material,m);}
+   o.material=swapped.get(o.material);}});
+ }
+ for(const w of c.wheels){
+  const p=w.mount.position,node=wheels.find(n=>Math.sign(n.position.x)===Math.sign(p.x)&&Math.sign(n.position.z)===Math.sign(p.z));
+  if(!node)throw new Error('老爷车模型里少了轮子，assets/vehicles/roadster.glb 可能是旧版本。');
+  w.mount.position.copy(node.position);
+  for(const child of w.hub.children)child.visible=false;
+  node.position.set(0,0,0);w.hub.add(node);
+ }
+ for(const child of c.g.children)if(child.isMesh)child.visible=false;
+ c.g.add(model);c.model=model;
+}
+
 // Conservative oriented body bounds include bumpers, wheels and visual lean.
 function vehicleHalfExtents(yaw){
  const sn=Math.abs(Math.sin(yaw)),cs=Math.abs(Math.cos(yaw));
@@ -6480,6 +6519,9 @@ function updateDrive(dt,t){
  if(keys["s"]||keys["arrowdown"]) iz+=1;
  if(keys["a"]||keys["arrowleft"]) ix-=1;
  if(keys["d"]||keys["arrowright"]) ix+=1;
+ // 触屏：「油门」「刹车」按钮。刹车按到停住后继续按就是倒车，和 S 键一样
+ if(throttleHeld) iz-=1;
+ if(brakeHeld) iz+=1;
  const throttle=Math.max(-1,Math.min(1,-iz)), steerIn=Math.max(-1,Math.min(1,ix));
  const hand=!!keys[" "];
 
@@ -6545,8 +6587,8 @@ const vehicleBtn=$('vehicle-interact'), jumpBtn=$('jump-button'), brakeBtn=$('br
 jumpBtn.onclick=()=>{ if(mode!==MODE.FLY) jumpAction(); };
 // 按住的是哪根手指要记住：另一只手离开摇杆时不该把油门松掉
 let throttlePointer=null, brakePointer=null;
-jumpBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY){ throttleHeld=true; throttlePointer=e.pointerId; e.preventDefault(); } });
-brakeBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY){ brakeHeld=true; brakePointer=e.pointerId; e.preventDefault(); } });
+jumpBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY||mode===MODE.DRIVE){ throttleHeld=true; throttlePointer=e.pointerId; e.preventDefault(); } });
+brakeBtn.addEventListener('pointerdown',e=>{ if(mode===MODE.FLY||mode===MODE.DRIVE){ brakeHeld=true; brakePointer=e.pointerId; e.preventDefault(); } });
 function releasePointer(e){
  if(e.pointerId===throttlePointer){ throttleHeld=false; throttlePointer=null; }
  if(e.pointerId===brakePointer){ brakeHeld=false; brakePointer=null; }
@@ -6568,7 +6610,7 @@ function carExitSpot(){
 function enterCar(){
  if(mode!==MODE.WALK||!vehicleNear||activeHarborBuilding)return;
  setMode(MODE.DRIVE);
- showHint(touchUi()?'上车了 · 推摇杆前进，左右转向，点「下车」离开':'上车了 · W 加速，A / D 转向，空格手刹，F 下车');
+ showHint(touchUi()?'上车了 · 按住「油门」前进，摇杆左右转向，「刹车」减速倒车，点「下车」离开':'上车了 · W 加速，A / D 转向，空格手刹，F 下车');
 }
 function exitCar(){
  if(mode!==MODE.DRIVE)return;
@@ -6742,7 +6784,7 @@ function updateVoyage(dt){
  if(landingAcc>=0.12){landingAcc=0;shipLanding=shipStepOff();}
  btn.hidden=!!document.querySelector('dialog[open]');
  btn.disabled=false;
- btn.textContent=(shipLanding&&shipLanding.dry?'靠岸下船':'跳下水')+(innerWidth>700?' · F':'');
+ btn.textContent=(shipLanding&&shipLanding.dry?'靠岸下船':'跳下水')+(!touchUi()?' · F':'');
 }
 // 空格：陆上起跳，水里翻身上岸
 function jumpAction(){
@@ -6777,9 +6819,11 @@ function updateActors(dt,t){
  hitchNear=hitch?null:findHitch();
  const show = (vehicleNear || shipNear || planeNear || hitchNear || hitch || mode===MODE.DRIVE || canLeavePlane) && !document.querySelector('dialog[open]');
  vehicleBtn.hidden=!show;
- if(show) vehicleBtn.textContent=(hitch?'下车':mode===MODE.DRIVE?'下车':canLeavePlane?'下机':vehicleNear?'上车 · 老爷车':shipNear?'上船 · 帆船':planeNear?'上机 · 水上飞机':'搭 '+(hitchNear.r.name||'朋友')+' 的车')+(innerWidth>700?' · F':'');
- const jumpLabel=mode===MODE.FLY?'油门':walk.swim?'上岸':'跳';
+ if(show) vehicleBtn.textContent=(hitch?'下车':mode===MODE.DRIVE?'下车':canLeavePlane?'下机':vehicleNear?'上车 · 老爷车':shipNear?'上船 · 帆船':planeNear?'上机 · 水上飞机':'搭 '+(hitchNear.r.name||'朋友')+' 的车')+(!touchUi()?' · F':'');
+ const jumpLabel=mode===MODE.FLY||mode===MODE.DRIVE?'油门':walk.swim?'上岸':'跳';
  if(jumpBtn.textContent!==jumpLabel)jumpBtn.textContent=jumpLabel;
+ const brakeLabel=mode===MODE.DRIVE?'刹车':'收油门';
+ if(brakeBtn.textContent!==brakeLabel)brakeBtn.textContent=brakeLabel;
 }
 
 /* ============================================================
@@ -7204,6 +7248,17 @@ function needScript(src, globalName){
   document.head.appendChild(el);
  }));
 }
+// 老爷车模型：同样各自加载、各自报错。加载失败留着方盒车，但要说出来
+(async()=>{
+ try{
+  await needScript('journeys/assets.js','AstraTreeAssets');
+  roadsterModel=await window.AstraTreeAssets.loadVehicle(THREE,'roadster.glb');
+  fitCarModel(roadster,roadsterModel.clone(true));
+ }catch(error){
+  console.error('[Astra] 老爷车模型加载失败：',error);
+  showHint('老爷车模型没能加载，现在显示的是旧的方盒车。请用 python START_GAME.py 或 npm run dev 起本地服务，或打开 npm run package:game 生成的单文件版。');
+ }
+})();
 // 玩家模型和植被各自加载、各自报错：树没来不该拖住人，人没来也不该拖住树
 (async()=>{
  try{
