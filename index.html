@@ -1050,6 +1050,26 @@ function buildSailboat(){
 const boat = buildSailboat();
 scene.add(boat.g);
 
+/* ---------- 帆船的 glTF 模型 ----------
+   Blender 自建（blender/tools/build_sailboat.py），船身沿 X、船头 +X、尺寸原点照上面的 buildSailboat。
+   主帆（连帆杆）和前帆是独立节点 sail / jib。updateSail 每帧写 boat.sail / boat.jibM 的
+   rotation.y = -π/2 + 转舵量；这里在旧帆的位置各放一个新转轴组顶替这两个引用，模型的帆挂进去再补 +π/2，
+   静止时帆顺着船身。帆船在「会动的」名单里，没被合批，藏旧件直接 visible=false 就够。 */
+let sailboatModel=null;
+function fitSailboatModel(b,model){
+ const sail=model.getObjectByName('sail'),jib=model.getObjectByName('jib');
+ if(!sail||!jib)throw new Error('帆船模型里没有 sail / jib 节点，assets/vehicles/sailboat.glb 可能是旧版本。');
+ model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+ for(const child of b.g.children)child.visible=false;
+ for(const [key,node] of [['sail',sail],['jibM',jib]]){
+  const old=b[key],pivot=new THREE.Group();
+  pivot.position.copy(old.position);pivot.rotation.copy(old.rotation);
+  node.position.set(0,0,0);node.rotation.set(0,Math.PI/2,0);pivot.add(node);
+  b.g.add(pivot);b[key]=pivot;
+ }
+ b.g.add(model);b.model=model;
+}
+
 // 停泊的小船
 function buildDinghy(col){
   const b = new THREE.Group();
@@ -6182,7 +6202,7 @@ function buildRemoteVehicle(kind,color){
   if(roadsterModel)fitCarModel(car,roadsterModel.clone(true),paint);
   return car;
  }
- if(kind==='sail')return buildSailboat();
+ if(kind==='sail'){const b=buildSailboat();if(sailboatModel)fitSailboatModel(b,sailboatModel.clone(true));return b;}
  if(kind==='fly'){const p=buildSeaplane();if(planeModel)fitPlaneModel(p,planeModel.clone(true));return p;}
  return null;
 }
@@ -7328,6 +7348,36 @@ function needScript(src, globalName){
   document.head.appendChild(el);
  }));
 }
+// 帆船、港区的船和电车：各自加载、各自报错
+(async()=>{
+ try{
+  await needScript('journeys/assets.js','AstraTreeAssets');
+  sailboatModel=await window.AstraTreeAssets.loadVehicle(THREE,'sailboat.glb');
+  fitSailboatModel(boat,sailboatModel.clone(true));
+ }catch(error){
+  console.error('[Astra] 帆船模型加载失败：',error);
+  showHint('帆船模型没能加载，现在显示的是旧的方块帆船。请用 python START_GAME.py 或 npm run dev 起本地服务，或打开单文件版。');
+ }
+})();
+(async()=>{
+ try{
+  await needScript('journeys/assets.js','AstraTreeAssets');
+  const [steamer,junk,tramModel]=await Promise.all(['harbor_steamer.glb','harbor_junk.glb','tram_hk.glb'].map(f=>window.AstraTreeAssets.loadVehicle(THREE,f)));
+  /* 港区的船和电车开场时被合进 InstancedMesh 批次（instanceResortMeshes），藏原件没用：
+     打 crowdReplaced 标记（和路人共用这个口子），harborInstances.update 每帧把这些实例缩成零。
+     船身沿 X、船头 +X，原点和水线照旧；偶数号是汽船、奇数号是帆船，和原来的分法一样 */
+  const swap=(root,model)=>{
+   root.traverse(o=>{if(o.isMesh){o.visible=false;o.userData.crowdReplaced=true;}});
+   const m=model.clone(true);m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.userData.crowdReplaced=false;}});
+   root.add(m);return m;
+  };
+  harborShips.forEach((s,i)=>swap(s.g,i%2?junk:steamer));
+  for(const t of harborTrams)swap(t.g,tramModel);
+ }catch(error){
+  console.error('[Astra] 港区船只/电车模型加载失败：',error);
+  showHint('港区的船和电车模型没能加载，现在显示的是旧的方块模型。');
+ }
+})();
 // 港区路人模型：加载失败留着方块人，但要说出来
 (async()=>{
  try{

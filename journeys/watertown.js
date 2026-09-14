@@ -14,6 +14,9 @@ const NODE_ENV={aspect:1,makeCanvas:(w,h)=>{const c=document.createElement('canv
    Node 环境（没有 XHR，加载不了 glTF）。浏览器里 runtime.js 会先 await 成功
    才创建区域，加载失败直接报错、进不来，不会静默给你看旧树。 */
 const TREES=(opts&&opts.trees)||null;
+/* 船的模型（乌篷船 wupeng.glb）。规矩同上：只有 Node 测试里会是 null，那边退回旧的拼装船。
+   注意：用模型时一次随机数都不许多调 —— 镇子布局是固定种子的，多一次 rnd() 整片移位。 */
+const VEHICLES=(opts&&opts.vehicles)||null;
 
 /* ---------- 随机：固定种子，每次打开都是同一座镇子 ---------- */
 let _seed = 20260906;
@@ -1141,6 +1144,20 @@ function makeBoat(opt){
   man.g.position.set(-2.3,0.55,0); man.g.rotation.y=Math.PI/2; g.add(man.g);
   const oar=new T.Group(); oar.position.set(-2.9,1.05,0.35); g.add(oar);
   const oarM=new T.Mesh(G.box,new T.MeshPhongMaterial({color:0x8c6a42,specular:0x000000})); oarM.scale.set(3.6,0.09,0.12); oarM.position.set(-1.7,0,0); oar.add(oarM); oar.rotation.z=0.55;
+  if(VEHICLES&&VEHICLES['wupeng.glb']){
+    // 船身、乌篷换成模型；橹挂进旧的 oar 组（原点对得上：模型里橹的转轴就在 (-2.9,1.05,0.35)），
+    // 游戏照旧每帧转 oar.rotation.y。模型的橹本身已经斜着伸进水里，旧组那个 0.55 的倾角要去掉。
+    // 船夫、船头灯笼还是原来的（船夫留到路人那轮换）；批出来的灯杆跟船身一起藏了，补一根
+    const model=VEHICLES['wupeng.glb'].clone(true),blade=model.getObjectByName('oar');
+    // 烟雨渡是 LinearEncoding + NoToneMapping：GLTFLoader 给颜色贴图标的 sRGB 在这里会先转线性、输出不转回，
+    // 实拍整条船发黑。和树一样让贴图原样通过（见 journeys/assets.js 的 loadTexture 注释）。只有烟雨渡用这条船，直接改原件
+    model.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;
+      for(const m of [].concat(o.material))if(m.map&&m.map.encoding!==T.LinearEncoding){m.map.encoding=T.LinearEncoding;m.map.needsUpdate=true;m.needsUpdate=true;}});
+    hullMesh.visible=false; oarM.visible=false;
+    if(blade){ blade.position.set(0,0,0); oar.rotation.z=0; oar.add(blade); }
+    g.add(model);
+    if(opt.lantern){ const pole=new T.Mesh(new T.CylinderGeometry(0.04,0.04,0.9,6),new T.MeshPhongMaterial({color:0x3a2716,specular:0x000000})); pole.position.set(2.6,1.0,0); g.add(pole); }
+  }
   return {g,man,oar,bob:rr(0,TAU)};
 }
 const boats=[];
