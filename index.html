@@ -421,20 +421,24 @@ function $(id){
    ============================================================ */
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.3, 4000);
-const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:"high-performance", preserveDrawingBuffer:true});
-renderer.setSize(innerWidth, innerHeight);
-/* 触屏设备：看的是指针是不是手指，不看屏幕宽度。横着拿的手机宽 844~932 像素，
-   原来按 innerWidth<700 判断，横屏手机拿到的是桌面版：没有油门按钮、提示写着按 Shift。
-   Node 测试环境里没有 navigator，matchMedia 是桩，两边都要兜住。 */
+/* 触屏设备：看的是指针是不是手指，不看屏幕宽度（横着拿的手机宽 844~932 像素）。
+   Node 测试环境里没有 navigator，matchMedia 是桩，两边都要兜住。
+   要在建渲染器之前定：抗锯齿只能建的时候开关。手机屏幕像素密度高，多重采样抗锯齿按物理像素算，
+   是手机上最贵的几项之一，关掉换帧率 */
 const touchDevice = (typeof matchMedia==='function' && matchMedia('(pointer:coarse)').matches) || (typeof navigator!=='undefined' && navigator.maxTouchPoints>0);
+const renderer = new THREE.WebGLRenderer({antialias:!touchDevice, powerPreference:"high-performance", preserveDrawingBuffer:true});
+renderer.setSize(innerWidth, innerHeight);
 if(touchDevice) document.documentElement?.classList?.add('touch');
-renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 || touchDevice ? 1.35 : 1.65));
+const START_PIXEL_RATIO = Math.min(devicePixelRatio, innerWidth < 700 || touchDevice ? 1.35 : 1.65);
+renderer.setPixelRatio(START_PIXEL_RATIO);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// 软阴影每个像素要采样一圈；触屏上换普通 PCF，边缘硬一点，便宜很多
+renderer.shadowMap.type = touchDevice ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.outputEncoding = THREE.sRGBEncoding;
 $("stage").appendChild(renderer.domElement);
 const dom = renderer.domElement;
-const isSmall = innerWidth < 700 || (touchDevice && Math.min(innerWidth, innerHeight) < 700);
+// 平板（iPad 最短边 768~1024）原来不算小屏：80 个路人、全部树、2048 阴影、泛光全开，GPU 和手机差不多却按电脑喂
+const isSmall = innerWidth < 700 || touchDevice;
 
 const SUN_DIR = new THREE.Vector3(0.42, 0.62, 0.30).normalize();
 
@@ -2286,6 +2290,27 @@ function drawQuad(mat,target,clear){
 
 const bloomOrigin=new THREE.Vector2(0,0);
 /* 主渲染入口。关掉泛光时就是原来那一句 renderer.render。 */
+/* ---------- 自动降画质 ----------
+   旅行地区（journeys/runtime.js）早就有：帧率掉了降分辨率、关阴影。主世界一直没有，卡就一直卡。
+   每 0.5 秒统计一次帧率，连续 2 秒低于 45 帧就降一级，最多三级；不自动升回去，免得来回跳：
+   1 级：分辨率降到 1 倍、关泛光  2 级：再关阴影  3 级：分辨率降到 0.8 倍 */
+const QUALITY={level:0,low:0};
+function setQuality(level){
+ QUALITY.level=level;
+ renderer.setPixelRatio(Math.min(START_PIXEL_RATIO,[START_PIXEL_RATIO,1,1,.8][level]));
+ if(level>=1)BLOOM.on=false;
+ const shadows=level<2;
+ if(renderer.shadowMap.enabled!==shadows){
+  renderer.shadowMap.enabled=shadows;
+  scene.traverse(o=>{if(o.material)for(const m of [].concat(o.material))m.needsUpdate=true;});   // 着色器里有没有阴影是编译进去的
+ }
+ renderer.setSize(innerWidth,innerHeight);
+}
+function adaptQuality(fps){
+ if(document.hidden||document.querySelector('dialog[open]'))return;   // 切后台、开着对话框时帧率不算数
+ QUALITY.low=fps<45?QUALITY.low+1:0;
+ if(QUALITY.low>=4&&QUALITY.level<3){QUALITY.low=0;setQuality(QUALITY.level+1);}
+}
 function renderScene(sc,cam){
  renderer.setRenderTarget?.(null);            // 精简 renderer（测试替身）没有这个方法
  renderer.render(sc,cam);                     // 基准图：原样画到画布，不经我的手
@@ -2407,6 +2432,7 @@ function tick(){
     const fps = Math.round(fCnt/fAcc);
     tlFps.textContent = fps + " FPS";
     tlDot.classList.toggle("busy", fps < 30);
+    adaptQuality(fps);
     fAcc = 0; fCnt = 0;
   }
   if(mode===MODE.SAIL){
@@ -5917,7 +5943,9 @@ function resolveActorWalk(oldX,oldZ,x,z,opts){
 }
 function resolveHarborWalk(oldX,oldZ,x,z,includePeople=true,includeEdges=true){
  const inside=harborBuildingAt(oldX,oldZ)||harborBuildingAt(x,z);
- const p=resolveActorWalk(oldX,oldZ,x,z,{floor:harborFloor,edges:includeEdges,people:includePeople?harborPeopleColliders(inside):null});
+ /* local:true 只取这一步附近格子里的碰撞体。原来每一步都拿全港 2109 个盒子挨个扫：
+    手机尺寸下在港区奔跑，这一个函数就占一帧 JS 的 7.1/12.8 毫秒（tests/perf-profile.cjs 实测） */
+ const p=resolveActorWalk(oldX,oldZ,x,z,{floor:harborFloor,edges:includeEdges,local:true,people:includePeople?harborPeopleColliders(inside):null});
  harborFloor=p.floor;
  return {x:p.x,z:p.z};
 }
