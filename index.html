@@ -24,6 +24,12 @@
   }
   #stage{position:fixed;inset:0;}
   canvas{display:block;touch-action:none;}
+  /* 手机上长按摇杆、按钮、提示文字会选中文字、弹出「复制 / 查询」气泡，一边开车一边就把字选上了。
+     整个游戏界面不许选字、不弹长按菜单；要打字的输入框（联机房间码、昵称、聊天）照常能选能粘贴，
+     明信片照片留着长按「存储图像」，出错页面的内联样式自己重新打开了选字，方便把报错复制出来。 */
+  html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;}
+  input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;}
+  #postcard{-webkit-touch-callout:default;}
 
   /* ---------- 加载 ---------- */
   #boot{
@@ -1205,6 +1211,8 @@ addEventListener("keydown", e=>{
      ["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"," "].indexOf(k)>=0) e.preventDefault();
 });
 addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
+// 安卓长按会触发右键菜单（contextmenu），CSS 管不住。输入框和明信片照片放行
+addEventListener("contextmenu", e=>{ if(!e.target?.closest?.("input,textarea,select,#postcard")) e.preventDefault(); });
 
 const joyEl=$("joy"), joyKnob=$("joy-knob");
 const dockEl=$("dock");
