@@ -93,7 +93,7 @@ function init(host){
    detach();active=next;quality=1;lowFrames=0;frameCount=frameTime=0;
    if(!progress.visited.includes(id))progress.visited.push(id);C.saveProgress(storage,progress);
    document.body.dataset.journey=id;hud.hidden=false;address(id);
-   renderer.physicallyCorrectLights=false;renderer.outputEncoding=id==='watertown'?T.LinearEncoding:T.sRGBEncoding;renderer.toneMapping=id==='watertown'?T.NoToneMapping:T.ACESFilmicToneMapping;renderer.toneMappingExposure=id==='temple'?1.05:1.2;renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;
+   renderer.physicallyCorrectLights=false;renderer.outputEncoding=id==='watertown'?T.LinearEncoding:T.sRGBEncoding;renderer.toneMapping=id==='watertown'?T.NoToneMapping:T.ACESFilmicToneMapping;renderer.toneMappingExposure=id==='temple'?1.05:1.2;renderer.shadowMap.enabled=true;renderer.shadowMap.type=mobile?T.PCFShadowMap:T.PCFSoftShadowMap;/* 软阴影每像素要采一圈，手机上换普通 PCF */
    renderer.setPixelRatio(Math.min(devicePixelRatio,mobile?1.25:1.5));renderer.setSize(innerWidth,innerHeight);
    active.scene.add(host.avatar.g);host.avatar.g.visible=true;host.avatar.g.scale.setScalar(1);
    // 玩家换成蒙皮模型后，程序化骨架整个藏起来了，剑挂在它的肘上会跟着看不见 —— 挂到手骨上
@@ -204,7 +204,7 @@ function init(host){
   if(time>noteUntil)$('journey-note').classList.remove('show');
   if(Math.floor(time*6)!==Math.floor((time-dt)*6))minimap();
   frameCount++;frameTime+=dt;
-  if(frameTime>2){if(frameCount/frameTime<27)lowFrames++;else lowFrames=0;if(lowFrames>=2&&quality){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
+  if(frameTime>2){if(frameCount/frameTime<(mobile?45:27))lowFrames++;/* 手机上掉到 27 帧早就明显卡了，45 帧就开始降 */else lowFrames=0;if(lowFrames>=2&&quality){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
   renderer.render(active.scene,active.camera);return true;
  }
  function updateAudio(){if(ambient)ambient.gain.setTargetAtTime(soundOn&&active&&!book.open&&!menu.open? .045:0,audio.currentTime,.3);}
