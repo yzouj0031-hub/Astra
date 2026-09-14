@@ -104,7 +104,13 @@ CC0 允许这些修改，也允许不署名。
 | --- | --- | --- |
 | `brown_leather` | 座椅 | <https://polyhaven.com/a/brown_leather> |
 | `rough_linen` | 敞篷车帆布篷；飞机蒙皮用的是它重新上色的版本 `linen_cream`（原图是蓝布，只留布纹明暗，改成奶油色） | <https://polyhaven.com/a/rough_linen> |
-| `teak_veneer` | 仪表板、木桨、翼间支柱 | <https://polyhaven.com/a/teak_veneer> |
+| `teak_veneer` | 仪表板、木桨、翼间支柱、帆船船舱与桅杆 | <https://polyhaven.com/a/teak_veneer> |
+| `wood_floor_deck` | 帆船、船只甲板；汽船用的是它重新上色的浅色版 `deck_light`（原图偏橙红） | <https://polyhaven.com/a/wood_floor_deck> |
+| `weathered_planks` | 大眼鸡帆船船壳、乌篷船舱板；另有重新上色的 `planks_white`（汽船上层建筑、雨港船舱）和 `planks_tung`（乌篷船桐油船壳） | <https://polyhaven.com/a/weathered_planks> |
+| `bamboo_wall_02` | 竹撑条、乌篷拱骨；重新上色的 `bamboo_black` 是乌篷的黑竹篾 | <https://polyhaven.com/a/bamboo_wall_02> |
+
+`rough_linen` 另有重新上色的 `sail_rust`（大眼鸡帆船的红褐色硬帆）。重新上色的几张都只保留原图的明暗纹理、换掉颜色，
+生成方式就是对灰度图 colorize，法线贴图照用原件。
 
 原件在不入库的 `assets/_src/vehicles/tex/`。车漆、镀铬、铝件不贴图，是纯材质参数。
 

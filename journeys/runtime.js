@@ -81,8 +81,13 @@ function init(host){
    if(!root.AstraFoliage)await loadScript('journeys/foliage.js');
    if(!root.AstraTreeAssets)await loadScript('journeys/assets.js');
    const trees=await root.AstraTreeAssets.load(T);
+   // 船和电车也是外部 glTF（blender/tools/build_canal_boats.py、build_trams.py），和树一样先 await 到手，
+   // 失败就抛到下面的 catch：报错、留在原地区，不静默给你看旧的方块船
+   const VEHICLE_FILES={watertown:['wupeng.glb'],rainport:['tram_rainport.glb','rainport_boat.glb','rainport_ferry.glb']};
+   const vehicles={};
+   for(const file of VEHICLE_FILES[id]||[])vehicles[file]=await root.AstraTreeAssets.loadVehicle(T,file);
    // Build before replacing the old scene: a failed load leaves the previous region playable.
-   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel,surface:host.surface,trees});
+   const next=root.AstraCreateRegion(T,id,{mobile,progress,notify,stamp,travel,surface:host.surface,trees,vehicles});
    next.restore(progress.positions[id]);
    if(!returnState){returnState=host.capture();savedRender={toneMapping:renderer.toneMapping,toneMappingExposure:renderer.toneMappingExposure,outputEncoding:renderer.outputEncoding,physicallyCorrectLights:renderer.physicallyCorrectLights,shadow:renderer.shadowMap.enabled,shadowType:renderer.shadowMap.type,pixelRatio:renderer.getPixelRatio()};host.suspend();}
    detach();active=next;quality=1;lowFrames=0;frameCount=frameTime=0;

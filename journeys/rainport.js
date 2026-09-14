@@ -12,7 +12,7 @@ const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
 const range=(a,b)=>a+(b-a)*rnd();
 const C={navy:0x263c52,blue:0x344d65,blue2:0x3c5469,teal:0x336a72,coral:0xb96661,cream:0xb5b7a1,wood:0x664c49,dark:0x142833,trim:0x718a8d,amber:0xffce87,pink:0xff7b89,cyan:0x81e5df};
 
-function createWorld(scene,{mobile=false,trees=null}={}){
+function createWorld(scene,{mobile=false,trees=null,vehicles=null}={}){
   const TREES=trees;
   seed=314159;
   const colliders=[],batches=new Map(),matCache=new Map(),glows=[],reflections=[];
@@ -186,8 +186,15 @@ function createWorld(scene,{mobile=false,trees=null}={}){
   modelBox(tram,0,3.23,0,1.9,.18,3.3,C.dark);
   const pantograph=mesh(new T.TorusGeometry(.8,.035,4,4),material(0x99a39c),0,4.1,0,0,Math.PI/2,Math.PI/4,tram);pantograph.scale.y=1.1;
   const tramGlow=new T.PointLight(C.amber,mobile?0:.7,8,1.5);tramGlow.position.set(0,2,0);tram.add(tramGlow);
+  // 有模型（blender/tools/build_trams.py）就把上面拼的方块车身藏掉、换模型；只有 Node 测试里没有模型。
+  // 模型沿 X 建，旧车沿 Z：绕 Y 转 -90°（车两头对称）。车里那盏暖灯留着
+  if(vehicles&&vehicles['tram_rainport.glb']){for(const ch of tram.children)if(!ch.isLight)ch.visible=false;const m=vehicles['tram_rainport.glb'].clone(true);m.rotation.y=-Math.PI/2;m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});tram.add(m);}
   // A moored canal boat and the slow night ferry out at sea.
-  function makeBoat(ferry=false){const g=new T.Group();scene.add(g);const hull=mesh(new T.CylinderGeometry(1.8,1.3,.85,8),material(ferry?0x3e7980:0x9c655d),0,0,0,0,Math.PI/8,0,g);hull.scale.z=ferry?3.1:2.4;modelBox(g,0,.55,.6,2.4,.5,5,0xc6b79b);modelBox(g,0,1.4,1,2.1,1.25,2.5,0xbdb89b);modelBox(g,0,2.12,1,2.6,.17,3.2,0x3a6875);for(const x of [-1.07,1.07])modelBox(g,x,1.55,1,.04,.55,1.8,C.amber,.5);modelBox(g,0,1.6,-.28,1.5,.5,.05,C.cyan,.3);return g;}
+  function makeBoat(ferry=false){const g=new T.Group();scene.add(g);
+    // 有模型就用模型（blender/tools/build_canal_boats.py），沿 X 建的船头转到 +Z，和渡轮的航向算法对上
+    const model=vehicles&&vehicles[ferry?'rainport_ferry.glb':'rainport_boat.glb'];
+    if(model){const m=model.clone(true);m.rotation.y=-Math.PI/2;m.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});g.add(m);return g;}
+   const hull=mesh(new T.CylinderGeometry(1.8,1.3,.85,8),material(ferry?0x3e7980:0x9c655d),0,0,0,0,Math.PI/8,0,g);hull.scale.z=ferry?3.1:2.4;modelBox(g,0,.55,.6,2.4,.5,5,0xc6b79b);modelBox(g,0,1.4,1,2.1,1.25,2.5,0xbdb89b);modelBox(g,0,2.12,1,2.6,.17,3.2,0x3a6875);for(const x of [-1.07,1.07])modelBox(g,x,1.55,1,.04,.55,1.8,C.amber,.5);modelBox(g,0,1.6,-.28,1.5,.5,.05,C.cyan,.3);return g;}
   const boat=makeBoat();boat.position.set(.5,-.35,25);boat.rotation.y=.09;const ferry=makeBoat(true);ferry.scale.setScalar(1.5);
   // People are articulated, with geometric umbrellas and a clear silhouette.
   const umbrellaGeo=new T.ConeGeometry(.92,.45,10,1,true);
