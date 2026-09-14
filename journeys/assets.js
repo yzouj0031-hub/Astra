@@ -150,19 +150,31 @@ function loadPlayer(T) {
 
 /* 载具：assets/vehicles/ 下 Blender 自建的模型（见 blender/tools/build_*.py）。
    静态网格可以直接 clone(true) 共享几何，一个文件缓存一份，调用方自己克隆。 */
-const vehicleCache = new Map();
-function loadVehicle(T, name) {
- if (vehicleCache.has(name)) return vehicleCache.get(name);
+const modelCache = new Map();
+/** 按目录取一个 GLB 的 scene。dist 单文件版内嵌在 window[dataKey] 上，有就不发请求。 */
+function loadModel(T, dir, dataKey, name, label) {
+ const key = dir + name;
+ if (modelCache.has(key)) return modelCache.get(key);
  const p = (async () => {
   await ensureLoader(T);
-  const url = (root.AstraVehicleAssetData && root.AstraVehicleAssetData[name]) || 'assets/vehicles/' + name;
+  const url = (root[dataKey] && root[dataKey][name]) || dir + name;
   const gltf = await new Promise((resolve, reject) => {
-   new T.GLTFLoader().load(url, resolve, undefined, () => reject(new Error('载具模型 ' + name + ' 加载失败。' + OFFLINE_HINT)));
+   new T.GLTFLoader().load(url, resolve, undefined, () => reject(new Error(label + ' ' + name + ' 加载失败。' + OFFLINE_HINT)));
   });
   return gltf.scene;
- })().catch(error => { vehicleCache.delete(name); throw error; });
- vehicleCache.set(name, p);
+ })().catch(error => { modelCache.delete(key); throw error; });
+ modelCache.set(key, p);
  return p;
+}
+function loadVehicle(T, name) { return loadModel(T, 'assets/vehicles/', 'AstraVehicleAssetData', name, '载具模型'); }
+
+/* 路人：assets/crowd/ 下几套烘成单网格单贴图的角色（blender/tools/bake_crowd.py），
+   骨骼和玩家同名，动画直接用玩家的 anims.glb，不另存一份。 */
+function loadCrowd(T, files) {
+ return Promise.all([
+  Promise.all(files.map(f => loadModel(T, 'assets/crowd/', 'AstraCrowdAssetData', f, '路人模型'))),
+  loadPlayer(T),
+ ]).then(([variants, player]) => ({ variants, animations: player.animations }));
 }
 
 let cache = null;
@@ -248,6 +260,6 @@ function load(T) {
  return cache;
 }
 
-root.AstraTreeAssets = { load, loadPlayer, loadVehicle };
+root.AstraTreeAssets = { load, loadPlayer, loadVehicle, loadCrowd };
 
 })(typeof window === 'undefined' ? globalThis : window);

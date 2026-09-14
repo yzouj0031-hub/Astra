@@ -41,6 +41,7 @@ ap.add_argument("--skin", action="append", default=[], help="要调色的皮肤�
 ap.add_argument("--skin-sat", type=float, default=0.7)
 ap.add_argument("--skin-val", type=float, default=1.22)
 ap.add_argument("--indigo", action="append", default=[], help="要重染成靛蓝土布的贴图名前缀")
+ap.add_argument("--decimate", type=float, default=1.0, help="减面比例（路人版用，1 = 不减）")
 args = ap.parse_args(argv)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -179,6 +180,20 @@ for img in list(bpy.data.images):
         store(img, a)
         print(f"[compose] 靛蓝重染 {img.name}")
 
+# --- 路人版：减面 --------------------------------------------------------------------------
+# 玩家 1.9 万三角形，港区 80 个路人照搬就是 150 万，所以路人版按比例减面。
+# 眼睛、眉毛本来就只有几百面，减了会碎，跳过。
+if args.decimate < 1.0:
+    for o in [o for o in bpy.data.objects if o.type == "MESH"]:
+        if any(m and m.name.startswith(("MI_Eyes", "MI_Hair_1")) for m in o.data.materials) and len(o.data.polygons) < 1200:
+            continue
+        mod = o.modifiers.new("Decimate", "DECIMATE")
+        mod.ratio = args.decimate
+        mod.use_collapse_triangulate = True
+        # 蒙皮权重要跟着减面走：减面排在骨架修改器前面，导出时 apply
+        o.modifiers.move(o.modifiers.find("Decimate"), 0)
+    print(f"[compose] 减面 ×{args.decimate}")
+
 # --- 报数 ---------------------------------------------------------------------------------
 dg = bpy.context.evaluated_depsgraph_get()
 total = 0
@@ -193,6 +208,7 @@ print(f"[compose] 三角形合计 {total}")
 
 bpy.ops.export_scene.gltf(
     filepath=args.out, export_format="GLB", export_animations=False, export_skins=True,
+    export_apply=args.decimate < 1.0,   # 路人版要把减面修改器烘进去；玩家版不开，输出和原来逐字节一致
     export_image_format="JPEG" if args.jpeg else "AUTO", export_jpeg_quality=args.jpeg or 75,
     export_yup=True,
 )

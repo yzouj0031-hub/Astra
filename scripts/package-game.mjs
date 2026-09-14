@@ -49,20 +49,21 @@ async function embedPlayerAssets() {
   return { source: 'window.AstraPlayerAssetData=' + JSON.stringify(entry) + ';', raw };
 }
 const playerAssets = await embedPlayerAssets();
-// 载具：assets/vehicles/*.glb，挂在 AstraVehicleAssetData 上（journeys/assets.js 的 loadVehicle）
-async function embedVehicleAssets() {
+// 载具、路人：一个目录下的 *.glb 整个内嵌，挂在 window[globalName] 上（journeys/assets.js 的 loadModel）
+async function embedGlbDir(dir, globalName, hint) {
   const entry = {};
   let raw = 0;
-  for (const file of await readdir(resolve(root, 'assets', 'vehicles'), { withFileTypes: true })) {
+  for (const file of await readdir(resolve(root, 'assets', dir), { withFileTypes: true })) {
     if (!file.isFile() || extname(file.name) !== '.glb') continue;
-    const bytes = await readFile(resolve(root, 'assets', 'vehicles', file.name));
+    const bytes = await readFile(resolve(root, 'assets', dir, file.name));
     raw += bytes.length;
     entry[file.name] = `data:${MIME['.glb']};base64,${bytes.toString('base64')}`;
   }
-  if (!Object.keys(entry).length) throw new Error('assets/vehicles 是空的 —— 先跑 blender/tools/build_roadster.py');
-  return { source: 'window.AstraVehicleAssetData=' + JSON.stringify(entry) + ';', raw };
+  if (!Object.keys(entry).length) throw new Error(`assets/${dir} 是空的 —— ${hint}`);
+  return { source: `window.${globalName}=` + JSON.stringify(entry) + ';', raw };
 }
-const vehicleAssets = await embedVehicleAssets();
+const vehicleAssets = await embedGlbDir('vehicles', 'AstraVehicleAssetData', '先跑 blender/tools/build_roadster.py、build_seaplane.py');
+const crowdAssets = await embedGlbDir('crowd', 'AstraCrowdAssetData', '先跑 blender/tools/bake_crowd.py');
 
 for (const name of ['core', 'regions', 'runtime']) {
   let source = await read('journeys/' + name + '.js');
@@ -74,7 +75,7 @@ for (const name of ['core', 'regions', 'runtime']) {
     // 所以包成一个函数存着，等 assets.js 真要用的时候再调（那时 three 早就在了）。
     const loader = await read('journeys/vendor/GLTFLoader.js');
     const deferred = 'window.AstraDefineGLTFLoader=function(){\n' + loader + '\n};';
-    source = [treeAssets.source, playerAssets.source, vehicleAssets.source, deferred, ...factories, source].join('\n');
+    source = [treeAssets.source, playerAssets.source, vehicleAssets.source, crowdAssets.source, deferred, ...factories, source].join('\n');
   }
   html = html.replace('<script src="journeys/' + name + '.js"></script>', () => script(source));
 }
