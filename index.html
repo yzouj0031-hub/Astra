@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>星屿 · 海岛游乐园</title><meta name="description" content="静屿、星辉乐园与旧维多利亚港。听海、乘坐游乐设施，走进大建筑参观。"><meta name="theme-color" content="#163e46">
 <style>
   :root{
@@ -20,7 +20,7 @@
   html,body{height:100%;overflow:hidden;background:#061118;}
   body{
     font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;color:var(--foam);touch-action:auto;
+    -webkit-font-smoothing:antialiased;color:var(--foam);touch-action:manipulation;   /* 连点按钮不再触发双击放大；面板照样能上下滑 */
   }
   #stage{position:fixed;inset:0;}
   canvas{display:block;touch-action:none;}
@@ -1233,6 +1233,11 @@ addEventListener("keydown", e=>{
 addEventListener("keyup", e=>{ keys[e.key.toLowerCase()]=false; });
 // 安卓长按会触发右键菜单（contextmenu），CSS 管不住。输入框和明信片照片放行
 addEventListener("contextmenu", e=>{ if(!e.target?.closest?.("input,textarea,select,#postcard")) e.preventDefault(); });
+/* 手机上点按钮很容易把整页放大。viewport 的 user-scalable=no 安卓认，iOS Safari 不认；
+   CSS 的 touch-action:manipulation 管住了双击放大，双指捏合要靠 iOS 专有的 gesture 事件拦。
+   画布本来就是 touch-action:none，游戏里的双指操作不受影响 */
+for(const type of ["gesturestart","gesturechange","gestureend"]) addEventListener(type, e=>e.preventDefault(), {passive:false});
+addEventListener("dblclick", e=>{ if(!e.target?.closest?.("input,textarea")) e.preventDefault(); }, {passive:false});
 
 const joyEl=$("joy"), joyKnob=$("joy-knob");
 const dockEl=$("dock");
