@@ -2295,6 +2295,7 @@ const bloomOrigin=new THREE.Vector2(0,0);
    每 0.5 秒统计一次帧率，连续 2 秒低于 45 帧就降一级，最多三级；不自动升回去，免得来回跳：
    1 级：分辨率降到 1 倍、关泛光  2 级：再关阴影  3 级：分辨率降到 0.8 倍 */
 const QUALITY={level:0,low:0};
+const LAST_INFO={calls:0,triangles:0};
 function setQuality(level){
  QUALITY.level=level;
  renderer.setPixelRatio(Math.min(START_PIXEL_RATIO,[START_PIXEL_RATIO,1,1,.8][level]));
@@ -2318,6 +2319,7 @@ function adaptQuality(fps){
 function renderScene(sc,cam){
  renderer.setRenderTarget?.(null);            // 精简 renderer（测试替身）没有这个方法
  renderer.render(sc,cam);                     // 基准图：原样画到画布，不经我的手
+ if(renderer.info&&renderer.info.render){LAST_INFO.calls=renderer.info.render.calls;LAST_INFO.triangles=renderer.info.render.triangles;}   // 泛光那几趟会把 info 清掉，这里先记下场景本身的
  if(!BLOOM.on||!renderer.copyFramebufferToTexture)return;
  try{
   bloomSetup();bloomResize();
@@ -7507,7 +7509,7 @@ renderer.toneMappingExposure=1.20;
 
 setMode(MODE.VIEW);
 // 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
-window.__astra={info:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,quality:QUALITY.level,mode:mode})};
+window.__astra={info:()=>({calls:LAST_INFO.calls,triangles:LAST_INFO.triangles,quality:QUALITY.level,mode:mode})};
 placeToggle();
 joyRelease();
 resetFishing();
