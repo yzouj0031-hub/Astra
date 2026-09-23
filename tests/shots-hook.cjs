@@ -64,11 +64,14 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     if (shot.journey) await page.waitForFunction(j => document.body.dataset.journey === j, shot.journey, { timeout: 90000 });
     // 开场遮罩要等它真的淡出（软件渲染下 1 秒的定时器可能拖到好几秒），否则整张图蒙着一层蓝
     await page.waitForFunction(() => document.getElementById('boot').classList.contains('gone'), null, { timeout: 90000 }).catch(() => {});
+    // 两台软件渲染并跑时一帧要好几秒，定时器和 CSS 渐隐都跟着慢：真等到遮罩透明度归零，再等两帧真正画出来
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('boot')).opacity === '0', null, { timeout: 240000, polling: 1000 }).catch(() => {});
+    const twoFrames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
     await page.waitForTimeout(1200);
     await page.waitForTimeout(shot.wait);
     for (const sel of (shot.click||[])) { await page.click(sel); await page.waitForTimeout(600); }
     if (shot.run) { await page.evaluate(shot.run); }
-    if (shot.click || shot.run) await page.waitForTimeout(shot.after || 3000);
+    if (shot.click || shot.run) { await page.waitForTimeout(shot.after || 3000); await twoFrames(); }
     for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day'); await page.waitForTimeout(300); }
     if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click(); await page.waitForTimeout(2500); }
     if (shot.journey) await closeMenu(page);
