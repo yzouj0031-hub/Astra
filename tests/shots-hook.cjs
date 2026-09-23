@@ -57,6 +57,9 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     await page.goto(shot.url, { waitUntil: 'load', timeout: 240000 });
     await page.waitForFunction(() => document.body.dataset.mode, null, { timeout: 90000 });
     if (shot.journey) await page.waitForFunction(j => document.body.dataset.journey === j, shot.journey, { timeout: 90000 });
+    // 开场遮罩要等它真的淡出（软件渲染下 1 秒的定时器可能拖到好几秒），否则整张图蒙着一层蓝
+    await page.waitForFunction(() => document.getElementById('boot').classList.contains('gone'), null, { timeout: 90000 }).catch(() => {});
+    await page.waitForTimeout(1200);
     await page.waitForTimeout(shot.wait);
     for (const sel of (shot.click||[])) { await page.click(sel); await page.waitForTimeout(600); }
     if (shot.run) { await page.evaluate(shot.run); }
