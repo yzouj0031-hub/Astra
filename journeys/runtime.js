@@ -268,4 +268,5 @@ function init(host){
  };
 }
 root.AstraJourneys={init};
+root.__astraJourney=()=>active;   // 验收截图用：拿到当前地区，能 place() 到近景机位
 })(window);

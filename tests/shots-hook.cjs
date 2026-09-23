@@ -50,6 +50,16 @@ const SHOTS = [
   { name: 'rainport-stop1', url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', stop: 1 },
   { name: 'temple',         url: GAME + '&journey=temple', wait: 11000, journey: 'temple' },
   { name: 'temple-stop1',   url: GAME + '&journey=temple', wait: 11000, journey: 'temple', stop: 1 },
+  // 旅行地区的近景：通过 window.__astraJourney() 把玩家放到指定点、转到指定朝向（相机在玩家身后）
+  { name: 'rainport-market',  url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',24,8]);r.yaw=-Math.PI/2;r.pitch=.2;" },
+  { name: 'rainport-shelter', url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',-15.5,17]);r.yaw=Math.PI/2+.5;r.pitch=.18;" },
+  { name: 'rainport-facade',  url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',-28,-22]);r.yaw=Math.PI/2-.6;r.pitch=.12;" },
+  { name: 'temple-hall',      url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',1.6,-9]);r.yaw=0;r.pitch=.22;" },
+  { name: 'temple-gate',      url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',0,5]);r.yaw=Math.PI;r.pitch=.2;" },
+  { name: 'temple-lantern',   url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',-8,-3]);r.yaw=Math.PI/2;r.pitch=.15;" },
+  { name: 'watertown-bridge', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', jrun: "const r=__astraJourney();r.place(['x','x',8,9]);r.yaw=Math.PI/2+.35;r.pitch=.12;" },
+  { name: 'watertown-roofs',  url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', jrun: "const r=__astraJourney();r.place(['x','x',-30,9]);r.yaw=.4;r.pitch=.3;" },
+  { name: 'watertown-pagoda', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3, jrun: "const r=__astraJourney();r.place(['x','x',-96,58]);r.yaw=Math.PI+.9;r.pitch=.05;" },
 ];
 
 async function openMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(!o) await page.click('#journey-menu-toggle'); }
@@ -82,6 +92,7 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day'); await page.waitForTimeout(300); }
     if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click(); await page.waitForTimeout(2500); }
     if (shot.journey) await closeMenu(page);
+    if (shot.jrun) { await page.evaluate(shot.jrun); await page.waitForTimeout(2500); await twoFrames(); }
     const info = await page.evaluate(j => j ? (window.__astraJourneyInfo || null) : ((window.__astra && window.__astra.info) ? window.__astra.info() : null), !!shot.journey);
     const file = path.join(OUT, shot.name + '.png');
     await page.screenshot({ path: file, timeout: 180000 });   // 软件渲染下一帧可能要一分多钟，别按默认 30 秒放弃
