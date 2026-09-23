@@ -74,7 +74,7 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     if (shot.journey) await closeMenu(page);
     const info = await page.evaluate(() => (window.__astra && window.__astra.info) ? window.__astra.info() : null);
     const file = path.join(OUT, shot.name + '.png');
-    await page.screenshot({ path: file });
+    await page.screenshot({ path: file, timeout: 180000 });
     console.log('拍了', file, ((Date.now()-t0)/1000).toFixed(0)+'s', info ? JSON.stringify(info) : '');
     } catch (e) { console.log('失败', shot.name, String(e.message||e).split('\n')[0]); }
     await page.close();
