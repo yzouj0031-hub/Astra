@@ -687,13 +687,31 @@ function islandTerrainH(x, z){
   }
   // 两座小丘
   const d1 = Math.hypot(x-30, z+26), d2 = Math.hypot(x+38, z-18);
-  h += Math.max(0, 1 - d1/44) ** 2 * 17;
-  h += Math.max(0, 1 - d2/38) ** 2 * 11;
+  const k1 = Math.max(0, 1 - d1/44), k2 = Math.max(0, 1 - d2/38);
+  h += k1*k1*17 + k2*k2*11;
   // 细节起伏，靠海边收敛，保证沙滩平整
   const detail = (fbm(x*0.035 + 12.3, z*0.035 - 4.1) - 0.5) * 7.0;
   h += detail * Math.max(0, Math.min(1, t*2.6));
+  if(t > 0.18){
+    /* 岸线以内的细纹：坡越陡颗粒越粗，平地几乎不加，所以沙滩、营地、桥头都还是平的。
+       坡度用穹顶和两座丘的解析梯度算，不递归求差分。 */
+    const gr = 1.35*Math.pow(t, 0.35)*30/R;
+    let gx = -gr*x/r, gz = -gr*z/r;
+    if(k1 > 0){ const q = -2*k1*17/44/Math.max(d1, 1e-3); gx += q*(x-30); gz += q*(z+26); }
+    if(k2 > 0){ const q = -2*k2*11/38/Math.max(d2, 1e-3); gx += q*(x+38); gz += q*(z-18); }
+    const slope = Math.hypot(gx, gz);
+    const w = Math.min(1, Math.max(0, (slope-0.14)/0.26)) * Math.min(1, (t-0.18)/0.1);
+    if(w > 0) h += (vnoise(x*0.11 + 7.7, z*0.11 + 2.2) + 0.5*vnoise(x*0.23 + 5.1, z*0.23 - 3.3) - 0.75) * 1.9 * w;
+  }
+  // 沙滩顶上一道很缓的沙脊（0.25 m，宽约 6 m），让沙滩到草地之间有个肩；高斯自己衰减到零，不用门槛
+  { const u = (t-0.215)/0.03; h += 0.25*Math.exp(-u*u); }
+  // 灯塔脚下压出一块平台（半径 7.5 m，往外 6.5 m 内渐变回坡面），不然塔基和台阶有一半埋在上坡里
+  if(LH_PAD.h !== null){ const d = Math.hypot(x-LH_PAD.x, z-LH_PAD.z); if(d < LH_PAD.r1){ h += (LH_PAD.h - h) * (1 - smoothstep(LH_PAD.r0, LH_PAD.r1, d)); } }
   return h - 1.6;                                 // 整体下沉，让水线落在沙滩上
 }
+const LH_PAD = {x:-22, z:-30, r0:7.5, r1:14, h:null};
+LH_PAD.h = islandTerrainH(LH_PAD.x, LH_PAD.z) + 1.6;   // 平台高度 = 塔心处原来的地面（此时 h 还是 null，不会递归）
+function smoothstep(a, b, v){ const k = Math.min(1, Math.max(0, (v-a)/(b-a))); return k*k*(3-2*k); }
 
 function parkGroundH(x,z){const r=Math.hypot(x,z+510);if(r<195)return 5;return Math.max(-14,5-(r-195)*.55);}
 function harborGroundH(x,z){
@@ -702,19 +720,22 @@ function harborGroundH(x,z){
  return Math.max(-14,4.15-outside*6);
 }
 function terrainH(x,z){return Math.max(islandTerrainH(x,z),parkGroundH(x,z),harborGroundH(x,z));}
-const TERR_HALF = 190, TERR_SEG = isSmall ? 130 : 190;
+const TERR_HALF = 190, TERR_SEG = isSmall ? 130 : 256;   // 桌面 1.48 m 一格（13.1 万三角形），手机保持 130
 const terrGeo = new THREE.PlaneGeometry(TERR_HALF*2, TERR_HALF*2, TERR_SEG, TERR_SEG);
 terrGeo.rotateX(-Math.PI/2);
 {
   const pos = terrGeo.attributes.position;
   const colors = new Float32Array(pos.count*3);
-  const cSandWet = new THREE.Color(0xd9c398);
+  const cSandWet = new THREE.Color(0xcdb58a);
+  const cSeabed  = new THREE.Color(0xa8ad8e);
   const cSand    = new THREE.Color(0xeddcb4);
   const cGrass   = new THREE.Color(0x5f8459);
   const cGrass2  = new THREE.Color(0x7c9a67);
+  const cDry     = new THREE.Color(0x9c9c62);
   const cRock    = new THREE.Color(0x7d786a);
+  const cRock2   = new THREE.Color(0x5e5a51);
   const cDark    = new THREE.Color(0x496a57);
-  const tmpC = new THREE.Color();
+  const tmpC = new THREE.Color(), rockC = new THREE.Color();
   for(let i=0;i<pos.count;i++){
     const x = pos.getX(i), z = pos.getZ(i);
     const h = terrainH(x, z);
@@ -723,16 +744,30 @@ terrGeo.rotateX(-Math.PI/2);
     const hx = terrainH(x+1.5, z) - terrainH(x-1.5, z);
     const hz = terrainH(x, z+1.5) - terrainH(x, z-1.5);
     const slope = Math.min(1, Math.hypot(hx, hz)/3.0);
-    if(h < 0.55){
-      tmpC.copy(cSandWet).lerp(cSand, Math.min(1, Math.max(0,(h+2.2))/2.8));
-    }else if(h < 2.6){
-      tmpC.copy(cSand).lerp(cGrass, Math.min(1,(h-0.55)/2.05));
+    // 到岸线的有符号距离（按岸线半径归一），湿沙带跟着岸线走而不是跟着等高线
+    const r = Math.hypot(x, z), t = 1 - r/shoreRadius(Math.atan2(z, x));
+    const wet = Math.max(1 - smoothstep(0.128, 0.168, t), 1 - smoothstep(0.15, 0.75, h));
+    if(h < 2.6){
+      tmpC.copy(cSand).lerp(cGrass, smoothstep(0.9, 2.6, h));
+      tmpC.lerp(cSandWet, wet);
+      if(h < 0) tmpC.lerp(cSeabed, Math.min(1, -h/6));
     }else{
       const g = fbm(x*0.06+3.7, z*0.06-2.2);
       tmpC.copy(cGrass).lerp(cGrass2, g);
+      tmpC.lerp(cDry, smoothstep(0.56, 0.74, vnoise(x*0.045+9.1, z*0.045+4.3)) * 0.7);
       tmpC.lerp(cDark, Math.min(0.45, Math.max(0,(h-14))/22));
     }
-    tmpC.lerp(cRock, Math.min(0.72, Math.pow(Math.max(0,(slope-0.34))/0.66, 1.5)));
+    // 岩石：陡坡更早饱和，两座丘的上部围一圈岩带，岩色按高度分层（水平的岩层纹）
+    const k1 = Math.max(0, 1 - Math.hypot(x-30, z+26)/44), k2 = Math.max(0, 1 - Math.hypot(x+38, z-18)/38);
+    const belt = smoothstep(0.5, 0.8, Math.max(k1, k2)) * smoothstep(0.1, 0.25, slope);
+    const rockK = Math.min(0.85, Math.pow(Math.max(0,(slope-0.22))/0.5, 1.3) + belt*0.6);
+    if(rockK > 0){
+      const strata = 0.5 + 0.5*Math.sin(h*1.7 + vnoise(x*0.2+1.3, z*0.2+8.8)*2.4);
+      rockC.copy(cRock).lerp(cRock2, strata*0.75);
+      tmpC.lerp(rockC, rockK);
+    }
+    // 顶点级的颗粒噪声，避免大片单色
+    tmpC.multiplyScalar(0.94 + 0.12*vnoise(x*0.9+2.2, z*0.9+7.1));
     colors[i*3] = tmpC.r; colors[i*3+1] = tmpC.g; colors[i*3+2] = tmpC.b;
   }
   terrGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
@@ -765,6 +800,14 @@ mat("leaf",   0x4d8f46);
 mat("leaf2",  0x639f52);
 mat("rock",   0x8b8578, {roughness:.95});
 mat("rock2",  0x746f64, {roughness:.95});
+// 平面着色的岩石材质要独立实例，不然合批会把它和平滑网格并成一块；顶点色给湿带和地衣
+mat("rockF",  0x746d60, {roughness:.95, flatShading:true, vertexColors:true});
+mat("rockF2", 0x5c574d, {roughness:.95, flatShading:true, vertexColors:true});
+mat("thatch", 0xa1803e, {roughness:1});
+mat("thatchD",0x7f6330, {roughness:1});   // 下层茅草晒得旧一点，三层叠檐才看得出层次
+mat("canvas", 0xd8c79c, {side:THREE.DoubleSide, roughness:.92});
+mat("canvas2",0x8d9878, {side:THREE.DoubleSide, roughness:.92});
+mat("teakWet",0x3a2718, {roughness:.72});
 mat("teak",   0x8a5a34);
 mat("teakD",  0x66412a);
 mat("plank",  0xa97c52);
@@ -839,25 +882,57 @@ function bushSpot(x, z){
 }
 
 
-function rock(x,z,s){
+/* ---------- 岩石 ----------
+   以前是一个 20 面的二十面体抖一抖顶点，远看是一堆白水晶。现在是五种基底：
+   二十面体细分两次（320 面），按 fbm 沿径向位移 ±45%，再各自压扁一点；不建索引，
+   computeVertexNormals 得到的就是每个面的法线，配 flatShading 的材质是块状岩面。
+   顶点色两件事：底部（y≈0 以下）一圈深色湿带 —— 礁石上是水线，岸上的石头是贴地的泥线；
+   朝上的面淡淡一层黄绿地衣。所有岩石共用这几个几何体，合批时只多复制一个 color 属性。 */
+const ROCK_GEOS = [], ROCK_GEOS_SMALL = [], ROCK_GEOS_BIG = [];
+function buildRockGeo(seed, detail, sx, sy, sz){
+  const g = new THREE.IcosahedronGeometry(1.6, detail);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for(let i=0;i<p.count;i++){
+    v.set(p.getX(i), p.getY(i), p.getZ(i)).multiplyScalar(1/1.6);
+    const n = fbm(v.x*1.6 + seed, v.z*1.6 - seed*0.6)*0.65 + fbm(v.y*1.7 + seed*1.3, v.x*1.4 + seed*0.4)*0.35;
+    const k = 1.6*(1 + (n-0.5)*0.9) * (1 + 0.12*Math.sin(v.y*2.3 + seed) );
+    p.setXYZ(i, v.x*k*sx, v.y*k*sy, v.z*k*sz);
+  }
+  g.computeVertexNormals();
+  const nrm = g.attributes.normal, col = new Float32Array(p.count*3);
+  for(let i=0;i<p.count;i++){
+    const y = p.getY(i), up = nrm.getY(i);
+    let r = 1, gg = 1, b = 1;
+    const wetK = 1 - smoothstep(-0.55, 0.15, y);                 // 底部湿带 / 泥线
+    r *= 1 - 0.42*wetK; gg *= 1 - 0.40*wetK; b *= 1 - 0.36*wetK;
+    const lichen = smoothstep(0.45, 0.9, up) * (0.25 + 0.5*hash2(i*0.37, seed));   // 朝上的面长地衣
+    r = r*(1-lichen) + r*0.86*lichen; gg = gg*(1-lichen) + gg*1.02*lichen; b = b*(1-lichen) + b*0.62*lichen;
+    const grain = 0.9 + 0.2*hash2(Math.floor(i/3), seed*2.1);     // 每个面一点明暗差
+    col[i*3] = r*grain; col[i*3+1] = gg*grain; col[i*3+2] = b*grain;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  return g;
+}
+[[3.1,1,.82,1.05],[7.7,1.15,.7,.95],[12.9,.9,1.0,1.2],[19.3,1.2,.62,.9],[25.1,.95,.9,1.0]]
+  .forEach(([seed,sx,sy,sz])=>{ ROCK_GEOS.push(buildRockGeo(seed,2,sx,sy,sz)); ROCK_GEOS_SMALL.push(buildRockGeo(seed+.5,1,sx,sy,sz)); ROCK_GEOS_BIG.push(buildRockGeo(seed,3,sx,sy,sz)); });
+// s<0.5 用 80 面的小基底，s>=2.4 的大石头用 1280 面的（放大三四倍后 320 面的棱太大，又像水晶），其余 320 面
+function rockVariant(x,z,s){ const set = s<0.5?ROCK_GEOS_SMALL:(s>=2.4?ROCK_GEOS_BIG:ROCK_GEOS); return set[Math.floor(hash2(x*0.37+0.11, z*0.41+0.07)*set.length)%set.length]; }
+// rnd 默认是 Math.random（原来的散布序列一次不多一次不少）；新加的簇和道具传 hash 流进来
+function rock(x,z,s,rnd,noObs){
+  rnd = rnd || Math.random;
   if(Math.abs(x)<8 && z < -65 && z > -125)x=(x<0?-1:1)*13;
   const g = new THREE.Group();
+  g.userData.rock = true;
   g.position.set(x, terrainH(x,z)-0.4, z);
-  s = s || (1+Math.random()*2.2);
-  g.scale.set(s, s*(0.6+Math.random()*0.5), s);
-  g.rotation.set(Math.random()*0.4, Math.random()*6.28, Math.random()*0.4);
-  const r = add(g, G.ico(1.6,0), Math.random()<0.5?M.rock:M.rock2, 0,0,0, true, true);
-  r.geometry = r.geometry.clone();
-  const p = r.geometry.attributes.position;
-  for(let i=0;i<p.count;i++){
-    p.setXYZ(i, p.getX(i)*(0.8+hash2(i,3)*0.5),
-                p.getY(i)*(0.8+hash2(i,7)*0.5),
-                p.getZ(i)*(0.8+hash2(i,11)*0.5));
-  }
-  r.geometry.computeVertexNormals();
+  s = s || (1+rnd()*2.2);
+  g.scale.set(s, s*(0.6+rnd()*0.5), s);
+  g.rotation.set(rnd()*0.4, rnd()*6.28, rnd()*0.4);
+  add(g, rockVariant(x,z,s), rnd()<0.5?M.rockF:M.rockF2, 0,0,0, true, true);
   scene.add(g);
-  addObs(x,z,1.5*s);
+  if(!noObs) addObs(x,z,1.5*s);
+  return s;
 }
+function hashRng(seed){ let i = 0; return ()=>hash2(seed + i++*0.731, seed*1.37 + i*0.113); }
 
 // 散布
 for(let i=0;i<155;i++){
@@ -873,27 +948,44 @@ for(let i=0;i<155;i++){
   else if(Math.random()<0.35) palmSpot(x,z);
   else bushSpot(x,z);
 }
+const rockSpots = [];
 for(let i=0;i<52;i++){
   const a = Math.random()*6.28;
   const R = shoreRadius(a);
   const r = R*(0.15 + Math.random()*0.95);
-  rock(Math.cos(a)*r, Math.sin(a)*r);
+  const x = Math.cos(a)*r, z = Math.sin(a)*r;
+  const s = rock(x, z);
+  const gx = terrainH(x+1.5,z)-terrainH(x-1.5,z), gz = terrainH(x,z+1.5)-terrainH(x,z-1.5);
+  rockSpots.push({x, z, s, slope:Math.hypot(gx,gz)/3, h:terrainH(x,z)});
 }
-// 礁石：伸到水里
+// 露头：最陡的八个落点各补两三块，挤成一簇（hash 流，不动上面的随机序列）
+rockSpots.filter(p=>p.h>1.2).sort((a,b)=>b.slope-a.slope).slice(0,8).forEach((p,k)=>{
+  const rnd = hashRng(41.7 + k*3.3);
+  const n = 2 + Math.floor(rnd()*2);
+  for(let j=0;j<n;j++){
+    const ang = rnd()*6.28, dist = 1.4 + rnd()*2.2 + p.s*0.6;
+    rock(p.x + Math.cos(ang)*dist, p.z + Math.sin(ang)*dist, p.s*(0.45 + rnd()*0.8), rnd);
+  }
+});
+// 礁石：伸到水里 —— 同样的基底，斜 15–25°，沉下去三到六成
 for(let i=0;i<26;i++){
   const a = Math.random()*6.28;
   const R = shoreRadius(a);
   const r = R + 4 + Math.random()*26;
   const x = Math.cos(a)*r, z = Math.sin(a)*r;
   const g = new THREE.Group();
-  g.position.set(x, -1.5 - Math.random()*2, z);
+  g.userData.rock = true;
+  const yOld = -1.5 - Math.random()*2;          // 保留这次随机调用，序列不变；新的下沉量用 hash 算
   const s = 1.4 + Math.random()*3;
-  g.scale.set(s, s*(1.1+Math.random()), s);
-  g.rotation.y = Math.random()*6.28;
-  add(g, G.ico(1.5,0), M.rock2, 0,0,0, true, true);
+  const sy = s*(0.55+0.45*Math.random());       // 原来高是宽的一到两倍，成了白尖塔；礁石应该矮而阔
+  const sunk = 0.3 + 0.3*hash2(i*1.7, 3.3);
+  g.position.set(x, Math.max(-sy*1.6*sunk, 0.8 - sy*1.35), z);
+  g.scale.set(s, sy, s);
+  const tilt = 0.26 + 0.18*hash2(i*2.3, 9.1), ta = hash2(i*3.1, 4.4)*6.28;
+  g.rotation.set(Math.cos(ta)*tilt, Math.random()*6.28, Math.sin(ta)*tilt);
+  add(g, rockVariant(x,z,s), i%3?M.rockF2:M.rockF, 0,0,0, true, true);
   scene.add(g);
 }
-
 /* ============================================================
    码头与营地
    ============================================================ */
@@ -903,47 +995,129 @@ const DOCK_SHORE = shoreRadius(DOCK_ANG);
 const DOCK_END = DOCK_SHORE + 26;
 const dockEndPt = new THREE.Vector3(DOCK_DIR.x*DOCK_END, 0, DOCK_DIR.y*DOCK_END);
 
+// 潮线上的小东西：漂木、贝壳和卵石、一只翻倒的木箱。全部走 hash，不加障碍
+const crateGeoCache = new Map();
+function crateGeo(size){
+  const key = size.toFixed(2);
+  if(!crateGeoCache.has(key)){
+    const sh = new THREE.Shape(); const h = size/2 - 0.05;
+    sh.moveTo(-h,-h); sh.lineTo(h,-h); sh.lineTo(h,h); sh.lineTo(-h,h); sh.lineTo(-h,-h);
+    const g = new THREE.ExtrudeGeometry(sh, {depth:size-0.1, bevelEnabled:true, bevelThickness:0.05, bevelSize:0.05, bevelSegments:1});
+    g.translate(0,0,-(size-0.1)/2);
+    crateGeoCache.set(key, g);
+  }
+  return crateGeoCache.get(key);
+}
+for(let i=0;i<40;i++){
+  const rnd = hashRng(77.3 + i*1.91);
+  const a = rnd()*6.28;
+  let da = a - DOCK_ANG; da = Math.atan2(Math.sin(da), Math.cos(da));
+  if(Math.abs(da) < 0.3) continue;                                  // 码头那一段留空
+  const R = shoreRadius(a), t = 0.15 + rnd()*0.06, r = R*(1-t);
+  const x = Math.cos(a)*r, z = Math.sin(a)*r;
+  if(Math.abs(x)<10 && z < -60 && z > -130) continue;              // 栈桥走廊
+  const y = terrainH(x,z);
+  if(y < 0.3) continue;
+  const g = new THREE.Group(); g.userData.beachProp = true; g.position.set(x, y, z); scene.add(g);
+  const kind = i < 14 ? 0 : (i === 39 ? 2 : 1);
+  if(kind === 0){
+    const len = 1.5 + rnd()*1.0, thick = 0.07 + rnd()*0.05;
+    const log = add(g, G.cyl(thick, thick*1.7, len, 7), rnd()<0.5?M.bark:M.bark2, 0, thick*1.2, 0, true, true);
+    log.rotation.set(0, rnd()*6.28, Math.PI/2 + (rnd()-0.5)*0.12);
+  }else if(kind === 1){
+    const s = 0.15 + rnd()*0.15;
+    const n = 1 + Math.floor(rnd()*3);
+    for(let j=0;j<n;j++) rock(x + (rnd()-0.5)*1.6, z + (rnd()-0.5)*1.6, s*(0.7+rnd()*0.6), rnd, true);
+    if(!g.children.length) scene.remove(g);
+  }else{
+    const c = add(g, crateGeo(1.0), M.teakD, 0, 0.42, 0, true, true);
+    c.rotation.set(0.35, rnd()*6.28, 1.25);
+  }
+}
+
+
 function buildDock(){
   const g = new THREE.Group();
   scene.add(g);
   const start = DOCK_SHORE - 12;
   const n = 26;
+  const deckY = 2.4;                       // 甲板中心高度不动（钓鱼位、灯和小船都按它摆）
+  const px = Math.cos(DOCK_ANG+Math.PI/2), pz = Math.sin(DOCK_ANG+Math.PI/2);   // 横向单位向量
+  const at = (r, o)=>[DOCK_DIR.x*r + px*o, DOCK_DIR.y*r + pz*o];              // 沿码头 r、横向 o → 世界坐标
+  const rnd = hashRng(5.5);
+  const pitch = (DOCK_END - start)/n;
+  const boardGeo = G.box(0.32, 0.12, 5.4);   // 长边沿 z：转 -DOCK_ANG 后 z 轴正好横过码头（x 轴才是顺着码头的）
+  const railTops = [];
+  // 两根纵梁托着整条甲板
+  for(const o of [-2.0, 2.0]){
+    const [ax, az] = at(start - pitch*0.5, o), [bx, bz] = at(DOCK_END + pitch*0.5, o);
+    const beam = add(g, G.box(Math.hypot(bx-ax, bz-az), 0.3, 0.2), M.teakD, (ax+bx)/2, deckY-0.13, (az+bz)/2, true, true);
+    beam.rotation.y = -DOCK_ANG;
+  }
   for(let i=0;i<=n;i++){
     const t = i/n;
-    const r = start + (DOCK_END - start)*t;
-    const x = DOCK_DIR.x*r, z = DOCK_DIR.y*r;
+    const r = start + pitch*i;
+    const [x, z] = at(r, 0);
     const groundY = terrainH(x,z);
-    const deckY = 2.4;
-    // 甲板
-    const pl = add(g, G.box(5.4, 0.28, 1.5), i%2?M.plank:M.teak, x, deckY, z, true, true);
-    pl.rotation.y = -DOCK_ANG;
-    // 桩
+    // 甲板：每站四块窄板，板间留 5 cm 缝，高低各差一两厘米
+    for(let b=0;b<4;b++){
+      const rb = r + (b-1.5)*0.37;
+      const [bx, bz] = at(rb, 0);
+      const pl = add(g, boardGeo, (i+b)%3?M.plank:M.teak, bx, deckY+0.08+(rnd()-0.5)*0.02, bz, true, true);
+      pl.rotation.y = -DOCK_ANG;
+    }
+    // 桩：水线一圈深色、甲板下一圈缆绳、方木桩帽
     if(i%3===0){
       const bot = Math.min(groundY, -3.2);
       [-2.2, 2.2].forEach(o=>{
-        const ox = x + Math.cos(DOCK_ANG+Math.PI/2)*o;
-        const oz = z + Math.sin(DOCK_ANG+Math.PI/2)*o;
+        const [ox, oz] = at(r, o);
         strut(g, ox, bot, oz, ox, deckY, oz, 0.24, M.teakD);
-        add(g, G.sph(0.3,8,6), M.teakD, ox, deckY+0.1, oz);
+        add(g, G.cyl(0.255,0.255,0.7,10), M.teakWet, ox, 0.05, oz);
+        const wrap = add(g, new THREE.TorusGeometry(0.3, 0.06, 6, 14), M.rope, ox, deckY-0.55, oz);
+        wrap.rotation.x = Math.PI/2;
+        const cap = add(g, G.box(0.52,0.22,0.52), M.teakD, ox, deckY+0.22, oz, true, true);
+        cap.rotation.y = -DOCK_ANG;
       });
     }
-    // 栏杆（只做一侧，留出上下船的口）
+    // 栏杆（只做一侧，留出上下船的口）：立柱 + 顶上一根圆木扶手 + 中间下垂的绳
     if(i%2===0 && t < 0.86){
-      const ox = x + Math.cos(DOCK_ANG+Math.PI/2)*2.4;
-      const oz = z + Math.sin(DOCK_ANG+Math.PI/2)*2.4;
-      strut(g, ox, deckY, oz, ox, deckY+1.1, oz, 0.09, M.teakD);
+      const [ox, oz] = at(r, 2.4);
+      strut(g, ox, deckY, oz, ox, deckY+1.1, oz, 0.12, M.teakD);
+      railTops.push(new THREE.Vector3(ox, deckY+1.1, oz));
     }
-    addObs(x + Math.cos(DOCK_ANG+Math.PI/2)*3.1, z + Math.sin(DOCK_ANG+Math.PI/2)*3.1, 0.5);
-    addObs(x - Math.cos(DOCK_ANG+Math.PI/2)*3.1, z - Math.sin(DOCK_ANG+Math.PI/2)*3.1, 0.5);
+    addObs(x + px*3.1, z + pz*3.1, 0.5);
+    addObs(x - px*3.1, z - pz*3.1, 0.5);
   }
-  // 尽头的灯与桶
+  if(railTops.length > 1){
+    add(g, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railTops), railTops.length*3, 0.09, 6, false), M.teak, 0,0,0, true);
+    for(let k=1;k<railTops.length;k++){
+      const a = railTops[k-1].clone(), b = railTops[k].clone(); a.y -= 0.42; b.y -= 0.42;
+      const mid = a.clone().lerp(b, .5); mid.y -= 0.13;
+      add(g, new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, mid, b), 6, 0.03, 5, false), M.rope, 0,0,0, false);
+    }
+  }
+  // 系缆桩四个（开放侧），尽头一根带唇的缆柱、一盘缆绳、一架下水梯
+  for(let k=0;k<4;k++){
+    const [cx, cz] = at(start + 8 + k*8.5, -2.55);
+    add(g, G.box(0.14,0.22,0.14), M.dark, cx, deckY+0.2, cz);
+    const c = add(g, G.box(0.55,0.09,0.13), M.dark, cx, deckY+0.34, cz); c.rotation.y = -DOCK_ANG;
+  }
   const ex = dockEndPt.x, ez = dockEndPt.z;
+  {const [bx, bz] = at(DOCK_END-0.6, 2.1);
+   add(g, G.cyl(0.24,0.28,0.95,12), M.dark, bx, deckY+0.5, bz, true, true);
+   const lip = add(g, new THREE.TorusGeometry(0.26,0.07,6,14), M.dark, bx, deckY+0.9, bz); lip.rotation.x = Math.PI/2;
+   const [rx, rz] = at(DOCK_END-2.4, 1.4);
+   const coil = add(g, new THREE.TorusGeometry(0.34,0.1,7,16), M.rope, rx, deckY+0.2, rz, true, true); coil.rotation.x = Math.PI/2;
+   for(const d of [-0.3, 0.3]){const [sx, sz] = at(DOCK_END-4.5+d, -2.85); strut(g, sx, -1.3, sz, sx, deckY+0.75, sz, 0.05, M.teakD);}
+   for(let k=0;k<5;k++){const y = deckY+0.35-k*0.6; const [ax, az] = at(DOCK_END-4.8, -2.85), [bx2, bz2] = at(DOCK_END-4.2, -2.85); strut(g, ax, y, az, bx2, y, bz2, 0.035, M.teakD);}}
+  // 尽头的灯与桶
   strut(g, ex, 2.4, ez, ex, 6.4, ez, 0.14, M.dark);
   const lamp = add(g, G.sph(0.5,10,8),
     new THREE.MeshStandardMaterial({color:0xffe6a8, emissive:0xffcf6a, emissiveIntensity:1.1}),
     ex, 6.6, ez, false);
   add(g, G.cone(0.75,0.6,8), M.dark, ex, 7.15, ez);
   add(g, G.cyl(0.8,0.8,1.5,12), M.teakD, ex-2.6, 3.15, ez+1.2, true, true);
+  for(const y of [2.6, 3.7]){const hoop = add(g, new THREE.TorusGeometry(0.81,0.035,5,18), M.dark, ex-2.6, y, ez+1.2); hoop.rotation.x = Math.PI/2;}
   return {g, lamp};
 }
 const dockObj = buildDock();
@@ -956,14 +1130,48 @@ function buildCamp(){
   g.position.set(cx, terrainH(cx,cz), cz);
   g.rotation.y = -a;
   scene.add(g);
-  // 小棚屋
-  add(g, G.box(7,4,6), M.plank, 0,2,0, true, true);
-  const roof = add(g, G.cone(6.2, 3.0, 4), M.teakD, 0, 5.4, 0);
-  roof.rotation.y = Math.PI/4;
-  add(g, G.box(1.6,2.6,.2), M.teakD, 0,1.3,3.05);
+  const rnd = hashRng(8.8);
+  /* 小棚屋：深色的芯子外面钉一圈横板（板间留缝、各自凸出一两厘米），四角立柱，
+     茅草顶分三层叠、出檐 0.6 m，门口一道门框和一根门廊横梁 */
+  add(g, G.box(6.8,4,5.8), M.teakD, 0,2,0, true, true);
+  const boardGeo = G.box(0.9, 0.22, 0.06);
+  const clad = (len, faceX, faceZ, yaw, openings)=>{   // faceX/faceZ：这面墙的中心；yaw：墙面朝向；openings：[u0,u1,y0,y1] 门窗
+    for(let row=0; row<16; row++){
+      const y = 0.15 + row*0.24;
+      const pieces = [];                                 // [起点,终点]，奇数行错开半块，行首行尾补短板
+      let u = -len/2;
+      if(row%2){ pieces.push([u, u+0.47]); u += 0.51; }
+      for(; u + 0.9 <= len/2 + 0.01; u += 0.94) pieces.push([u, u+0.9]);
+      if(len/2 - u > 0.25) pieces.push([u, len/2]);
+      for(let [p0, p1] of pieces){
+        for(const [o0, o1, y0, y1] of openings||[]){     // 碰到门窗就把板裁到洞口边
+          if(y < y0 || y > y1 || p1 <= o0 || p0 >= o1) continue;
+          if((p0+p1)/2 < (o0+o1)/2) p1 = Math.min(p1, o0); else p0 = Math.max(p0, o1);
+        }
+        if(p1 - p0 < 0.15) continue;
+        const c = (p0+p1)/2, px = faceX + Math.cos(yaw)*c, pz = faceZ - Math.sin(yaw)*c;
+        const out = 0.03 + (rnd()-0.5)*0.02;
+        const b = add(g, boardGeo, (row + Math.round(c*3))%4 ? M.plank : M.teak, px + Math.sin(yaw)*out, y, pz + Math.cos(yaw)*out, true, true);
+        b.rotation.y = yaw; b.scale.x = (p1-p0)/0.9;
+      }
+    }
+  };
+  clad(7, 0, 3.0, 0, [[-1.0,1.0,0,2.85],[1.4,3.0,1.95,3.25]]); clad(7, 0, -3.0, Math.PI); clad(6, 3.5, 0, Math.PI/2); clad(6, -3.5, 0, -Math.PI/2);
+  for(const [x,z] of [[-3.55,-3.05],[3.55,-3.05],[-3.55,3.05],[3.55,3.05]]) add(g, G.cyl(.16,.19,4.4,8), M.teakD, x, 2.2, z, true, true);
+  for(const [rt,rb,h,y,m] of [[4.3,5.6,1.1,4.45,M.thatchD],[3.0,4.35,1.1,5.45,M.thatch]]){ const layer = add(g, G.cyl(rt,rb,h,4), m, 0, y, 0, true, true); layer.rotation.y = Math.PI/4; }
+  { const top = add(g, G.cone(3.15,1.9,4), M.thatch, 0, 6.85, 0, true, true); top.rotation.y = Math.PI/4; }
+  add(g, G.cyl(.09,.12,.9,7), M.teakD, 0, 8.0, 0);
+  // 门廊梁与门框、门、窗
+  add(g, G.box(7.9,.22,.22), M.teakD, 0, 3.85, 3.7, true, true);
+  for(const x of [-3.5,3.5]) add(g, G.cyl(.12,.15,3.9,8), M.teakD, x, 1.95, 3.7, true, true);
+  for(const x of [-0.95,0.95]) add(g, G.box(.18,2.85,.26), M.teakD, x, 1.42, 3.1, true, true);
+  add(g, G.box(2.1,.18,.26), M.teakD, 0, 2.9, 3.1, true, true);
+  add(g, G.box(1.6,2.6,.2), M.plank, 0,1.3,3.05);
+  add(g, G.box(.06,.06,.06), M.dark, .55, 1.3, 3.18);   // 门把
   add(g, G.box(1.4,1.0,.16),
       new THREE.MeshStandardMaterial({color:0xffe0a0, emissive:0xffc768, emissiveIntensity:.5}),
       2.2, 2.6, 3.03, false);
+  for(const [w,h,x,y] of [[1.6,.1,2.2,3.15],[1.6,.1,2.2,2.05],[.1,1.0,1.45,2.6],[.1,1.0,2.95,2.6]]) add(g, G.box(w,h,.12), M.teakD, x, y, 3.08);
   // 晾晒的渔网
   strut(g, -6,0.2,3, -6,3.4,3, .12, M.teakD);
   strut(g,  1,0.2,5.5, 1,3.0,5.5, .12, M.teakD);
@@ -972,22 +1180,79 @@ function buildCamp(){
     const t=i/8;
     strut(g, -6+7*t, 3.2-0.3*t, 3+2.5*t, -6+7*t, 1.5-0.2*t, 3+2.5*t, .03, M.rope);
   }
-  // 篝火
+  /* 两顶布帐篷：A 字架，两片 4×3 的布各自往里塌一点（正弦鼓面 + 一层噪声），
+     后面一片三角布封死，前面只挂半片当门帘；脊杆、两根端杆、四根拉索钉进地里 */
+  const tentGeo = (()=>{
+    const pg = new THREE.PlaneGeometry(4, 3, 8, 6), p = pg.attributes.position;
+    for(let i=0;i<p.count;i++){
+      const u = p.getX(i)/4 + 0.5, v = p.getY(i)/3 + 0.5;
+      const sag = Math.sin(u*Math.PI)*Math.sin(v*Math.PI)*0.12 + (vnoise(u*5.3+1.1, v*4.1+2.7)-0.5)*0.07*Math.sin(v*Math.PI);
+      p.setZ(i, -sag);
+    }
+    pg.computeVertexNormals(); return pg;
+  })();
+  const tent = (tx, tz, yaw, cloth)=>{
+    const t = new THREE.Group(); t.position.set(tx, 0, tz); t.rotation.y = yaw; g.add(t);
+    const H = 2.6;
+    for(const side of [1,-1]){
+      const m = new THREE.Mesh(tentGeo, cloth); m.castShadow = m.receiveShadow = true;
+      m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI/6, side<0?Math.PI:0, 0);
+      m.position.set(0, H/2, side*0.75); t.add(m);
+    }
+    const tri = new THREE.Shape(); tri.moveTo(-1.5,0); tri.lineTo(1.5,0); tri.lineTo(0,H); tri.lineTo(-1.5,0);
+    const back = new THREE.Mesh(new THREE.ShapeGeometry(tri), cloth); back.rotation.y = Math.PI/2; back.position.x = -1.98; back.castShadow = true; t.add(back);
+    const half = new THREE.Shape(); half.moveTo(0,0); half.lineTo(1.5,0); half.lineTo(0,H); half.lineTo(0,0);
+    const flap = new THREE.Mesh(new THREE.ShapeGeometry(half), cloth); flap.rotation.y = Math.PI/2; flap.position.set(1.95, 0, 0); flap.castShadow = true; t.add(flap);
+    const ridge = add(t, G.cyl(.05,.05,4.7,7), M.teakD, 0, H+0.02, 0); ridge.rotation.z = Math.PI/2;
+    for(const x of [-2.15, 2.15]) strut(t, x, 0, 0, x, H, 0, .05, M.teakD);
+    for(const [ex, pz] of [[-2.15,-1.3],[-2.15,1.3],[2.15,-1.3],[2.15,1.3]]){
+      const px2 = ex + Math.sign(ex)*1.1;
+      strut(t, ex, H, 0, px2, 0.08, pz, .015, M.rope).castShadow = false;
+      const peg = add(t, G.box(.08,.3,.08), M.teakD, px2, 0.08, pz); peg.rotation.set(-Math.sign(pz)*0.35, 0, Math.sign(ex)*0.35);
+    }
+  };
+  tent(7.4, -5.6, -0.35, M.canvas);
+  tent(7.8, 6.3, 0.55, M.canvas2);
+  for(const [tx,tz] of [[7.4,-5.6],[7.8,6.3]]){ const wx = cx + Math.cos(-a)*tx + Math.sin(-a)*tz, wz = cz - Math.sin(-a)*tx + Math.cos(-a)*tz; addObs(wx, wz, 2.5); }
+  // 铺盖卷、两只木箱
+  { const roll = add(g, G.box(0.75,0.12,1.9), M.cloth, -5.4, 0.07, 1.6, true, true); roll.rotation.y = 0.5;
+    const end = add(g, G.cyl(.17,.17,.75,9), M.cloth, -5.4 - Math.sin(0.5)*0.95, 0.17, 1.6 - Math.cos(0.5)*0.95, true, true); end.rotation.set(0, 0.5, Math.PI/2); }
+  { const c1 = add(g, crateGeo(0.9), M.teakD, 4.5, 0.45, 2.1, true, true); c1.rotation.y = 0.2;
+    const c2 = add(g, crateGeo(0.9), M.plank, 4.55, 1.35, 2.05, true, true); c2.rotation.y = -0.35; }
+  /* 篝火：石圈是小号岩石基底，柴是带树皮色的锥柱，火焰是两张十字交叉的透明卡片
+     （画布上画的径向渐变、叠加混合），仍由 tick 每帧缩放，也仍在「会动的」名单里不合批 */
   const fire = new THREE.Group();
   fire.position.set(-8, 0, -3);
   g.add(fire);
   for(let i=0;i<7;i++){
-    const a2=i/7*6.28;
-    add(fire, G.ico(0.5,0), M.rock2, Math.cos(a2)*1.5, 0.15, Math.sin(a2)*1.5, true, true);
+    const a2=i/7*6.28, s = 0.2 + hash2(i,5.5)*0.08;
+    const st = add(fire, ROCK_GEOS_SMALL[i%ROCK_GEOS_SMALL.length], i%2?M.rockF:M.rockF2, Math.cos(a2)*1.45, 0.12, Math.sin(a2)*1.45, true, true);
+    st.scale.set(s, s*0.75, s); st.rotation.set(0, hash2(i,7.7)*6.28, 0);
   }
   for(let i=0;i<5;i++){
-    const a2=i/5*6.28;
-    strut(fire, Math.cos(a2)*0.9, 0, Math.sin(a2)*0.9, 0, 1.5, 0, 0.13, M.teakD);
+    const a2=i/5*6.28 + 0.3, len = 1.5;
+    const log = add(fire, G.cyl(0.11,0.14,len,8), i%2?M.bark:M.bark2, Math.cos(a2)*0.45, 0.62, Math.sin(a2)*0.45, true, true);
+    log.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(-Math.cos(a2)*0.9, 1.2, -Math.sin(a2)*0.9).normalize());
   }
-  const flameMat = new THREE.MeshBasicMaterial({color:0xff9436, transparent:true, opacity:0.9});
-  const flame = add(fire, G.cone(0.8, 2.2, 8), flameMat, 0, 1.1, 0, false);
-  const flame2 = add(fire, G.cone(0.45, 1.3, 7),
-    new THREE.MeshBasicMaterial({color:0xffe08a, transparent:true, opacity:0.95}), 0, 0.9, 0, false);
+  const flameTex = (()=>{
+    const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128;
+    const c2 = cv.getContext('2d'); c2.clearRect(0,0,64,128);
+    for(let i=0;i<14;i++){
+      const k = i/13;                                   // 外圈红橙、越里越黄白
+      c2.fillStyle = `rgba(${255},${Math.round(90+150*k)},${Math.round(20+200*k*k)},${(0.05+0.07*k).toFixed(3)})`;
+      c2.beginPath(); c2.ellipse(32, 92 - 30*k, 26*(1-k*0.85), 34*(1-k*0.7)+6, 0, 0, Math.PI*2); c2.fill();
+    }
+    const tex = new THREE.CanvasTexture(cv); return tex;
+  })();
+  const flameCard = (w, h, color)=>{
+    const grp = new THREE.Group();
+    const geo = new THREE.PlaneGeometry(w, h); geo.translate(0, h/2, 0);
+    const m = new THREE.MeshBasicMaterial({map:flameTex, color, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide});
+    for(const yaw of [0, Math.PI/2]){ const card = new THREE.Mesh(geo, m); card.rotation.y = yaw; grp.add(card); }
+    fire.add(grp); return grp;
+  };
+  const flame = flameCard(1.9, 2.5, 0xffa040); flame.position.y = 0.25;
+  const flame2 = flameCard(1.1, 1.7, 0xffe8a0); flame2.position.y = 0.3;
   const fireLight = new THREE.PointLight(0xff8a3a, 1.1, 26, 2);
   fireLight.position.set(0,1.6,0); fire.add(fireLight);
   addObs(cx, cz, 6.5);
@@ -2504,18 +2769,48 @@ const lighthousePos={x:-22,z:-30};
 lighthouse.position.set(-22,terrainH(-22,-30),-30);scene.add(lighthouse);
 const plaster=new THREE.MeshStandardMaterial({color:0xeee5cd,roughness:.9});
 const terracotta=new THREE.MeshStandardMaterial({color:0xab7961,roughness:.8});
-add(lighthouse,G.cyl(6.6,7.6,1.6,16),M.rock,0,.4,0,true,true);
-add(lighthouse,G.cyl(2.8,4.1,19,16),plaster,0,10.5,0,true,true);
-add(lighthouse,G.cyl(3.16,3.36,2.6,16),terracotta,0,14,0);
-add(lighthouse,G.cyl(4.1,4.1,.55,16),plaster,0,20.2,0);
-add(lighthouse,G.box(1.6,3,.3),M.teakD,0,2,4.06);
-for(let i=0;i<10;i++){let a=i/10*Math.PI*2;strut(lighthouse,Math.sin(a)*3.75,20.4,Math.cos(a)*3.75,Math.sin(a)*3.75,22,Math.cos(a)*3.75,.08,M.dark);}
-const railing=add(lighthouse,new THREE.TorusGeometry(3.75,.08,5,32),M.dark,0,22,0);railing.rotation.x=Math.PI/2;
-add(lighthouse,G.cyl(2.4,2.4,3.4,12),new THREE.MeshStandardMaterial({color:0xbfd8cf,transparent:true,opacity:.35,roughness:.25}),0,22.3,0,false);
+/* 塔身是一条旋转剖面（LatheGeometry）：底座外撇、塔身微微收分、回廊下面一圈托檐鼓出来再收成檐口。
+   高度、灯位（22 / 22.4）、障碍半径都没动 —— 飞机避障和 smoke 测试都指着这些数。 */
+add(lighthouse,G.cyl(6.6,7.6,1.6,28),M.rock,0,.4,0,true,true);
+const LH_PROFILE=[[0,1.9],[4.55,1.9],[4.55,2.3],[4.2,2.75],[3.98,4.5],[3.6,9],[3.25,13.5],[2.95,17.6],[2.9,18.7],[3.18,19.15],[3.62,19.65],[3.96,20.0],[4.12,20.2],[4.12,20.75],[2.62,20.75],[2.62,21.0],[0,21.0]];
+function lhRadius(y){for(let i=1;i<LH_PROFILE.length;i++){const [r0,y0]=LH_PROFILE[i-1],[r1,y1]=LH_PROFILE[i];if(y<=y1&&y1>y0)return r0+(r1-r0)*(y-y0)/(y1-y0);}return 3;}
+add(lighthouse,new THREE.LatheGeometry(LH_PROFILE.map(([r,y])=>new THREE.Vector2(r,y)),40),plaster,0,0,0,true,true);
+// 三级台阶
+add(lighthouse,G.cyl(6.0,6.25,.3,32),M.rock2,0,1.35,0,true,true);
+add(lighthouse,G.cyl(5.5,5.7,.3,32),M.rock2,0,1.65,0,true,true);
+add(lighthouse,G.cyl(5.0,5.15,.3,32),M.rock2,0,1.95,0,true,true);
+// 腰带（原来那圈赤陶色保留，改成窄一点的两道）
+add(lighthouse,G.cyl(lhRadius(13.3)+.05,lhRadius(12.1)+.05,1.2,40),terracotta,0,12.7,0);
+add(lighthouse,G.cyl(lhRadius(15.2)+.04,lhRadius(14.7)+.04,.5,40),terracotta,0,14.95,0);
+// 门：门扇 + 两根门框 + 半圆拱
+add(lighthouse,G.box(1.5,2.9,.18),M.teakD,0,3.55,4.06);
+for(const sx of [-1,1])add(lighthouse,G.box(.28,3.3,.42),terracotta,sx*.9,3.75,4.1);
+{const arch=add(lighthouse,new THREE.CylinderGeometry(1.1,1.1,.42,14,1,false,-Math.PI/2,Math.PI),terracotta,0,5.05,4.1);arch.rotation.x=-Math.PI/2;}
+add(lighthouse,G.box(2.6,.22,.5),M.rock2,0,2.2,4.2,true,true);   // 门槛
+// 三扇朝海的窄窗（深色窗框嵌进墙里，里面一片暖光玻璃），越往上越绕向一侧，像里面有旋梯
+const lhPane=new THREE.MeshStandardMaterial({color:0xffe0a0,emissive:0xffc768,emissiveIntensity:.55});
+{const sea=Math.atan2(-22,-30);
+ [[6,0],[11,.7],[16,1.4]].forEach(([y,off])=>{
+  const a=sea+off,r=lhRadius(y);
+  const frame=add(lighthouse,G.box(.7,1.5,.34),M.dark,Math.sin(a)*(r+.02),y,Math.cos(a)*(r+.02));frame.rotation.y=a;
+  const pane=add(lighthouse,G.box(.38,1.15,.1),lhPane,Math.sin(a)*(r+.17),y,Math.cos(a)*(r+.17),false);pane.rotation.y=a;
+ });}
+// 回廊：木地板环、24 根栏杆、上下两道扶手
+{const floor=add(lighthouse,new THREE.RingGeometry(2.62,4.12,40),M.teakD,0,20.76,0,false,true);floor.rotation.x=-Math.PI/2;}
+for(let i=0;i<24;i++){let a=i/24*Math.PI*2;strut(lighthouse,Math.sin(a)*3.9,20.75,Math.cos(a)*3.9,Math.sin(a)*3.9,22,Math.cos(a)*3.9,.05,M.dark).castShadow=false;}
+for(const y of [22,21.35]){const railing=add(lighthouse,new THREE.TorusGeometry(3.9,.07,6,40),M.dark,0,y,0);railing.rotation.x=Math.PI/2;}
+// 灯室：八根竖框、上下两圈箍、玻璃、灯
+for(let i=0;i<8;i++){let a=i/8*Math.PI*2;strut(lighthouse,Math.sin(a)*2.45,21.0,Math.cos(a)*2.45,Math.sin(a)*2.45,23.95,Math.cos(a)*2.45,.07,M.dark);}
+for(const y of [21.1,23.9]){const ring=add(lighthouse,new THREE.TorusGeometry(2.48,.09,6,32),M.dark,0,y,0);ring.rotation.x=Math.PI/2;}
+add(lighthouse,G.cyl(2.42,2.42,2.9,24),new THREE.MeshStandardMaterial({color:0xbfd8cf,transparent:true,opacity:.35,roughness:.25}),0,22.5,0,false);
 const lanternMat=new THREE.MeshBasicMaterial({color:0xffe7a9});
 add(lighthouse,G.sph(.95,12,8),lanternMat,0,22.4,0,false);
-add(lighthouse,G.cone(3.25,2.6,12),M.teakD,0,25.2,0);
+add(lighthouse,G.cyl(3.3,3.3,.25,24),M.dark,0,24.0,0);
+add(lighthouse,G.cone(3.25,2.6,16),M.teakD,0,25.2,0);
 strut(lighthouse,0,26.3,0,0,28.3,0,.10,M.dark);
+add(lighthouse,G.sph(.18,8,6),M.brass,0,28.4,0);
+// 塔基周围一圈石头
+for(let i=0;i<9;i++){const rnd=hashRng(19.1+i*2.7),a=i/9*Math.PI*2+rnd()*.4,d=7.6+rnd()*1.2;rock(-22+Math.cos(a)*d,-30+Math.sin(a)*d,.8+rnd()*.9,rnd);}
 const beaconLight=new THREE.PointLight(0xffd58b,0,85,2);beaconLight.position.set(0,22,0);lighthouse.add(beaconLight);
 const beamPivot=new THREE.Group();beamPivot.position.y=22.4;lighthouse.add(beamPivot);
 const beamMat=new THREE.MeshBasicMaterial({color:0xffe3a0,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending});
@@ -2554,7 +2849,9 @@ for(const items of batches.values()){
  if(items.length<3)continue;
  const parts=items.map(o=>{const g=o.geometry.clone().applyMatrix4(o.matrixWorld);if(g.index){const flat=g.toNonIndexed();g.dispose();return flat;}return g;});
  const count=parts.reduce((n,g)=>n+g.attributes.position.count,0),g=new THREE.BufferGeometry();
- for(const name of ['position','normal']){const data=new Float32Array(count*3);let offset=0;for(const part of parts){data.set(part.attributes[name].array,offset);offset+=part.attributes[name].array.length;}g.setAttribute(name,new THREE.BufferAttribute(data,3));}
+ // 岩石靠顶点色画湿带和地衣（材质 vertexColors），这一批全都带 color 才复制，混着的照旧只带位置和法线
+ const attrs=parts.every(p=>p.attributes.color)?['position','normal','color']:['position','normal'];
+ for(const name of attrs){const data=new Float32Array(count*3);let offset=0;for(const part of parts){data.set(part.attributes[name].array,offset);offset+=part.attributes[name].array.length;}g.setAttribute(name,new THREE.BufferAttribute(data,3));}
  const mesh=new THREE.Mesh(g,items[0].material);mesh.castShadow=items[0].castShadow;mesh.receiveShadow=items[0].receiveShadow;g.computeBoundingSphere();scene.add(mesh);
  items.forEach(o=>o.parent.remove(o));parts.forEach(g=>g.dispose());
 }
@@ -5058,19 +5355,40 @@ function walkingHeight(x,z){
  return terrainH(x,z);
 }
 const boardwalk=new THREE.Group();scene.add(boardwalk);
+/* 栈桥：每 2 m 一站三块窄板（板间 10 cm 缝，坡段随坡倾斜），下面两根纵梁架在每 12 m 一对的桩上，
+   桩间一道横梁加一对斜撑；扶手是穿过桩顶的一根圆木（TubeGeometry），中间那根绳照旧；
+   灯换成四根黑框加顶盖的灯箱。桩位 ±3.25、障碍、行走高度都没动。 */
+const bwBoard=G.box(2.2,.12,1.9),bwBearer=G.box(.25,.3,12.25),bwUp=new THREE.Vector3(0,0,1);
+function beamAlong(parent,geo,m,ax,ay,az,bx,by,bz){const o=new THREE.Mesh(geo,m);o.position.set((ax+bx)/2,(ay+by)/2,(az+bz)/2);o.quaternion.setFromUnitVectors(bwUp,new THREE.Vector3(bx-ax,by-ay,bz-az).normalize());o.castShadow=o.receiveShadow=true;parent.add(o);return o;}
+const railTops={'-1':[],'1':[]};
 for(let z=bridgeStart;z>=bridgeEnd;z-=2){
- const y=bridgeHeight(z);add(boardwalk,G.box(7,.24,2.05),M.plank,0,y-.14,z,true,true);
+ const y=bridgeHeight(z),tilt=Math.atan2(bridgeHeight(z-1)-bridgeHeight(z+1),2);
+ for(const x of [-2.3,0,2.3]){const b=add(boardwalk,bwBoard,M.plank,x,y-.06,z,true,true);b.rotation.x=tilt;}
  if(Math.round(-z)%12===6){
+  const zn=Math.max(bridgeEnd,z-12),yn=bridgeHeight(zn);
+  if(zn<z)for(const x of [-2.6,2.6])beamAlong(boardwalk,bwBearer,M.teakD,x,y-.32,z,x,yn-.32,zn);
+  add(boardwalk,G.box(7.2,.22,.22),M.teakD,0,y-.55,z,true,true);
+  strut(boardwalk,-3.25,y-2.8,z,3.25,y-.7,z,.07,M.teakD);strut(boardwalk,3.25,y-2.8,z,-3.25,y-.7,z,.07,M.teakD);
   for(const side of [-1,1]){
    const x=side*3.25;strut(boardwalk,x,-3,z,x,y+1.05,z,.14,M.teakD);
-   strut(boardwalk,x,y+.82,z,x,bridgeHeight(Math.max(bridgeEnd,z-12))+.82,Math.max(bridgeEnd,z-12),.055,M.rope);
+   railTops[side].push(new THREE.Vector3(x,y+1.05,z));
+   strut(boardwalk,x,y+.82,z,x,bridgeHeight(zn)+.82,zn,.055,M.rope);
    addObs(side*4.1,z,.32);
-   if(Math.round(-z)%36===6)add(boardwalk,G.sph(.21,8,6),lanternMat,x,y+1.13,z,false);
+   if(Math.round(-z)%36===6){
+    add(boardwalk,G.box(.36,.05,.36),M.dark,x,y+1.08,z,false);
+    for(const [dx,dz] of [[-.16,-.16],[.16,-.16],[-.16,.16],[.16,.16]])strut(boardwalk,x+dx,y+1.1,z+dz,x+dx,y+1.46,z+dz,.022,M.dark).castShadow=false;
+    add(boardwalk,G.box(.44,.07,.44),M.dark,x,y+1.49,z,false);
+    add(boardwalk,G.sph(.17,8,6),lanternMat,x,y+1.28,z,false);
+   }
   }
  }
 }
+for(const side of [-1,1]){const pts=railTops[side];if(pts.length>1)add(boardwalk,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),pts.length*3,.08,6,false),M.teak,0,0,0,true);}
 // A pier for arriving by boat, on the amusement island's east coast.
-for(let x=180;x<=218;x+=2)add(boardwalk,G.box(2.05,.26,7),M.plank,x,5,-475,true,true);
+{const pierBoard=G.box(1.9,.12,2.2);
+ for(let x=180;x<=218;x+=2)for(const dz of [-2.3,0,2.3])add(boardwalk,pierBoard,M.plank,x,5.07,-475+dz,true,true);
+ for(const dz of [-2.6,2.6])add(boardwalk,G.box(40.4,.3,.25),M.teakD,199,4.85,-475+dz,true,true);
+ for(let x=180;x<=216;x+=12)for(const dz of [-3.55,3.55]){strut(boardwalk,x,-3,-475+dz,x,5.1,-475+dz,.14,M.teakD);add(boardwalk,G.box(.5,.2,.5),M.teakD,x,5.2,-475+dz,true,true);}}
 const originalWalkingHeight=walkingHeight;
 function worldWalkHeight(x,z){const h=harborSurface(x,z);if(h!==null)return h;if(x>=180&&x<=219&&Math.abs(z+475)<3.5)return Math.max(terrainH(x,z),5.15);return originalWalkingHeight(x,z);}
 // Sculpt the second island's underwater shelf and sandy edge.
@@ -5347,6 +5665,14 @@ function applySurfaceDetail(){
   [M.rock,"rock",2.4,.85,1.1,.55],
   [M.rock2,"rock",2.4,.85,1.1,.55],
   [M.hull,"timber",1.8,.6,.6,.4],
+  // 静屿翻新新增：平面着色的岩石、营地茅草/帆布、桩子的湿木（列表末尾，方便合并）
+  [M.rockF,"rock",1.6,.7,.9,.5],
+  [M.rockF2,"rock",1.6,.7,.9,.5],
+  [M.thatch,"grass",0.9,.85,1.3,.6],
+  [M.thatchD,"grass",0.9,.85,1.3,.6],
+  [M.teakWet,"timber",2.2,.8,.8,.5],
+  [M.canvas,"plaster",1.4,.35,.4,.35],
+  [M.canvas2,"plaster",1.4,.35,.4,.35],
  ];
  for(const [mat,kind,m,a,b,r,base,up] of plan) addSurfaceDetail(mat,kind,m,a,b,r,base,up);
  // 港区的路面、步道和街心分隔带是按颜色缓存出来的材质

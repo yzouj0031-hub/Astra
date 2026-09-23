@@ -32,6 +32,13 @@ const SHOTS = [
   { name: 'island-camp',   url: GAME, wait: 4000, run: '__astra.walkTo(-40,40,-2.3)', after: 2500 },
   { name: 'island-light',  url: GAME, wait: 4000, run: '__astra.walkTo(-2,-8,0.9)', after: 2500 },
   { name: 'island-sunset', url: GAME, wait: 4000, run: '__astra.period(1);__astra.walkTo(30,60,2.6)', after: 4000 },
+  // 静屿近景（岩石 / 码头 / 营地 / 沙滩），轨道相机直接对准目标
+  { name: 'island-dockclose', url: GAME, wait: 4000, run: '__astra.orbit(89.5,3,-55,24,2.4,1.25)', after: 3000 },
+  { name: 'island-campclose', url: GAME, wait: 4000, run: '__astra.orbit(83,2.5,1,24,1.25,1.2)', after: 3000 },
+  { name: 'island-beach',     url: GAME, wait: 4000, run: '__astra.orbit(82,1,62,22,4.2,1.3)', after: 3000 },
+  { name: 'island-rocks',     url: GAME, wait: 4000, run: '__astra.orbit(30,12,-26,42,5.2,1.15)', after: 3000 },
+  { name: 'island-lightclose',url: GAME, wait: 4000, run: '__astra.orbit(-22,17,-30,30,4.1,1.3)', after: 3000 },
+  { name: 'island-lightbase', url: GAME, wait: 4000, run: '__astra.walkTo(-10,-40,2.27,0.15)', after: 3000 },
   { name: 'park-view',     url: GAME, wait: 4000, run: '__astra.view("park")', after: 4000 },
   { name: 'park-gate',     url: GAME, wait: 4000, run: '__astra.park()', after: 2500 },
   { name: 'park-plaza',    url: GAME, wait: 4000, run: '__astra.walkTo(0,-505,0)', after: 2500 },
@@ -64,17 +71,20 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     if (shot.journey) await page.waitForFunction(j => document.body.dataset.journey === j, shot.journey, { timeout: 90000 });
     // 开场遮罩要等它真的淡出（软件渲染下 1 秒的定时器可能拖到好几秒），否则整张图蒙着一层蓝
     await page.waitForFunction(() => document.getElementById('boot').classList.contains('gone'), null, { timeout: 90000 }).catch(() => {});
+    // 两台软件渲染并跑时一帧要好几秒，定时器和 CSS 渐隐都跟着慢：真等到遮罩透明度归零，再等两帧真正画出来
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('boot')).opacity === '0', null, { timeout: 240000, polling: 1000 }).catch(() => {});
+    const twoFrames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
     await page.waitForTimeout(1200);
     await page.waitForTimeout(shot.wait);
     for (const sel of (shot.click||[])) { await page.click(sel); await page.waitForTimeout(600); }
     if (shot.run) { await page.evaluate(shot.run); }
-    if (shot.click || shot.run) await page.waitForTimeout(shot.after || 3000);
+    if (shot.click || shot.run) { await page.waitForTimeout(shot.after || 3000); await twoFrames(); }
     for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day'); await page.waitForTimeout(300); }
     if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click(); await page.waitForTimeout(2500); }
     if (shot.journey) await closeMenu(page);
     const info = await page.evaluate(() => (window.__astra && window.__astra.info) ? window.__astra.info() : null);
     const file = path.join(OUT, shot.name + '.png');
-    await page.screenshot({ path: file, timeout: 180000 });
+    await page.screenshot({ path: file, timeout: 180000 });   // 软件渲染下一帧可能要一分多钟，别按默认 30 秒放弃
     console.log('拍了', file, ((Date.now()-t0)/1000).toFixed(0)+'s', info ? JSON.stringify(info) : '');
     } catch (e) { console.log('失败', shot.name, String(e.message||e).split('\n')[0]); }
     await page.close();
