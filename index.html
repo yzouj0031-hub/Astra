@@ -2684,7 +2684,9 @@ function refreshEnvironment(){
   src.dispose();
  }catch(e){ /* 没有 WebGL 或画布时照常跑，只是少了环境光 */ }
 }
-function scheduleEnvironment(){refreshEnvironment();setTimeout(refreshEnvironment,1500);}
+// 换时段：先按当下的天色烤一张，等插值到位（atmoProgress）再烤一张定稿；原来按 1.5 秒定时，帧率低时那会儿天色还在半路
+let envPending=false, atmoProgress=1, atmoWall=0;
+function scheduleEnvironment(){refreshEnvironment();envPending=true;atmoProgress=0;}
 function selectPeriod(index){
  periodIndex=index;document.body.dataset.period=periodNames[index];
  scheduleEnvironment();          // 天空变了，环境光也要跟着变
@@ -2692,7 +2694,10 @@ function selectPeriod(index){
  try{localStorage.setItem('windward-period-v2',periodNames[index]);}catch{}
 }
 function updateAtmosphere(dt,t){
- const p=periods[periodIndex],k=1-Math.exp(-dt*1.8);
+ // 插值按真实经过的时间走（一帧最多记 2 秒）：帧率低的机器上换时段也是同样的几秒到位，不会被 dt 的 0.05 上限拖成几十帧
+ const now=(typeof performance!=='undefined'&&performance.now)?performance.now()/1000:0;
+ const wall=atmoWall?Math.min(Math.max(now-atmoWall,0),2):0;atmoWall=now;
+ const p=periods[periodIndex],k=1-Math.exp(-Math.max(dt,wall)*1.8);
  tint(skyU.top.value,p.top,k);tint(skyU.mid.value,p.mid,k);tint(skyU.bot.value,p.bot,k);tint(skyU.sunC.value,p.sun,k);
  tint(skyU.fogC.value,p.fog,k);tint(skyU.cloudC.value,p.cloudC,k);tint(skyU.cloudD.value,p.cloudD,k);skyU.uCloud.value+=(p.cloud-skyU.uCloud.value)*k;skyU.uTime.value=t;
  tint(seaUniforms.uDeep.value,p.deep,k);tint(seaUniforms.uShallow.value,p.shallow,k);tint(seaUniforms.uSand.value,p.sand,k);tint(seaUniforms.uMood.value,p.mood,k);
@@ -2708,6 +2713,8 @@ function updateAtmosphere(dt,t){
  const night=starMat.opacity/.9;beaconLight.intensity=night*2.5;dockLight.intensity=night*1.8;
  beamMat.opacity=night*.075;beamPivot.rotation.y=t*.22;
  for(const l of harborStreetLights)l.intensity=night*1.4;
+ atmoProgress+=(1-atmoProgress)*k;
+ if(envPending&&atmoProgress>0.96){envPending=false;refreshEnvironment();}
 }
 selectPeriod(periodIndex);
 $('time-toggle').addEventListener('click',()=>{selectPeriod((periodIndex+1)%3);showHint(periods[periodIndex].caption);});
