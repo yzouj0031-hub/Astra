@@ -32,6 +32,7 @@ const SURFACES={
   roof:  ['rooftile', 1.6,.8, 1.0,.55,0,true],
   wood:  ['plank',    1.8,.7, .8, .5 ],
   floor: ['rock',     1.6,.6, .8, .5 ],
+  ground:['grass',    2.8,.6, .7, .5 ],
  },
 };
 function dressRegion(scene,surface,table){
@@ -104,7 +105,10 @@ function createRegion(T,id,services){
   ground=(x,z)=>Math.abs(x)<9.1&&z>=-25.2&&z<=-16.6?1.2:Math.abs(x)<3.6&&z>-16.6&&z<-14.4?C.clamp((-z-14.4)/2.2,0,1)*1.2:0;
   land=(x,z)=>(Math.hypot(x,z)<15.8)||(Math.abs(x)<3.55&&z<=-13&&z>=-17)||(Math.abs(x)<8.85&&z>=-25.1&&z<=-16.6);
   solids=[rect(0,-24.35,16,.4,6),rect(0,-25.4,18,.3,6)];
-  for(const x of [-7,-3.5,0,3.5,7])for(const z of [-23.7,-18.3])solids.push(rect(x,z,.6,.6,6));
+  // 四根一排的柱子（正中一间是门），两侧间的格扇，殿前的香炉
+  for(const x of [-7.6,-2.9,2.9,7.6])for(const z of [-23.7,-18.3])solids.push(rect(x,z,.6,.6,6));
+  for(const x of [-5.25,5.25])solids.push(rect(x,-18.4,4.4,.3,5));
+  solids.push(rect(0,-17.4,1.1,1.1,2.2));
   for(const x of [-11,11])for(const z of [-11,-3,6,13])solids.push(rect(x,z,1,1,2.5));
   world.game=root.AstraCombat.createGame();world.fighting=false;world.completed=progress.stamps.includes('warden');
   // A small, walkable exhibition behind the guardian gives the victory a destination.
@@ -131,11 +135,12 @@ function createRegion(T,id,services){
   },
   restore(p){if(C.validPosition(p)&&C.canStand(p.x,p.z,solids,land)){Object.assign(pos,{x:p.x,z:p.z});pos.y=ground(p.x,p.z);}},
   setRain(){rain=!rain;if(id==='rainport')world.setRain(rain);if(id==='watertown')world.S.rain=rain;notify(rain?'雨落下来了。':'雨停了。');},
-  setDay(){day=1-day;if(id==='watertown')world.S.dayT=day?.5:.95;if(id==='rainport')world.lightCycle();if(id==='temple'){scene.background.set(day?'#a8b7a0':'#7e9389');scene.fog.color.copy(scene.background);}notify(day?'日光漫游':'灯火时分');},
+  setDay(){day=1-day;if(id==='watertown')world.S.dayT=day?.5:.95;if(id==='rainport')world.lightCycle();if(id==='temple'){scene.background.set(day?'#a8b7a0':'#7e9389');scene.fog.color.copy(scene.background);world.setSky?.(day);}notify(day?'日光漫游':'灯火时分');},
   people(){return id==='rainport'?world.npcs.map(n=>({x:n.g.position.x,z:n.g.position.z})):id==='watertown'?world.npcs.map(n=>({x:n.x,z:n.z})):(!world.fighting?[{x:world.game.boss.x,z:world.game.boss.z,radius:1.1}]:[]);},
   update(dt,input){
    if(!active)return;clock+=dt;phase+=dt;
    world.foliage?.tick(clock);   // 山寺的林子跟着风摆
+   if(id==='temple')world.tick?.(clock);   // 雾片漂移
    const old={x:pos.x,z:pos.z};
    const ix=input.x,iz=input.z,mag=Math.min(1,Math.hypot(ix,iz));
    const dx=Math.cos(region.yaw)*ix+Math.sin(region.yaw)*iz,dz=-Math.sin(region.yaw)*ix+Math.cos(region.yaw)*iz;
