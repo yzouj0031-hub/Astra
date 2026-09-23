@@ -204,7 +204,7 @@ function init(host){
   if(time>noteUntil)$('journey-note').classList.remove('show');
   if(Math.floor(time*6)!==Math.floor((time-dt)*6))minimap();
   frameCount++;frameTime+=dt;
-  if(frameTime>2){if(frameCount/frameTime<(mobile?45:27))lowFrames++;/* 手机上掉到 27 帧早就明显卡了，45 帧就开始降 */else lowFrames=0;if(lowFrames>=2&&quality){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
+  if(frameTime>2){if(frameCount/frameTime<(mobile?45:27))lowFrames++;/* 手机上掉到 27 帧早就明显卡了，45 帧就开始降 */else lowFrames=0;if(lowFrames>=2&&quality&&!QUALITY_LOCKED){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
   renderer.render(active.scene,active.camera);return true;
  }
  function updateAudio(){if(ambient)ambient.gain.setTargetAtTime(soundOn&&active&&!book.open&&!menu.open? .045:0,audio.currentTime,.3);}
@@ -258,6 +258,7 @@ function init(host){
  const run=$('journey-run');run.addEventListener('pointerdown',e=>{if(runId!==null)return;runId=e.pointerId;run.setPointerCapture(e.pointerId);e.preventDefault();});for(const type of ['pointerup','pointercancel','lostpointercapture'])run.addEventListener(type,e=>{if(runId===e.pointerId)runId=null;});
  updateBook();
  const requested=(()=>{try{return new URL(location.href).searchParams.get('journey');}catch{return null;}})();
+ const QUALITY_LOCKED=(()=>{try{return new URL(location.href).searchParams.get('quality')==='lock';}catch{return false;}})();   // 截图用，见 index.html adaptQuality
  if(C.REGIONS[requested])setTimeout(()=>travel(requested),0);
  return {frame,travel,home,openMap,get active(){return active;},get busy(){return busy;},progress,
   getPose(){if(!active)return null;return {x:active.pos.x,y:active.pos.y,z:active.pos.z,heading:active.pos.heading,speed:active.pos.speed,kind:active.transport?'ride':'walk',region:active.id};},
