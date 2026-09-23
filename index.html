@@ -2295,6 +2295,7 @@ const bloomOrigin=new THREE.Vector2(0,0);
    每 0.5 秒统计一次帧率，连续 2 秒低于 45 帧就降一级，最多三级；不自动升回去，免得来回跳：
    1 级：分辨率降到 1 倍、关泛光  2 级：再关阴影  3 级：分辨率降到 0.8 倍 */
 const QUALITY={level:0,low:0};
+const LAST_INFO={calls:0,triangles:0};
 function setQuality(level){
  QUALITY.level=level;
  renderer.setPixelRatio(Math.min(START_PIXEL_RATIO,[START_PIXEL_RATIO,1,1,.8][level]));
@@ -2306,7 +2307,11 @@ function setQuality(level){
  }
  renderer.setSize(innerWidth,innerHeight);
 }
+/* ?quality=lock：截图/验收用。软件渲染（Playwright 的 swiftshader）帧率只有个位数，
+   不锁的话拍出来的永远是关了阴影和泛光的第三档，看不出真机的样子。 */
+const QUALITY_LOCKED=(()=>{try{return new URL(location.href).searchParams.get('quality')==='lock';}catch{return false;}})();
 function adaptQuality(fps){
+ if(QUALITY_LOCKED)return;
  if(document.hidden||document.querySelector('dialog[open]'))return;   // 切后台、开着对话框时帧率不算数
  QUALITY.low=fps<45?QUALITY.low+1:0;
  if(QUALITY.low>=4&&QUALITY.level<3){QUALITY.low=0;setQuality(QUALITY.level+1);}
@@ -2314,6 +2319,7 @@ function adaptQuality(fps){
 function renderScene(sc,cam){
  renderer.setRenderTarget?.(null);            // 精简 renderer（测试替身）没有这个方法
  renderer.render(sc,cam);                     // 基准图：原样画到画布，不经我的手
+ if(renderer.info&&renderer.info.render){LAST_INFO.calls=renderer.info.render.calls;LAST_INFO.triangles=renderer.info.render.triangles;}   // 泛光那几趟会把 info 清掉，这里先记下场景本身的
  if(!BLOOM.on||!renderer.copyFramebufferToTexture)return;
  try{
   bloomSetup();bloomResize();
@@ -5390,6 +5396,14 @@ const harborWindowMat=new THREE.MeshStandardMaterial({color:0x6c918e,emissive:0x
 const harborGlass=new THREE.MeshStandardMaterial({color:0xa1c7c3,transparent:true,opacity:.17,roughness:.2,side:THREE.DoubleSide,depthWrite:false});
 const harborSignMats=[];
 function hb(p,w,h,d,m,x,y,z,shadow=true){return add(p,G.box(w,h,d),m,x,y,z,shadow,true);}
+// 把若干几何体（各自带变换）拼成一块只有 position/normal 的 BufferGeometry。
+// 港区末尾的静态合并、货架上的果蔬、路灯光晕这些共用小件都走这里
+function mergeHarborGeometry(parts){
+ const flat=parts.map(({geometry,matrix})=>{const g=geometry.clone();if(matrix)g.applyMatrix4(matrix);if(!g.index)return g;const n=g.toNonIndexed();g.dispose();return n;});
+ const length=flat.reduce((n,g)=>n+g.attributes.position.array.length,0),geometry=new THREE.BufferGeometry();
+ for(const attr of ['position','normal']){const values=new Float32Array(length);let offset=0;for(const g of flat){values.set(g.attributes[attr].array,offset);offset+=g.attributes[attr].array.length;}geometry.setAttribute(attr,new THREE.BufferAttribute(values,3));}
+ flat.forEach(g=>g.dispose());geometry.computeBoundingSphere();return geometry;
+}
 function harborSign(parent,text,x,y,z,w=16,h=2.6){
  const cv=document.createElement('canvas');cv.width=1024;cv.height=160;const cx=cv.getContext('2d');
  cx.fillStyle='#213b3c';cx.fillRect(0,0,1024,160);cx.strokeStyle='#c7ad76';cx.lineWidth=5;cx.strokeRect(10,10,1004,140);cx.fillStyle='#ead6a9';cx.font='52px "Microsoft YaHei",sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(text,512,82);
@@ -5442,7 +5456,7 @@ const harborSpecs=[
  {id:'ferry',name:'渡輪會館',en:'STEAM FERRY HALL',kind:'ferry',x:801,z:-385,w:88,d:68,h:34,color:0xc6b393,subtitle:'候船大厅 · 售票柜台 · 上层航线室',rooms:['候船大厅','航线阅览室'],exhibits:['候船大厅：港湾另一边，是下一段旅程。','航线室：地图上的细线，把群岛连接在一起。']}
 ];
 function buildHarborLandmark(spec){
- const b={...spec,g:new THREE.Group(),furniture:[],doorOpen:false,exhibitPoints:[],stairX:spec.w/2-7};b.g.position.set(b.x,4.3,b.z);harborRoot.add(b.g);
+ const b={...spec,g:new THREE.Group(),furniture:[],doorOpen:false,exhibitPoints:[],stairX:spec.w/2-7};b.g.name='landmark:'+spec.id;b.g.position.set(b.x,4.3,b.z);harborRoot.add(b.g);
  const stone=humanMat(spec.color),w=b.w,d=b.d,h=b.h;
  hb(b.g,w+.8,.3,d+.8,HM.floor,0,-.15,0);
  // Front facade has a real 7 m wide entrance opening, with hinged door leaves.
@@ -5546,7 +5560,7 @@ harborSpecs.forEach(buildHarborLandmark);
 let harborFacadeCount=0;
 for(const row of [-290,-466])for(let i=0;i<18;i++){
  const x=350+i*33,z=row;if([370,530,705,875,928].some(street=>Math.abs(x-street)<14))continue;
- const g=new THREE.Group();g.position.set(x,4.3,z);harborRoot.add(g);const w=26,d=30,h=19+(i%4)*6;
+ const g=new THREE.Group();g.name='street';g.position.set(x,4.3,z);harborRoot.add(g);const w=26,d=30,h=19+(i%4)*6;
  hb(g,w,h,d,[HM.cream,HM.brick,HM.stone][i%3],0,h/2,0);hb(g,w+2,1,d+2,HM.darkstone,0,h+.5,0);
  for(let level=0;level<Math.floor(h/6);level++)for(const wx of [-8,0,8]){
   hb(g,3.5,3.8,.15,harborWindowMat,wx,4+level*6,d/2+.1);arch(g,wx,2+level*6,d/2+.2,4,4.4,HM.cream);
@@ -5557,7 +5571,7 @@ for(const row of [-290,-466])for(let i=0;i<18;i++){
  harborBuildings.push({id:'street-'+row+'-'+i,name:'沿街商号',x,z,w,d,h,g,decorative:true,furniture:[]});harborFacadeCount++;
 }
 // A tall waterfront clock tower is a visual landmark across the water.
-const clockTower=new THREE.Group();clockTower.position.set(921,4.3,-130);harborRoot.add(clockTower);
+const clockTower=new THREE.Group();clockTower.name='clock';clockTower.position.set(921,4.3,-130);harborRoot.add(clockTower);
 hb(clockTower,13,51,13,HM.brick,0,25.5,0);for(const y of [0,12,25,38,51])hb(clockTower,15,.8,15,HM.cream,0,y,0);
 for(const side of [-1,1]){const dial=add(clockTower,G.cyl(3.4,3.4,.15,32),HM.paper,0,44,side*6.65,false);dial.rotation.x=Math.PI/2;hb(clockTower,.2,4,.2,HM.iron,0,45.3,side*6.85);hb(clockTower,2.2,.2,.2,HM.iron,1,44,side*6.85);}
 add(clockTower,G.cone(11,12,4),HM.roof,0,57,0).rotation.y=Math.PI/4;harborSign(clockTower,'HARBOUR CLOCK',0,31,6.8,12,2);
@@ -5583,11 +5597,18 @@ function harborPerson(parent,x,y,z,heading=0){
  add(p.g,G.cyl(.36,.36,.07,9),HM.wood,0,2.83,0);add(p.g,G.cyl(.23,.26,.2,9),HM.cream,0,2.94,0);
  return p;
 }
+// 货架上的货：三只木箱照旧是独立盒子（街面碰撞从它们来），箱里的果蔬合成一块共用网格。
+// 原来一摊 15 个网格 636 个三角形（港区六成的三角形都花在这些没人细看的果子上），现在 4 个网格 ~230 个
+let produceGeoShared=null;
+function produceGeo(){
+ if(produceGeoShared)return produceGeoShared;
+ const ball=G.sph(.22,5,3),parts=[];
+ for(let k=0;k<3;k++)for(let j=0;j<4;j++)parts.push({geometry:ball,matrix:new THREE.Matrix4().makeTranslation((k-1)*1.15+(j%2-.5)*.45,.78,(Math.floor(j/2)-.5)*.55)});
+ return produceGeoShared=mergeHarborGeometry(parts);
+}
 function goods(parent,x,y,z,seed=0){
- for(let k=0;k<3;k++){
-  const dx=x+(k-1)*1.15;hb(parent,1,.65,1.4,HM.wood,dx,y+.32,z);
-  for(let j=0;j<4;j++)add(parent,G.sph(.22,6,5),[HM.red,HM.green,HM.paper][seed%3],dx+(j%2-.5)*.45,y+.78,z+(Math.floor(j/2)-.5)*.55);
- }
+ for(let k=0;k<3;k++)hb(parent,1,.65,1.4,HM.wood,x+(k-1)*1.15,y+.32,z);
+ add(parent,produceGeo(),[HM.red,HM.green,HM.paper][seed%3],x,y,z);
 }
 function tradingStall(x,z,index,parent=harborRoot,ox=0,oz=0){
  const m=[HM.red,HM.green,HM.blue][index%3];
@@ -5616,7 +5637,7 @@ const infillSpecs=[
  [348,-385,28,64],[386,-385,18,64],[502,-385,34,64],[547,-385,22,64],[691,-385,20,64],[728,-385,24,64],[892,-385,66,64]
 ];
 function buildInfill(x,z,w,d,index){
- const g=new THREE.Group();g.position.set(x,4.3,z);harborRoot.add(g);const h=22+(index%3)*7;
+ const g=new THREE.Group();g.name='infill';g.position.set(x,4.3,z);harborRoot.add(g);const h=22+(index%3)*7;
  const mat=[HM.brick,HM.stone,HM.cream][index%3];
  // Open arcade at street level; the upper dwelling forms a continuous street wall.
  hb(g,w,h-6,d,mat,0,6+(h-6)/2,0);
@@ -5631,7 +5652,7 @@ function buildInfill(x,z,w,d,index){
  hb(g,w+1,.7,d+1,HM.darkstone,0,h,0);
  for(const side of [-1,1]){
   streetSolid(g,2,3.8,d-18,HM.wood,side*(w/2-4),1.9,-3,x,z);
-  for(let zz=-d/2+8;zz<d/2-12;zz+=4)for(const yy of [1.2,2.7,4]){
+  for(let zz=-d/2+8;zz<d/2-12;zz+=8)for(const yy of [1.2,2.9]){
    hb(g,2.2,.15,3.9,HM.cream,side*(w/2-4),yy,zz);goods(g,side*(w/2-4),yy+.1,zz,index);
   }
  }
@@ -5644,7 +5665,7 @@ function buildInfill(x,z,w,d,index){
 infillSpecs.forEach((v,i)=>buildInfill(...v,i));
 
 // A covered market occupies the formerly empty central block behind the hotel.
-const market=new THREE.Group();market.position.set(618,0,-385);harborRoot.add(market);
+const market=new THREE.Group();market.name='market';market.position.set(618,0,-385);harborRoot.add(market);
 for(const side of [-1,1])streetSolid(market,1,10,64,HM.brick,side*49,9.3,0,618,-385);
 for(const z of [-32,32])for(const side of [-1,1])streetSolid(market,40,10,1,HM.brick,side*29,9.3,z,618,-385);
 for(let x=-44;x<=44;x+=11)if(x!==0)for(const z of [-29,0,29])harborColumn(market,x,z,10,4.3);
@@ -7502,6 +7523,15 @@ renderer.toneMapping=THREE.CustomToneMapping;
 renderer.toneMappingExposure=1.20;
 
 setMode(MODE.VIEW);
+// 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
+window.__astra={
+ info:()=>({calls:LAST_INFO.calls,triangles:LAST_INFO.triangles,quality:QUALITY.level,mode:mode}),
+ period:i=>{selectPeriod(i);for(let k=0;k<60;k++)updateAtmosphere(.5);},   // 0 晨光 1 日落 2 星夜；把几秒的渐变一次推到位，软件渲染下等不起
+ view:r=>focusRegion(r),                                      // 'island' | 'park' | 'harbor' | 'all'
+ park:()=>parkEntry(), harbor:()=>strollHarbor(), walkMode:()=>setMode(MODE.WALK),
+ walkTo:(x,z,yaw=0,pitch=-.05)=>{setMode(MODE.WALK);walk.x=x;walk.z=z;walk.yaw=yaw;walk.pitch=pitch;walk.vx=walk.vz=0;faceAway();groundPlayer();updateWalk(0,0);},
+ orbit:(x,y,z,dist,theta,phi)=>{setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(x,y,z);ctrl.target.set(x,y,z);ctrl.tDist=ctrl.dist=dist;ctrl.tTheta=ctrl.theta=theta;ctrl.tPhi=ctrl.phi=phi;applyOrbit();},
+};
 placeToggle();
 joyRelease();
 resetFishing();
