@@ -7509,7 +7509,14 @@ renderer.toneMappingExposure=1.20;
 
 setMode(MODE.VIEW);
 // 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
-window.__astra={info:()=>({calls:LAST_INFO.calls,triangles:LAST_INFO.triangles,quality:QUALITY.level,mode:mode})};
+window.__astra={
+ info:()=>({calls:LAST_INFO.calls,triangles:LAST_INFO.triangles,quality:QUALITY.level,mode:mode}),
+ period:i=>selectPeriod(i),                                   // 0 晨光 1 日落 2 星夜
+ view:r=>focusRegion(r),                                      // 'island' | 'park' | 'harbor' | 'all'
+ park:()=>parkEntry(), harbor:()=>strollHarbor(), walkMode:()=>setMode(MODE.WALK),
+ walkTo:(x,z,yaw=0,pitch=-.05)=>{setMode(MODE.WALK);walk.x=x;walk.z=z;walk.yaw=yaw;walk.pitch=pitch;walk.vx=walk.vz=0;faceAway();groundPlayer();updateWalk(0,0);},
+ orbit:(x,y,z,dist,theta,phi)=>{setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(x,y,z);ctrl.target.set(x,y,z);ctrl.tDist=ctrl.dist=dist;ctrl.tTheta=ctrl.theta=theta;ctrl.tPhi=ctrl.phi=phi;applyOrbit();},
+};
 placeToggle();
 joyRelease();
 resetFishing();
