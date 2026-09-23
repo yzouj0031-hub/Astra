@@ -14,7 +14,7 @@ const SURFACES={
   wall:  ['brick',    2.0,.3, .55,.4, 0,false,null,.4],
   roof:  ['rooftile', 1.6,.5, .8, .5, 0,true, null,.5],
   wood:  ['plank',    1.8,.5, .7, .5, 0,false,null,.5],
-  stone: ['flagstone',1.3,.45,.75,.5, 0,false,null,.5],
+  stone: ['flagstone',1.7,.36,.7, .5, 0,false,null,.5],
   ground:['grass',    2.6,.4, .6, .55,0,false,null,.5],
   misc:  ['plaster',  2.0,.35,.4, .45,0,false,null,.5],
  },

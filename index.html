@@ -5474,19 +5474,19 @@ function addSurfaceDetail(mat, kind, metres, amt, bump, rough, base, upOnly, alt
   sh.vertexShader="varying vec3 vSurfPos; varying vec3 vSurfNrm;\n"+sh.vertexShader
    .replace("#include <begin_vertex>","#include <begin_vertex>\n#ifdef USE_INSTANCING\n vSurfPos=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n#else\n vSurfPos=(modelMatrix*vec4(transformed,1.0)).xyz;\n#endif")
    .replace("#include <beginnormal_vertex>","#include <beginnormal_vertex>\n#ifdef USE_INSTANCING\n vSurfNrm=mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal;\n#else\n vSurfNrm=mat3(modelMatrix)*objectNormal;\n#endif");
-  const micro="*7.3+vec2(0.37,0.61)";          // 第二个八度：同一张图缩小 7.3 倍再叠一层，一米以内还有颗粒
+  const micro="*7.3+vec2(0.37,0.61)";          // 第二个八度：同一张颜色图缩小 7.3 倍再叠一层，一米以内还有颗粒（只叠颜色，法线/AO 不叠：软件渲染实测每多一次采样一帧慢两成）
   sh.fragmentShader="varying vec3 vSurfPos; varying vec3 vSurfNrm;\nuniform sampler2D uSurf; uniform sampler2D uSurfN; uniform float uSurfScale; uniform float uSurfAmt; uniform float uSurfBump; uniform float uSurfRough; uniform float uSurfBase; uniform float uSurfUp; uniform float uSurfTint;\n"+(alt2?"uniform sampler2D uSurf2; uniform sampler2D uSurfN2; uniform float uSurfScale2; uniform vec2 uSurfBand;\n":"")+sh.fragmentShader
    // 主轴决定采样平面：地面用 xz，朝 x 的墙用 zy，朝 z 的墙用 xy
    .replace("#include <map_fragment>","#include <map_fragment>\n vec3 sWn=normalize(vSurfNrm);\n vec3 sN=abs(sWn);\n int sAx = sN.y>max(sN.x,sN.z) ? 1 : (sN.x>sN.z ? 0 : 2);\n vec2 sUv = sAx==1 ? vSurfPos.xz : (sAx==0 ? vSurfPos.zy : vSurfPos.xy);\n"
-    +(alt2?" vec2 sUv2=sUv*uSurfScale2;\n sUv*=uSurfScale;\n float sMix=smoothstep(uSurfBand.x,uSurfBand.y,vSurfPos.y);\n vec4 sT=mix(texture2D(uSurf,sUv),texture2D(uSurf2,sUv2),sMix);\n vec4 sTn=mix(texture2D(uSurfN,sUv),texture2D(uSurfN2,sUv2),sMix);\n vec4 sTm=mix(texture2D(uSurf,sUv"+micro+"),texture2D(uSurf2,sUv2"+micro+"),sMix);\n vec4 sTnm=mix(texture2D(uSurfN,sUv"+micro+"),texture2D(uSurfN2,sUv2"+micro+"),sMix);\n"
-     :" sUv*=uSurfScale;\n vec4 sT=texture2D(uSurf,sUv);\n vec4 sTn=texture2D(uSurfN,sUv);\n vec4 sTm=texture2D(uSurf,sUv"+micro+");\n vec4 sTnm=texture2D(uSurfN,sUv"+micro+");\n")
-    +" float sFace=mix(1.0,smoothstep(0.05,0.45,sWn.y),uSurfUp);\n float sHm=dot(sTm.rgb,vec3(0.299,0.587,0.114));\n float sH=mix(dot(sT.rgb,vec3(0.299,0.587,0.114)),sHm,0.25);\n sH=mix(0.5,sH,sFace);\n vec3 sCol=mix(vec3(sH*2.0),sT.rgb*2.0*mix(1.0,sHm*2.0,0.25),uSurfTint);\n sCol=mix(vec3(1.0),sCol,sFace);\n diffuseColor.rgb*=mix(vec3(1.0),sCol,uSurfAmt);\n float sAo=mix(1.0,mix(sTn.a,sTnm.a,0.25),sFace*uSurfAmt);")
+    +(alt2?" vec2 sUv2=sUv*uSurfScale2;\n sUv*=uSurfScale;\n float sMix=smoothstep(uSurfBand.x,uSurfBand.y,vSurfPos.y);\n vec4 sT=mix(texture2D(uSurf,sUv),texture2D(uSurf2,sUv2),sMix);\n vec4 sTn=mix(texture2D(uSurfN,sUv),texture2D(uSurfN2,sUv2),sMix);\n vec4 sTm=mix(texture2D(uSurf,sUv"+micro+"),texture2D(uSurf2,sUv2"+micro+"),sMix);\n"
+     :" sUv*=uSurfScale;\n vec4 sT=texture2D(uSurf,sUv);\n vec4 sTn=texture2D(uSurfN,sUv);\n vec4 sTm=texture2D(uSurf,sUv"+micro+");\n")
+    +" float sFace=mix(1.0,smoothstep(0.05,0.45,sWn.y),uSurfUp);\n float sHm=dot(sTm.rgb,vec3(0.299,0.587,0.114));\n float sH=mix(dot(sT.rgb,vec3(0.299,0.587,0.114)),sHm,0.25);\n sH=mix(0.5,sH,sFace);\n vec3 sCol=mix(vec3(sH*2.0),sT.rgb*2.0*mix(1.0,sHm*2.0,0.25),uSurfTint);\n sCol=mix(vec3(1.0),sCol,sFace);\n diffuseColor.rgb*=mix(vec3(1.0),sCol,uSurfAmt);\n float sAo=mix(1.0,sTn.a,sFace*uSurfAmt);")
    // 缝里更糙
    .replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\n roughnessFactor*=mix(1.0,(1.5-sH)*(1.3-0.3*sAo),uSurfRough);")
    // 烘好的切线空间法线：按采样平面转到世界空间再转到视空间。
    // 不需要按面的朝向翻符号 —— 扰动向量 -dh/du·U -dh/dv·V 里的 U、V 就是世界轴，
    // 和几何法线朝 +X 还是 -X 无关（高度是沿外法线量的，两边推导出来同一个式子）。
-   .replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n if(uSurfBump>0.0){\n  vec2 sTs=(mix(sTn.xy,sTnm.xy,0.25)*2.0-1.0)*uSurfBump*sFace;\n  vec3 wB = sAx==1 ? vec3(sTs.x,0.0,sTs.y) : (sAx==0 ? vec3(0.0,sTs.y,sTs.x) : vec3(sTs.x,sTs.y,0.0));\n  normal=normalize(normal+mat3(viewMatrix)*wB);\n }")
+   .replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n if(uSurfBump>0.0){\n  vec2 sTs=(sTn.xy*2.0-1.0)*uSurfBump*sFace;\n  vec3 wB = sAx==1 ? vec3(sTs.x,0.0,sTs.y) : (sAx==0 ? vec3(0.0,sTs.y,sTs.x) : vec3(sTs.x,sTs.y,0.0));\n  normal=normalize(normal+mat3(viewMatrix)*wB);\n }")
    // 光照空间的暗部：缝里的 AO、朝下的面少吃天光、墙脚一点接触阴影。
    // 这些以前是直接乘在漫反射颜色上的一道「污渍带」，连被太阳直射的面一起压暗；现在只动间接光
    .replace("#include <aomap_fragment>","#include <aomap_fragment>\n float sSky=0.5+0.5*sWn.y;\n float sContact=mix(mix(0.75,1.0,smoothstep(0.0,1.2,vSurfPos.y-uSurfBase)),1.0,smoothstep(0.3,0.7,sWn.y));\n reflectedLight.indirectDiffuse*=sAo*mix(0.6,1.0,sSky)*sContact;\n reflectedLight.directDiffuse*=mix(1.0,sAo,0.4);");
