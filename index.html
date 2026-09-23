@@ -2754,6 +2754,10 @@ const residentGeo={
  eye:G.sph(.024,8,6)};
 const residentMats=new Map();
 function humanMat(color){if(!residentMats.has(color))residentMats.set(color,new THREE.MeshStandardMaterial({color,roughness:.88}));return residentMats.get(color);}
+// 建筑、路面用的材质：和 humanMat 分开缓存，粗糙度按材料种类给（石 .75、灰泥 .9、瓦 .6、木 .7、铁 .45）。
+// 以前墙和人的皮肤共用一张按颜色缓存的表，粗糙度只能是同一个 .88。材质只在建场景时建一次，合批的键不受影响。
+const buildMats=new Map();
+function buildMat(color,rough,metal){if(!buildMats.has(color))buildMats.set(color,new THREE.MeshStandardMaterial({color,roughness:rough==null?.8:rough,metalness:metal||0}));return buildMats.get(color);}
 function makeResident(spec){
  const g=new THREE.Group();g.name='岛民 · '+spec.name;
  const body=new THREE.Group();g.add(body);
@@ -5196,44 +5200,65 @@ const harborBuildings=[],harborVisitors=[],harborShips=[],harborWarmMats=[];
 let activeHarborBuilding=null,harborFloor=0,harborNearby=null;
 /* ============================================================
    表面细节：程序化材质
-   世界是几千个纯色盒子，给每种表面配一张灰度细节图，按世界坐标采样（主轴三平面，
-   盒子都是轴对齐的所以一次采样就够、也不会有接缝）。贴图只出明暗和起伏，颜色仍旧
-   由原来的调色板决定——加细节不改美术。
+   世界是几千个纯色盒子，给每种表面配一套细节图（颜色图 + 法线/AO 图），按世界坐标采样
+   （主轴三平面，盒子都是轴对齐的所以一次采样就够、也不会有接缝）。
+   颜色图是围着 128 的偏色（暖石/冷石、灰泥上的赭色雨痕、草地的黄绿与蓝绿），乘在原来的
+   调色板上——加细节不改美术。法线和 AO 是画完之后从明度烘出来的（Sobel + 方框模糊），
+   着色器里各只采一次，不再做四次差分。随机数按种类名播种：刷新一次样子不变，
+   也不碰主世界那条没播种的随机序列。
    ============================================================ */
 const SURF = (function(){
  const cache={};
- function cv(n){const c=document.createElement("canvas");c.width=c.height=n;return c;}
- function grain(g,n,amt,cell){
+ const N=isSmall?128:512;                   // 手机 128、桌面 512；画法里的数量按 (N/256)^2 缩放
+ function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+ let R=Math.random;                         // texture() 里按种类重新播种
+ const cl=v=>Math.max(0,Math.min(255,Math.round(v)));
+ // 明度 v（128 为中性）加一点偏色 (tr,tg,tb)；带 a 就是 rgba
+ const rgb=(v,tr,tg,tb,a)=>a==null?"rgb("+cl(v+(tr||0))+","+cl(v+(tg||0))+","+cl(v+(tb||0))+")":"rgba("+cl(v+(tr||0))+","+cl(v+(tg||0))+","+cl(v+(tb||0))+","+a+")";
+ const WARM=[6,1,-7],COOL=[-5,0,7],OCHRE=[9,3,-13],GREY=[0,0,0];
+ const pick=arr=>arr[Math.floor(R()*arr.length)];
+ // 画矩形，越界的部分绕到对面，贴图四方连续
+ function rectW(g,n,x,y,w,h){for(const dx of [-n,0,n])for(const dy of [-n,0,n])if(x+dx+w>0&&y+dy+h>0&&x+dx<n&&y+dy<n)g.fillRect(x+dx,y+dy,w,h);}
+ // 同上，但把画法交给回调（渐变要按偏移后的坐标建）
+ function wrapDraw(n,x,y,w,h,fn){for(const dx of [-n,0,n])for(const dy of [-n,0,n])if(x+dx+w>0&&y+dy+h>0&&x+dx<n&&y+dy<n)fn(x+dx,y+dy);}
+ function ellipse(g,x,y,rx,ry,rot){g.beginPath();g.ellipse(x,y,rx,ry,rot||0,0,6.3);g.fill();}
+ // 颗粒：每格一个明度抖动，再加一点红蓝互补的色抖动（hue）
+ function grain(g,n,amt,cell,hue){
   const img=g.getImageData(0,0,n,n);
   if(!img||!img.data)return;              // 没有真正的 2D 画布（比如无头测试）就跳过
-  const d=img.data;
+  const d=img.data;hue=hue||0;
   for(let y=0;y<n;y+=cell)for(let x=0;x<n;x+=cell){
-   const v=(Math.random()-.5)*amt*255;
+   const v=(R()-.5)*amt*255,hr=(R()-.5)*hue*255;
    for(let j=0;j<cell;j++)for(let i=0;i<cell;i++){
     const p=(((y+j)%n)*n+((x+i)%n))*4;
-    const t=Math.max(0,Math.min(255,d[p]+v));d[p]=d[p+1]=d[p+2]=t;
+    d[p]=cl(d[p]+v+hr);d[p+1]=cl(d[p+1]+v);d[p+2]=cl(d[p+2]+v-hr);
    }
   }
   g.putImageData(img,0,0);
  }
  const draw={
-  // 石板：勾缝加每块石头深浅不同
-  slab(g,n){g.fillStyle="#7d7d7d";g.fillRect(0,0,n,n);
+  // 石板：勾缝加每块石头深浅、冷暖不同
+  slab(g,n,k){const S=n/256;g.fillStyle=rgb(104,0,0,2);g.fillRect(0,0,n,n);
    const rows=3,s=n/rows;
    for(let y=0;y<rows;y++)for(let x=0;x<rows+1;x++){
-    const v=128+(Math.random()-.5)*54;g.fillStyle="rgb("+v+","+v+","+v+")";
-    g.fillRect(((x*s+(y%2)*s*.5)%n)+2,y*s+2,s-4,s-4);
+    const v=128+(R()-.5)*50,t=R()<.5?WARM:COOL;g.fillStyle=rgb(v,...t);
+    rectW(g,n,x*s+(y%2)*s*.5+2*S,y*s+2*S,s-4*S,s-4*S);
+    g.fillStyle=rgb(v-10,...t,.4);
+    for(let i=0;i<3*k;i++)ellipse(g,R()*n,R()*n,4*S+R()*10*S,3*S+R()*6*S,R()*3);
    }
-   grain(g,n,.12,2);},
-  // 灰泥墙：淡淡的斑驳和几道雨痕
-  plaster(g,n){g.fillStyle="#828282";g.fillRect(0,0,n,n);
-   for(let i=0;i<80;i++){const v=128+(Math.random()-.5)*46;
-    g.fillStyle="rgba("+v+","+v+","+v+",.5)";g.beginPath();
-    g.ellipse(Math.random()*n,Math.random()*n,8+Math.random()*34,6+Math.random()*26,Math.random()*3,0,6.3);g.fill();}
-   for(let i=0;i<9;i++){const x=Math.random()*n;g.strokeStyle="rgba(88,88,88,.22)";g.lineWidth=2+Math.random()*8;
-    g.beginPath();g.moveTo(x,0);g.lineTo(x+(Math.random()-.5)*22,n);g.stroke();}
-   grain(g,n,.06,1);},
-  // 瓦：一垄一垄的半圆
+   grain(g,n,.11,2,.03);},
+  // 灰泥墙：淡淡的斑驳、赭色的雨痕、墙脚一点返潮
+  plaster(g,n,k){const S=n/256;g.fillStyle=rgb(130,1,0,-2);g.fillRect(0,0,n,n);
+   for(let i=0;i<80*k;i++){const v=128+(R()-.5)*40,t=R()<.35?OCHRE:(R()<.5?WARM:GREY);
+    g.fillStyle=rgb(v,...t,.45);ellipse(g,R()*n,R()*n,(8+R()*34)*S,(6+R()*26)*S,R()*3);}
+   for(let i=0;i<9*Math.sqrt(k);i++){const x=R()*n,v=96+R()*22;g.strokeStyle=rgb(v,...OCHRE,.22);g.lineWidth=(2+R()*8)*S;
+    g.beginPath();g.moveTo(x,0);g.lineTo(x+(R()-.5)*22*S,n);g.stroke();}
+   // 细裂纹
+   for(let i=0;i<4*Math.sqrt(k);i++){let x=R()*n,y=R()*n;g.strokeStyle=rgb(92,0,0,0,.5);g.lineWidth=Math.max(1,.8*S);g.beginPath();g.moveTo(x,y);
+    for(let j=0;j<6;j++){x+=(R()-.5)*30*S;y+=(R()*.7+.3)*18*S;g.lineTo(x,y);}g.stroke();}
+   grain(g,n,.06,1,.02);},
+  // 瓦楞板：一垄一垄的半圆（旧种类，留给需要的人）
   tile(g,n){const rows=4,h=n/rows;
    for(let r=0;r<rows;r++){
     const grd=g.createLinearGradient(0,r*h,0,(r+1)*h);
@@ -5244,82 +5269,223 @@ const SURF = (function(){
     g.fillRect(0,r*h,n,h);
    }
    grain(g,n,.07,2);},
-  // 木：顺纹加板缝
-  timber(g,n){g.fillStyle="#858585";g.fillRect(0,0,n,n);
-   for(let i=0;i<70;i++){const y=Math.random()*n,v=128+(Math.random()-.5)*46;
-    g.strokeStyle="rgba("+v+","+v+","+v+",.5)";g.lineWidth=1.4+Math.random()*5;
-    g.beginPath();g.moveTo(0,y);g.bezierCurveTo(n*.3,y+(Math.random()-.5)*8,n*.7,y+(Math.random()-.5)*8,n,y+(Math.random()-.5)*5);g.stroke();}
-   for(let p=1;p<4;p++){const y=p*n/4;g.strokeStyle="rgba(58,58,58,.6)";g.lineWidth=2.5;
-    g.beginPath();g.moveTo(0,y);g.lineTo(n,y);g.stroke();}},
-  // 砂：细颗粒和几道浪痕
-  sand(g,n){g.fillStyle="#848484";g.fillRect(0,0,n,n);
-   for(let i=0;i<16;i++){g.strokeStyle="rgba(156,156,156,.16)";g.lineWidth=3+Math.random()*9;
-    const y=Math.random()*n;g.beginPath();g.moveTo(0,y);g.bezierCurveTo(n/3,y+14,2*n/3,y-14,n,y+5);g.stroke();}
-   grain(g,n,.16,1);},
-  // 草：一丛一丛
-  grass(g,n){g.fillStyle="#808080";g.fillRect(0,0,n,n);
-   for(let i=0;i<520;i++){const v=128+(Math.random()-.5)*80;
-    g.fillStyle="rgba("+v+","+v+","+v+",.5)";g.beginPath();
-    g.ellipse(Math.random()*n,Math.random()*n,2+Math.random()*8,1.5+Math.random()*6,Math.random()*3,0,6.3);g.fill();}
-   grain(g,n,.09,1);},
+  // 木（树皮、船壳）：顺纹加板缝
+  timber(g,n,k){const S=n/256;g.fillStyle=rgb(132,5,1,-6);g.fillRect(0,0,n,n);
+   for(let i=0;i<70*Math.sqrt(k);i++){const y=R()*n,v=128+(R()-.5)*46;
+    g.strokeStyle=rgb(v,...WARM,.5);g.lineWidth=(1.4+R()*5)*S;
+    g.beginPath();g.moveTo(0,y);g.bezierCurveTo(n*.3,y+(R()-.5)*8*S,n*.7,y+(R()-.5)*8*S,n,y+(R()-.5)*5*S);g.stroke();}
+   for(let p=1;p<4;p++){const y=p*n/4;g.strokeStyle=rgb(58,2,0,-4,.6);g.lineWidth=2.5*S;
+    g.beginPath();g.moveTo(0,y);g.lineTo(n,y);g.stroke();}
+   grain(g,n,.05,1,.02);},
+  // 砂：暖色细颗粒和几道浪痕
+  sand(g,n,k){const S=n/256;g.fillStyle=rgb(132,4,1,-6);g.fillRect(0,0,n,n);
+   for(let i=0;i<16*Math.sqrt(k);i++){g.strokeStyle=rgb(156,3,1,-5,.16);g.lineWidth=(3+R()*9)*S;
+    const y=R()*n;g.beginPath();g.moveTo(0,y);g.bezierCurveTo(n/3,y+14*S,2*n/3,y-14*S,n,y+5*S);g.stroke();}
+   for(let i=0;i<40*k;i++){g.fillStyle=rgb(112,-2,-1,-2,.5);ellipse(g,R()*n,R()*n,S*(1+R()*2),S*(1+R()*1.5),R()*3);}   // 贝壳碎屑、小石子
+   grain(g,n,.15,1,.03);},
+  // 草：先铺黄绿 / 蓝绿的大块斑，再一丛一丛
+  grass(g,n,k){const S=n/256;g.fillStyle=rgb(128,0,3,-3);g.fillRect(0,0,n,n);
+   for(let i=0;i<14*k;i++){const y=R()<.5;g.fillStyle=rgb(128+(R()-.5)*16,y?7:-8,y?6:2,y?-13:6,.55);ellipse(g,R()*n,R()*n,(20+R()*40)*S,(14+R()*30)*S,R()*3);}
+   for(let i=0;i<520*k;i++){const v=128+(R()-.5)*80,y=R()<.5;
+    g.fillStyle=rgb(v,y?5:-4,y?5:2,y?-9:4,.5);ellipse(g,R()*n,R()*n,(2+R()*8)*S,(1.5+R()*6)*S,R()*3);}
+   grain(g,n,.09,1,.03);},
   // 石头：斑驳的花岗质感
-  rock(g,n){g.fillStyle="#808080";g.fillRect(0,0,n,n);
-   for(let i=0;i<300;i++){const v=128+(Math.random()-.5)*86;
-    g.fillStyle="rgba("+v+","+v+","+v+",.45)";g.beginPath();
-    g.ellipse(Math.random()*n,Math.random()*n,3+Math.random()*16,3+Math.random()*12,Math.random()*3,0,6.3);g.fill();}
-   grain(g,n,.12,1);},
+  rock(g,n,k){const S=n/256;g.fillStyle=rgb(128,0,0,1);g.fillRect(0,0,n,n);
+   for(let i=0;i<300*k;i++){const v=128+(R()-.5)*86,t=R()<.4?WARM:(R()<.5?COOL:GREY);
+    g.fillStyle=rgb(v,...t,.45);ellipse(g,R()*n,R()*n,(3+R()*16)*S,(3+R()*12)*S,R()*3);}
+   for(let i=0;i<3*Math.sqrt(k);i++){let x=R()*n,y=R()*n;g.strokeStyle=rgb(84,0,0,0,.6);g.lineWidth=Math.max(1,S);g.beginPath();g.moveTo(x,y);
+    for(let j=0;j<5;j++){x+=(R()-.5)*40*S;y+=(R()-.5)*40*S;g.lineTo(x,y);}g.stroke();}
+   grain(g,n,.12,1,.02);},
+  // 砖：顺砖错缝，一皮 8.3 cm、一块 25 cm（一张铺 2 m 时），每块深浅冷暖不同，灰缝凹陷（暗）
+  brick(g,n,k){const S=n/256;g.fillStyle=rgb(98,2,0,-3);g.fillRect(0,0,n,n);
+   const rows=24,cols=8,bh=n/rows,bw=n/cols,m=Math.max(1,1.6*S);
+   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const v=128+(R()-.5)*44,t=R()<.7?[7+R()*6,0,-8-R()*6]:[-3,-1,4];   // 大多偏暖红，少数烧过头的偏青
+    g.fillStyle=rgb(v,...t);
+    const x0=x*bw+(y%2)*bw*.5+m/2,y0=y*bh+m/2;
+    rectW(g,n,x0,y0,bw-m,bh-m);
+    g.fillStyle=rgb(v-16,...t,.4);                       // 烧结的深浅斑
+    for(let i=0;i<2;i++)rectW(g,n,x0+R()*(bw-m),y0+R()*(bh-m),(2+R()*6)*S,(1+R()*2)*S);
+    if(R()<.12){g.fillStyle=rgb(v+14,...t,.5);rectW(g,n,x0+R()*(bw-m)*.6,y0,(bw-m)*.4,bh-m);}   // 偶尔一块发白
+   }
+   grain(g,n,.07,1,.02);},
+  // 条石：大块料，勾缝深，块面上下边各留一道凿边亮线
+  ashlar(g,n,k){const S=n/256;g.fillStyle=rgb(96,0,0,1);g.fillRect(0,0,n,n);
+   const rows=4,cols=3,bh=n/rows,bw=n/cols,m=Math.max(1,2.2*S);
+   for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const v=128+(R()-.5)*30,t=R()<.5?WARM:COOL;
+    const x0=x*bw+(y%2)*bw*.5+m/2,y0=y*bh+m/2,w=bw-m,h=bh-m;
+    g.fillStyle=rgb(v,...t);rectW(g,n,x0,y0,w,h);
+    g.fillStyle=rgb(v-9,...t,.5);
+    for(let i=0;i<12*k;i++)wrapDraw(n,x0,y0,w,h,(xx,yy)=>{g.save();g.beginPath();g.rect(xx,yy,w,h);g.clip();ellipse(g,xx+R()*w,yy+R()*h,(4+R()*14)*S,(3+R()*8)*S,R()*3);g.restore();});
+    g.fillStyle=rgb(v+22,...t,.7);rectW(g,n,x0,y0,w,Math.max(1,1.2*S));rectW(g,n,x0,y0,Math.max(1,1.2*S),h);   // 凿边亮线（上、左）
+    g.fillStyle=rgb(v-22,...t,.6);rectW(g,n,x0,y0+h-Math.max(1,1.2*S),w,Math.max(1,1.2*S));rectW(g,n,x0+w-Math.max(1,1.2*S),y0,Math.max(1,1.2*S),h);   // 下、右压暗
+   }
+   grain(g,n,.07,1,.02);},
+  // 屋瓦：8 皮，每皮的瓦一块一块错开，每块横向半圆渐变，上一皮压在下一皮上留一道投影
+  rooftile(g,n,k){const S=n/256;const rows=8,cols=6,th=n/rows,tw=n/cols;
+   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const v=128+(R()-.5)*26,t=R()<.5?COOL:GREY;
+    const x0=c*tw+(r%2)*tw*.5,y0=r*th;
+    wrapDraw(n,x0,y0,tw,th,(xx,yy)=>{
+     const grd=g.createLinearGradient(xx,0,xx+tw,0);
+     if(grd&&grd.addColorStop){grd.addColorStop(0,rgb(v-30,...t));grd.addColorStop(.3,rgb(v+24,...t));grd.addColorStop(.62,rgb(v+8,...t));grd.addColorStop(1,rgb(v-34,...t));g.fillStyle=grd;}
+     else g.fillStyle=rgb(v,...t);
+     g.fillRect(xx,yy,tw,th);
+     const dr=g.createLinearGradient(0,yy,0,yy+th*.45);           // 上一皮压下来的投影：要够重，不然整张读成竖条纹
+     if(dr&&dr.addColorStop){dr.addColorStop(0,"rgba(0,0,0,.68)");dr.addColorStop(.5,"rgba(0,0,0,.3)");dr.addColorStop(1,"rgba(0,0,0,0)");g.fillStyle=dr;g.fillRect(xx,yy,tw,th*.45);}
+     g.fillStyle=rgb(v+30,...t,.7);g.fillRect(xx,yy+th-Math.max(1,1.3*S),tw,Math.max(1,1.3*S));   // 瓦唇亮边
+     g.fillStyle=rgb(v-40,...t,.8);g.fillRect(xx,yy,Math.max(1,S),th);                          // 瓦与瓦之间的缝
+    });
+   }
+   for(let i=0;i<30*k;i++){g.fillStyle=rgb(150,-6,4,-4,.35);ellipse(g,R()*n,R()*n,(2+R()*6)*S,(1.5+R()*4)*S,R()*3);}   // 青苔、鸟粪
+   grain(g,n,.06,1,.02);},
+  // 木板：12–18 cm 的板，端头错缝，钉子、木节
+  plank(g,n,k){const S=n/256;g.fillStyle=rgb(70,3,0,-5);g.fillRect(0,0,n,n);
+   const rows=16,bh=n/rows,m=Math.max(1,1.2*S);
+   for(let y=0;y<rows;y++){
+    let x=-R()*n*.5;
+    while(x<n){
+     const len=(.5+R()*.9)*n*.5,v=128+(R()-.5)*40,t=[6+R()*5,1,-8-R()*5];
+     const x0=x+m/2,y0=y*bh+m/2,w=len-m,h=bh-m;
+     g.fillStyle=rgb(v,...t);rectW(g,n,x0,y0,w,h);
+     wrapDraw(n,x0,y0,w,h,(xx,yy)=>{g.save();g.beginPath();g.rect(xx,yy,w,h);g.clip();
+      for(let i=0;i<4;i++){const ly=yy+R()*h,vv=v+(R()-.5)*30;g.strokeStyle=rgb(vv,...t,.45);g.lineWidth=(.6+R()*1.6)*S;
+       g.beginPath();g.moveTo(xx,ly);g.bezierCurveTo(xx+w*.3,ly+(R()-.5)*4*S,xx+w*.7,ly+(R()-.5)*4*S,xx+w,ly+(R()-.5)*3*S);g.stroke();}
+      if(R()<.3){const kx=xx+w*(.2+R()*.6),ky=yy+h*(.3+R()*.4),kr=(1.5+R()*2.5)*S;g.fillStyle=rgb(v-40,...t);ellipse(g,kx,ky,kr,kr*.7,0);
+       g.strokeStyle=rgb(v-18,...t,.7);g.lineWidth=Math.max(1,.8*S);g.beginPath();g.ellipse(kx,ky,kr*1.7,kr*1.2,0,0,6.3);g.stroke();}   // 木节
+      g.fillStyle=rgb(48,0,0,0);for(const nx of [xx+3*S,xx+w-3*S])ellipse(g,nx,yy+h*.5,Math.max(.8,1.1*S),Math.max(.8,1.1*S),0);   // 钉子
+      g.restore();});
+     x+=len;
+    }
+   }
+   grain(g,n,.05,1,.02);},
+  // 金属：拉丝、稀疏划痕、一排铆钉
+  metal(g,n,k){const S=n/256;g.fillStyle=rgb(128,-2,0,3);g.fillRect(0,0,n,n);
+   for(let i=0;i<220*Math.sqrt(k);i++){const y=R()*n,v=128+(R()-.5)*34;g.strokeStyle=rgb(v,-2,0,3,.35);g.lineWidth=Math.max(.6,(.4+R()*1.2)*S);
+    g.beginPath();g.moveTo(0,y);g.lineTo(n,y+(R()-.5)*2*S);g.stroke();}
+   for(let i=0;i<10*Math.sqrt(k);i++){const x=R()*n,y=R()*n,a=R()*6.3,l=(6+R()*30)*S;g.strokeStyle=rgb(170,0,0,2,.5);g.lineWidth=Math.max(.6,.7*S);
+    g.beginPath();g.moveTo(x,y);g.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);g.stroke();}
+   for(const ry of [n*.5]){for(let i=0;i<8;i++){const x=(i+.5)*n/8,r=3.2*S;
+    g.fillStyle=rgb(92,0,0,2);ellipse(g,x+.6*S,ry+.6*S,r,r,0);g.fillStyle=rgb(140,0,0,2);ellipse(g,x,ry,r,r,0);g.fillStyle=rgb(178,0,0,2);ellipse(g,x-r*.3,ry-r*.3,r*.45,r*.4,0);}}
+   for(let i=0;i<10*k;i++){g.fillStyle=rgb(112,6,2,-4,.25);ellipse(g,R()*n,R()*n,(3+R()*8)*S,(2+R()*6)*S,R()*3);}   // 锈斑
+   grain(g,n,.04,1,.01);},
+  // 乱石路面：抖动网格上的 Voronoi 多边形，石缝暗、石边带一点圆角
+  flagstone(g,n,k){
+   const img=g.getImageData(0,0,n,n);if(!img||!img.data)return;
+   const d=img.data,S=n/256,cells=5,pts=[];
+   for(let j=0;j<cells;j++)for(let i=0;i<cells;i++){const cs=n/cells;
+    const v=128+(R()-.5)*44,t=R()<.4?WARM:(R()<.5?COOL:[-2,3,-3]);
+    pts.push({x:(i+.15+R()*.7)*cs,y:(j+.15+R()*.7)*cs,r:cl(v+t[0]),g:cl(v+t[1]),b:cl(v+t[2]),gx:(R()-.5)*.25,gy:(R()-.5)*.25});}
+   const joint=1.7*S,bevel=3.5*S;
+   for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+    let d1=1e9,d2=1e9,p1=null;
+    for(const p of pts){let dx=Math.abs(p.x-x),dy=Math.abs(p.y-y);if(dx>n/2)dx=n-dx;if(dy>n/2)dy=n-dy;const dd=Math.sqrt(dx*dx+dy*dy);
+     if(dd<d1){d2=d1;d1=dd;p1=p;}else if(dd<d2)d2=dd;}
+    const edge=(d2-d1)*.5,o=(y*n+x)*4;                     // 到石缝中线的距离
+    if(edge<joint){const v=90+R()*14;d[o]=v;d[o+1]=v;d[o+2]=v-2;}
+    else{const f=1-.35*Math.max(0,1-(edge-joint)/bevel),sh=1+p1.gx*(x-p1.x)/n*cells+p1.gy*(y-p1.y)/n*cells;
+     d[o]=cl(p1.r*f*sh);d[o+1]=cl(p1.g*f*sh);d[o+2]=cl(p1.b*f*sh);}
+    d[o+3]=255;
+   }
+   g.putImageData(img,0,0);
+   for(let i=0;i<40*k;i++){g.fillStyle=rgb(118,2,0,-3,.3);ellipse(g,R()*n,R()*n,(3+R()*10)*S,(2+R()*7)*S,R()*3);}
+   grain(g,n,.10,1,.03);},
  };
+ function setup(t){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.needsUpdate=true;return t;}
  function flat(){                         // 中性回退：细节为 0.5，等于什么都不做
-  const t=new THREE.DataTexture(new Uint8Array([128,128,128,255]),1,1,THREE.RGBAFormat);
-  t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
+  return setup(new THREE.DataTexture(new Uint8Array([128,128,128,255]),1,1,THREE.RGBAFormat));
+ }
+ function flatN(){                        // 法线朝外、AO 为 1
+  return setup(new THREE.DataTexture(new Uint8Array([128,128,255,255]),1,1,THREE.RGBAFormat));
+ }
+ function mipmapped(t){t.generateMipmaps=true;t.minFilter=THREE.LinearMipmapLinearFilter;t.magFilter=THREE.LinearFilter;
+  t.anisotropy=renderer.capabilities.getMaxAnisotropy();return setup(t);}   // 掠射角下的木纹最容易糊成条纹，各向异性给满
+ /* 烘法线和 AO：高度取明度。法线是带环绕的 Sobel；AO 是「模糊后的高度比自己高多少」——
+    缝和坑周围比自己高，就压暗。存进第二张图：rgb 法线、a 是 AO。 */
+ function bake(g,n){
+  const img=g.getImageData(0,0,n,n);
+  if(!img||!img.data||img.data.length!==n*n*4)return null;
+  const d=img.data,h=new Float32Array(n*n);
+  for(let i=0;i<n*n;i++)h[i]=(d[i*4]*.299+d[i*4+1]*.587+d[i*4+2]*.114)/255;
+  const blur=src=>{const out=new Float32Array(n*n);
+   for(let y=0;y<n;y++){const y0=((y+n-1)%n)*n,y1=y*n,y2=((y+1)%n)*n;
+    for(let x=0;x<n;x++){const x0=(x+n-1)%n,x2=(x+1)%n;
+     out[y1+x]=(src[y0+x0]+src[y0+x]+src[y0+x2]+src[y1+x0]+src[y1+x]+src[y1+x2]+src[y2+x0]+src[y2+x]+src[y2+x2])/9;}}
+   return out;};
+  let b=h;for(let i=0;i<5;i++)b=blur(b);   // 五遍 3x3，约等于 11x11：缝要比自己宽一截才压得暗
+  const out=new Uint8Array(n*n*4),K=1.6*Math.sqrt(n/256),KA=5;
+  for(let y=0;y<n;y++){const y0=((y+n-1)%n)*n,y1=y*n,y2=((y+1)%n)*n;
+   for(let x=0;x<n;x++){const x0=(x+n-1)%n,x2=(x+1)%n;
+    const gx=(h[y0+x2]+2*h[y1+x2]+h[y2+x2])-(h[y0+x0]+2*h[y1+x0]+h[y2+x0]);
+    const gy=(h[y2+x0]+2*h[y2+x]+h[y2+x2])-(h[y0+x0]+2*h[y0+x]+h[y0+x2]);
+    let nx=-gx*K,ny=-gy*K,nz=1;const l=Math.sqrt(nx*nx+ny*ny+nz*nz);nx/=l;ny/=l;nz/=l;
+    const i=y1+x,o=i*4,ao=Math.max(0,Math.min(1,1-KA*Math.max(0,b[i]-h[i])));
+    out[o]=cl(nx*127.5+127.5);out[o+1]=cl(ny*127.5+127.5);out[o+2]=cl(nz*127.5+127.5);out[o+3]=cl(ao*255);
+   }}
+  return {c:new Uint8Array(d),n:out};
  }
  function texture(kind){
   if(cache[kind])return cache[kind];
-  let t;
+  let pair;
   try{
-   const n=isSmall?128:256,c=cv(n),g=c.getContext("2d");
+   const n=N,c=document.createElement("canvas");c.width=c.height=n;const g=c.getContext("2d",{willReadFrequently:true});
    if(!g||!g.fillRect)throw new Error("no 2d canvas");
+   R=mulberry32(hash(kind));
    g.fillStyle="#808080";g.fillRect(0,0,n,n);
-   (draw[kind]||draw.plaster)(g,n);
-   t=new THREE.CanvasTexture(c);
-   t.anisotropy=renderer.capabilities.getMaxAnisotropy();   // 掠射角下的木纹最容易糊成条纹，各向异性给满
-  }catch(e){ t=flat(); }
-  t.wrapS=t.wrapT=THREE.RepeatWrapping;
-  return cache[kind]=t;
+   (draw[kind]||draw.plaster)(g,n,(n/256)*(n/256));
+   const baked=bake(g,n);
+   if(!baked)throw new Error("no image data");
+   pair={c:mipmapped(new THREE.DataTexture(baked.c,n,n,THREE.RGBAFormat)),n:mipmapped(new THREE.DataTexture(baked.n,n,n,THREE.RGBAFormat)),size:n};
+  }catch(e){ pair={c:flat(),n:flatN(),size:1}; }
+  return cache[kind]=pair;
  }
- return {texture};
+ return {texture,kinds:Object.keys(draw)};
 })();
 
-// 给一种材质挂上表面细节。metres 是一张贴图铺多少米，amt 管明暗，bump 管起伏。
+// 给一种材质挂上表面细节。metres 是一张贴图铺多少米，amt 管明暗，bump 管起伏，rough 管粗糙度调制。
 // up 用来把瓦只铺在朝上的面；alt 再叠一层，按世界高度从第一层过渡到第二层
-// （地形一张材质从海边的沙一路长到山上的草，就靠这个）。
-function addSurfaceDetail(mat, kind, metres, amt, bump, rough, base, upOnly, alt){
+// （地形一张材质从海边的沙一路长到山上的草，就靠这个）。tint 是偏色的分量，
+// 烟雨渡那种不走色调映射的管线要把它压低。
+function addSurfaceDetail(mat, kind, metres, amt, bump, rough, base, upOnly, alt, tint){
  if(!mat||mat.userData.surfKind)return mat;
  mat.userData.surfKind=kind;
- const tex=SURF.texture(kind), relief=isSmall?0:(bump==null?1:bump);
+ const tex=SURF.texture(kind), relief=(bump==null?1:bump)*(isSmall?.6:1);   // 法线只采一次，手机也开得起，给六成
  const alt2=alt?SURF.texture(alt.kind):null;
  mat.onBeforeCompile=(sh)=>{
-  sh.uniforms.uSurf={value:tex};
+  sh.uniforms.uSurf={value:tex.c};
+  sh.uniforms.uSurfN={value:tex.n};
   sh.uniforms.uSurfScale={value:1/(metres||2)};
   sh.uniforms.uSurfAmt={value:amt==null?.9:amt};
   sh.uniforms.uSurfBump={value:relief};
   sh.uniforms.uSurfRough={value:rough==null?.55:rough};
   sh.uniforms.uSurfBase={value:base==null?0:base};
-  sh.uniforms.uSurfUp={value:upOnly?1:0};   // 瓦只铺在朝上的面，屋顶内侧不该是瓦楞板
-  if(alt2){ sh.uniforms.uSurf2={value:alt2}; sh.uniforms.uSurfScale2={value:1/(alt.metres||metres||2)};
+  sh.uniforms.uSurfUp={value:upOnly?1:0};   // 瓦只铺在朝上的面，屋顶内侧不该是瓦
+  sh.uniforms.uSurfTint={value:tint==null?1:tint};
+  if(alt2){ sh.uniforms.uSurf2={value:alt2.c}; sh.uniforms.uSurfN2={value:alt2.n}; sh.uniforms.uSurfScale2={value:1/(alt.metres||metres||2)};
    sh.uniforms.uSurfBand={value:new THREE.Vector2(alt.lo==null?0:alt.lo, alt.hi==null?6:alt.hi)}; }
   mat.userData.surfU=sh.uniforms;             // 留个把手，方便调参和现场核对
   sh.vertexShader="varying vec3 vSurfPos; varying vec3 vSurfNrm;\n"+sh.vertexShader
    .replace("#include <begin_vertex>","#include <begin_vertex>\n#ifdef USE_INSTANCING\n vSurfPos=(modelMatrix*instanceMatrix*vec4(transformed,1.0)).xyz;\n#else\n vSurfPos=(modelMatrix*vec4(transformed,1.0)).xyz;\n#endif")
    .replace("#include <beginnormal_vertex>","#include <beginnormal_vertex>\n#ifdef USE_INSTANCING\n vSurfNrm=mat3(modelMatrix)*mat3(instanceMatrix)*objectNormal;\n#else\n vSurfNrm=mat3(modelMatrix)*objectNormal;\n#endif");
-  sh.fragmentShader="varying vec3 vSurfPos; varying vec3 vSurfNrm;\nuniform sampler2D uSurf; uniform float uSurfScale; uniform float uSurfAmt; uniform float uSurfBump; uniform float uSurfRough; uniform float uSurfBase; uniform float uSurfUp;\n"+(alt2?"uniform sampler2D uSurf2; uniform float uSurfScale2; uniform vec2 uSurfBand;\n":"")+sh.fragmentShader
+  const micro="*7.3+vec2(0.37,0.61)";          // 第二个八度：同一张图缩小 7.3 倍再叠一层，一米以内还有颗粒
+  sh.fragmentShader="varying vec3 vSurfPos; varying vec3 vSurfNrm;\nuniform sampler2D uSurf; uniform sampler2D uSurfN; uniform float uSurfScale; uniform float uSurfAmt; uniform float uSurfBump; uniform float uSurfRough; uniform float uSurfBase; uniform float uSurfUp; uniform float uSurfTint;\n"+(alt2?"uniform sampler2D uSurf2; uniform sampler2D uSurfN2; uniform float uSurfScale2; uniform vec2 uSurfBand;\n":"")+sh.fragmentShader
    // 主轴决定采样平面：地面用 xz，朝 x 的墙用 zy，朝 z 的墙用 xy
-   .replace("#include <map_fragment>","#include <map_fragment>\n vec3 sN=abs(normalize(vSurfNrm));\n int sAx = sN.y>max(sN.x,sN.z) ? 1 : (sN.x>sN.z ? 0 : 2);\n vec2 sUv = sAx==1 ? vSurfPos.xz : (sAx==0 ? vSurfPos.zy : vSurfPos.xy);\n"+(alt2?" vec2 sUv2=sUv*uSurfScale2;\n sUv*=uSurfScale;\n float sMix=smoothstep(uSurfBand.x,uSurfBand.y,vSurfPos.y);\n float sH=mix(texture2D(uSurf,sUv).r,texture2D(uSurf2,sUv2).r,sMix);\n":" sUv*=uSurfScale;\n float sH=texture2D(uSurf,sUv).r;\n")+" float sFace=mix(1.0,smoothstep(0.05,0.45,normalize(vSurfNrm).y),uSurfUp);\n sH=mix(0.5,sH,sFace);\n diffuseColor.rgb*=mix(1.0,sH*2.0,uSurfAmt);\n float sGrime=smoothstep(0.0,2.6,vSurfPos.y-uSurfBase);\n diffuseColor.rgb*=mix(0.82,1.0,sGrime);")
-   .replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\n roughnessFactor*=mix(1.0,1.5-sH*1.0,uSurfRough);")
-   // 用相邻采样做导数凹凸：平光下的平面因此有了明暗起伏
-   .replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n if(uSurfBump>0.0){\n  float e=0.004;\n"+(alt2?"  float hx=mix(texture2D(uSurf,sUv+vec2(e,0.0)).r-texture2D(uSurf,sUv-vec2(e,0.0)).r, texture2D(uSurf2,sUv2+vec2(e,0.0)).r-texture2D(uSurf2,sUv2-vec2(e,0.0)).r, sMix);\n  float hy=mix(texture2D(uSurf,sUv+vec2(0.0,e)).r-texture2D(uSurf,sUv-vec2(0.0,e)).r, texture2D(uSurf2,sUv2+vec2(0.0,e)).r-texture2D(uSurf2,sUv2-vec2(0.0,e)).r, sMix);\n":"  float hx=texture2D(uSurf,sUv+vec2(e,0.0)).r-texture2D(uSurf,sUv-vec2(e,0.0)).r;\n  float hy=texture2D(uSurf,sUv+vec2(0.0,e)).r-texture2D(uSurf,sUv-vec2(0.0,e)).r;\n")+"  vec3 wB = sAx==1 ? vec3(-hx,0.0,-hy) : (sAx==0 ? vec3(0.0,-hy,-hx) : vec3(-hx,-hy,0.0));\n  normal = normalize(normal + mat3(viewMatrix)*wB*uSurfBump*sFace*6.0);\n }");
+   .replace("#include <map_fragment>","#include <map_fragment>\n vec3 sWn=normalize(vSurfNrm);\n vec3 sN=abs(sWn);\n int sAx = sN.y>max(sN.x,sN.z) ? 1 : (sN.x>sN.z ? 0 : 2);\n vec2 sUv = sAx==1 ? vSurfPos.xz : (sAx==0 ? vSurfPos.zy : vSurfPos.xy);\n"
+    +(alt2?" vec2 sUv2=sUv*uSurfScale2;\n sUv*=uSurfScale;\n float sMix=smoothstep(uSurfBand.x,uSurfBand.y,vSurfPos.y);\n vec4 sT=mix(texture2D(uSurf,sUv),texture2D(uSurf2,sUv2),sMix);\n vec4 sTn=mix(texture2D(uSurfN,sUv),texture2D(uSurfN2,sUv2),sMix);\n vec4 sTm=mix(texture2D(uSurf,sUv"+micro+"),texture2D(uSurf2,sUv2"+micro+"),sMix);\n vec4 sTnm=mix(texture2D(uSurfN,sUv"+micro+"),texture2D(uSurfN2,sUv2"+micro+"),sMix);\n"
+     :" sUv*=uSurfScale;\n vec4 sT=texture2D(uSurf,sUv);\n vec4 sTn=texture2D(uSurfN,sUv);\n vec4 sTm=texture2D(uSurf,sUv"+micro+");\n vec4 sTnm=texture2D(uSurfN,sUv"+micro+");\n")
+    +" float sFace=mix(1.0,smoothstep(0.05,0.45,sWn.y),uSurfUp);\n float sHm=dot(sTm.rgb,vec3(0.299,0.587,0.114));\n float sH=mix(dot(sT.rgb,vec3(0.299,0.587,0.114)),sHm,0.25);\n sH=mix(0.5,sH,sFace);\n vec3 sCol=mix(vec3(sH*2.0),sT.rgb*2.0*mix(1.0,sHm*2.0,0.25),uSurfTint);\n sCol=mix(vec3(1.0),sCol,sFace);\n diffuseColor.rgb*=mix(vec3(1.0),sCol,uSurfAmt);\n float sAo=mix(1.0,mix(sTn.a,sTnm.a,0.25),sFace*uSurfAmt);")
+   // 缝里更糙
+   .replace("#include <roughnessmap_fragment>","#include <roughnessmap_fragment>\n roughnessFactor*=mix(1.0,(1.5-sH)*(1.3-0.3*sAo),uSurfRough);")
+   // 烘好的切线空间法线：按采样平面转到世界空间再转到视空间。
+   // 不需要按面的朝向翻符号 —— 扰动向量 -dh/du·U -dh/dv·V 里的 U、V 就是世界轴，
+   // 和几何法线朝 +X 还是 -X 无关（高度是沿外法线量的，两边推导出来同一个式子）。
+   .replace("#include <normal_fragment_maps>","#include <normal_fragment_maps>\n if(uSurfBump>0.0){\n  vec2 sTs=(mix(sTn.xy,sTnm.xy,0.25)*2.0-1.0)*uSurfBump*sFace;\n  vec3 wB = sAx==1 ? vec3(sTs.x,0.0,sTs.y) : (sAx==0 ? vec3(0.0,sTs.y,sTs.x) : vec3(sTs.x,sTs.y,0.0));\n  normal=normalize(normal+mat3(viewMatrix)*wB);\n }")
+   // 光照空间的暗部：缝里的 AO、朝下的面少吃天光、墙脚一点接触阴影。
+   // 这些以前是直接乘在漫反射颜色上的一道「污渍带」，连被太阳直射的面一起压暗；现在只动间接光
+   .replace("#include <aomap_fragment>","#include <aomap_fragment>\n float sSky=0.5+0.5*sWn.y;\n float sContact=mix(mix(0.75,1.0,smoothstep(0.0,1.2,vSurfPos.y-uSurfBase)),1.0,smoothstep(0.3,0.7,sWn.y));\n reflectedLight.indirectDiffuse*=sAo*mix(0.6,1.0,sSky)*sContact;\n reflectedLight.directDiffuse*=mix(1.0,sAo,0.4);");
  };
- mat.customProgramCacheKey=()=>"surf-"+kind+(alt?"+"+alt.kind:"")+(relief>0?"b":"");
+ mat.customProgramCacheKey=()=>"surf-"+kind+(alt?"+"+alt.kind:"")+(relief>0?"b":"")+"n";
  mat.needsUpdate=true;
  return mat;
 }
@@ -5327,25 +5493,30 @@ function addSurfaceDetail(mat, kind, metres, amt, bump, rough, base, upOnly, alt
 // 哪种表面配哪张图：按实测的覆盖面积从大到小挑的
 function applySurfaceDetail(){
  const plan=[
-  [HM.darkstone,"slab",2.6,.85,.9,.5,4.15],
+  [HM.darkstone,"ashlar",2.6,.85,.9,.5,4.15],
   [HM.stone,"plaster",2.4,.9,.9,.45,4.15],
   [HM.cream,"plaster",2.4,.9,.9,.45,4.15],
-  [HM.brick,"plaster",2.0,.9,1.1,.5,4.15],
-  [HM.roof,"tile",2.0,.9,1.2,.55,4.15,true],
-  [HM.wood,"timber",2.4,.85,.9,.5,4.15],
-  [HM.floor,"timber",3.2,.7,.6,.4,4.15],
+  [HM.brick,"brick",2.0,.9,1.0,.5,4.15],
+  [HM.roof,"rooftile",2.0,.9,1.1,.55,4.15,true],
+  [HM.wood,"plank",2.4,.85,.9,.5,4.15],
+  [HM.floor,"plank",3.2,.7,.6,.4,4.15],
   [HM.paper,"plaster",2.4,.5,.4,.3,4.15],
-  [M.plank,"timber",2.6,.85,.9,.5],
-  [M.teak,"timber",2.2,.8,.8,.5],
-  [M.teakD,"timber",2.2,.8,.8,.5],
+  [HM.iron,"metal",1.6,.35,.5,.35,4.15],
+  [HM.red,"plaster",2.0,.5,.5,.35,4.15],
+  [HM.green,"plaster",2.0,.5,.5,.35,4.15],
+  [HM.blue,"plaster",2.0,.5,.5,.35,4.15],
+  [M.plank,"plank",2.6,.85,.9,.5],
+  [M.teak,"plank",2.2,.8,.8,.5],
+  [M.teakD,"plank",2.2,.8,.8,.5],
   [M.rock,"rock",2.4,.85,1.1,.55],
   [M.rock2,"rock",2.4,.85,1.1,.55],
-  [M.hull,"timber",1.8,.6,.6,.4],
+  [M.hull,"plank",1.8,.5,.5,.4],
  ];
  for(const [mat,kind,m,a,b,r,base,up] of plan) addSurfaceDetail(mat,kind,m,a,b,r,base,up);
- // 港区的路面、步道和街心分隔带是按颜色缓存出来的材质
+ // 港区脚下的路面：整片乱石（这是全游戏最常看见的一块表面），石板底、步道和街心分隔带是按颜色缓存出来的材质
+ addSurfaceDetail(pavingMat,"flagstone",1.8,.85,1,.5,4.15);
  for(const [hex,kind,m,a,b,r] of [[0x8d927c,"slab",2.4,.85,.9,.5],[0xd0bf9d,"slab",2.0,.8,.8,.5],
-   [0x6e716b,"slab",2.4,.7,.7,.5],[0x72766d,"slab",2.4,.7,.7,.5]]) addSurfaceDetail(humanMat(hex),kind,m,a,b,r,4.15);
+   [0x6e716b,"slab",2.4,.7,.7,.5],[0x72766d,"slab",2.4,.7,.7,.5]]) addSurfaceDetail(buildMat(hex),kind,m,a,b,r,4.15);
  // 沙滩与草地是顶点着色的地形，细节乘在上面
  addSurfaceDetail(island.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
  addSurfaceDetail(parkShoreMesh.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
@@ -5357,18 +5528,18 @@ function applySurfaceDetail(){
     上面那张 plan 里的 M 指的是海岛那张表，够不着乐园的（同名不同物）。
     现在把 parkModule.mats 露出来接上。
 
-    另外五座地标的墙色写在各自 spec 里、走 humanMat(spec.color)，也不在 HM 中，
+    另外五座地标的墙色写在各自 spec 里、走 buildMat(spec.color)，也不在 HM 中，
     整批漏掉 —— 港区最大的五栋楼，墙面一格纹理都没有。 */
  const P=parkModule.mats;
  for(const [m,kind,metres,amt,bump,rough] of [
    [P.grass,"grass",2.2,.5,.9,.5],   [P.grass2,"grass",2.2,.5,.9,.5],
-   [P.path,"slab",2.2,.8,.8,.5],     [P.plaza,"slab",2.4,.8,.8,.5],
+   [P.path,"flagstone",2.0,.8,.8,.5],[P.plaza,"slab",2.4,.8,.8,.5],
    [P.cream,"plaster",2.4,.8,.8,.45],[P.white,"plaster",2.4,.6,.6,.4],
-   [P.wood,"timber",2.4,.85,.9,.5],  [P.woodDk,"timber",2.4,.85,.9,.5],
+   [P.wood,"plank",2.4,.85,.9,.5],   [P.woodDk,"plank",2.4,.85,.9,.5],
    [P.bark,"timber",1.6,.9,1.2,.6],
    // 钢架和油漆件只给很轻的一层：金属抹上灰泥纹会假，但全无起伏又太干净
-   [P.steelA,"slab",1.8,.22,.35,.3], [P.steelB,"slab",1.8,.22,.35,.3],
-   [P.steelDk,"slab",1.8,.25,.4,.3], [P.gold,"slab",1.6,.18,.3,.25],
+   [P.steelA,"metal",1.6,.3,.5,.3],  [P.steelB,"metal",1.6,.3,.5,.3],
+   [P.steelDk,"metal",1.6,.35,.5,.3],[P.gold,"metal",1.4,.25,.4,.25],
    [P.red,"plaster",1.8,.3,.45,.35], [P.crimson,"plaster",1.8,.3,.45,.35],
    [P.blue,"plaster",1.8,.3,.45,.35],[P.skyblue,"plaster",1.8,.3,.45,.35],
    [P.yellow,"plaster",1.8,.3,.45,.35],[P.orange,"plaster",1.8,.3,.45,.35],
@@ -5381,11 +5552,13 @@ function applySurfaceDetail(){
  addSurfaceDetail(M.bark2,"timber",1.4,.9,1.3,.6);
  for(const m of [M.frond,M.frond2,M.leaf,M.leaf2]) addSurfaceDetail(m,"grass",1.1,.55,.8,.5);
 
- // 五座地标的墙。从 harborSpecs 现取颜色，加楼不会漏
- for(const spec of harborSpecs) addSurfaceDetail(humanMat(spec.color),"plaster",2.4,.9,.9,.45,4.15);
+ // 五座地标的墙。从 harborSpecs 现取颜色，加楼不会漏；材质种类按楼给（spec.surf 可以覆盖）
+ const landmarkSurf={customs:"ashlar",hotel:"plaster",museum:"ashlar",post:"brick",ferry:"ashlar"};
+ for(const spec of harborSpecs){const kind=spec.surf||landmarkSurf[spec.id]||"plaster";
+  addSurfaceDetail(buildMat(spec.color),kind,kind==="ashlar"?2.6:kind==="brick"?2.0:2.4,.9,.9,kind==="plaster"?.45:.5,4.15);}
 }
 
-const HM={stone:humanMat(0xc4b396),cream:humanMat(0xe0ceb0),darkstone:humanMat(0x847d70),brick:humanMat(0x9c6150),roof:humanMat(0x475c5b),wood:humanMat(0x694e37),floor:humanMat(0xc9b390),paper:humanMat(0xeee2c7),iron:humanMat(0x303e40),red:humanMat(0x894933),green:humanMat(0x526b54),blue:humanMat(0x466875)};
+const HM={stone:buildMat(0xc4b396,.9),cream:buildMat(0xe0ceb0,.9),darkstone:buildMat(0x847d70,.75),brick:buildMat(0x9c6150,.85),roof:buildMat(0x475c5b,.6),wood:buildMat(0x694e37,.7),floor:buildMat(0xc9b390,.7),paper:buildMat(0xeee2c7,.9),iron:buildMat(0x303e40,.45,.5),red:buildMat(0x894933,.7),green:buildMat(0x526b54,.7),blue:buildMat(0x466875,.7)};
 const harborWindowMat=new THREE.MeshStandardMaterial({color:0x6c918e,emissive:0xe6b568,emissiveIntensity:.1,roughness:.35,metalness:.15});harborWarmMats.push(harborWindowMat);
 const harborGlass=new THREE.MeshStandardMaterial({color:0xa1c7c3,transparent:true,opacity:.17,roughness:.2,side:THREE.DoubleSide,depthWrite:false});
 const harborSignMats=[];
@@ -5410,10 +5583,10 @@ function harborLamp(x,z){
 }
 // Ground, stone embankment, broad promenade and an orthogonal street network.
 hb(harborRoot,620,7,430,HM.darkstone,640,.45,-305);
-hb(harborRoot,620,.18,430,humanMat(0x8d927c),640,4,-305);
-hb(harborRoot,620,.2,37,humanMat(0xd0bf9d),640,4.14,-109);
-for(const z of [-162,-252,-342,-432])hb(harborRoot,594,.14,14,humanMat(0x6e716b),640,4.19,z);
-for(const x of [370,530,705,875,928])hb(harborRoot,13,.15,403,humanMat(0x72766d),x,4.21,-311);
+hb(harborRoot,620,.18,430,buildMat(0x8d927c,.85),640,4,-305);
+hb(harborRoot,620,.2,37,buildMat(0xd0bf9d,.85),640,4.14,-109);
+for(const z of [-162,-252,-342,-432])hb(harborRoot,594,.14,14,buildMat(0x6e716b,.85),640,4.19,z);
+for(const x of [370,530,705,875,928])hb(harborRoot,13,.15,403,buildMat(0x72766d,.85),x,4.21,-311);
 for(let x=346;x<=935;x+=22)harborLamp(x,-99);
 for(const x of [370,530,705,875])for(let z=-189;z>-485;z-=54)harborLamp(x+8,z);
 // Dock platform; visitor arrival faces the waterfront buildings.
@@ -5443,7 +5616,7 @@ const harborSpecs=[
 ];
 function buildHarborLandmark(spec){
  const b={...spec,g:new THREE.Group(),furniture:[],doorOpen:false,exhibitPoints:[],stairX:spec.w/2-7};b.g.position.set(b.x,4.3,b.z);harborRoot.add(b.g);
- const stone=humanMat(spec.color),w=b.w,d=b.d,h=b.h;
+ const stone=buildMat(spec.color,.8),w=b.w,d=b.d,h=b.h;
  hb(b.g,w+.8,.3,d+.8,HM.floor,0,-.15,0);
  // Front facade has a real 7 m wide entrance opening, with hinged door leaves.
  hb(b.g,(w-8)/2,9,1.2,stone,-(w+8)/4,4.5,d/2);hb(b.g,(w-8)/2,9,1.2,stone,(w+8)/4,4.5,d/2);
@@ -5599,15 +5772,10 @@ function tradingStall(x,z,index,parent=harborRoot,ox=0,oz=0){
  harborStalls.push({x:x+ox,z:z+oz,w:5.7,d:2});
  if(index%3===0)harborSign(parent,['茶葉 · TEA','鮮果 · FRUIT','洋貨 · GOODS'][index%3],x,7.3,z+.2,4.8,1.2);
 }
-// Stone texture replaces the uninterrupted flat ground colour.
-const pavingCanvas=document.createElement('canvas');pavingCanvas.width=pavingCanvas.height=256;
-const pavingCtx=pavingCanvas.getContext('2d');pavingCtx.fillStyle='#62635b';pavingCtx.fillRect(0,0,256,256);
-for(let row=0;row<16;row++)for(let col=-1;col<9;col++){
- const shade=116+((row*17+col*13+47)%22);pavingCtx.fillStyle=`rgb(${shade},${shade-2},${shade-10})`;
- pavingCtx.fillRect(col*32+(row%2)*16+1,row*16+1,30,14);
-}
-const pavingTexture=new THREE.CanvasTexture(pavingCanvas);pavingTexture.wrapS=pavingTexture.wrapT=THREE.RepeatWrapping;pavingTexture.repeat.set(42,30);pavingTexture.encoding=THREE.sRGBEncoding;
-const pavingMat=new THREE.MeshStandardMaterial({map:pavingTexture,roughness:1});
+// 港区路面：纯色石板底，乱石纹（flagstone）由 applySurfaceDetail 统一挂上（法线 + AO + 颗粒）。
+// 以前这里是一张 30x14 像素一块的色块贴图，一块「石头」铺十几米，站在上面看就是大格子；
+// 带 map 的材质还进不了程序化细节和合批。
+const pavingMat=new THREE.MeshStandardMaterial({color:0x7e7c70,roughness:.8});
 const paving=add(harborRoot,new THREE.PlaneGeometry(620,430),pavingMat,640,4.115,-305,false,true);paving.rotation.x=-Math.PI/2;
 
 // Fill the broad gaps between monuments with narrow, attached commercial fronts.

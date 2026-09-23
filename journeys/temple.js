@@ -20,11 +20,12 @@ fillLight.position.set(10, 6, -12); scene.add(fillLight);
 let seed = 12879;
 function random() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
 const rand = (a, b) => a + random() * (b - a);
-const material = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: .82, ...opts });
+// name：regions.js 照名字挂程序化表面细节（石 / 墙 / 瓦 / 木 / 地砖），没名字的不动
+const material = (color, opts = {}, name = '') => Object.assign(new THREE.MeshStandardMaterial({ color, roughness: .82, ...opts }), { name });
 const M = {
-  stone: material('#626e61'), stoneDark: material('#3e5048'), edge: material('#7a8470'),
-  red: material('#763e32'), redBright: material('#b3543f'), roof: material('#304e47', { metalness: .12 }),
-  roofEdge: material('#71836b', { metalness: .25 }), wood: material('#302d25'),
+  stone: material('#626e61', {}, 'stone'), stoneDark: material('#3e5048'), edge: material('#7a8470'),
+  red: material('#763e32', {}, 'wall'), redBright: material('#b3543f'), roof: material('#304e47', { metalness: .12 }, 'roof'),
+  roofEdge: material('#71836b', { metalness: .25 }), wood: material('#302d25', {}, 'wood'),
   gold: material('#bc934c', { metalness: .72, roughness: .34 }), darkGold: material('#756139', { metalness: .52 }),
   fur: material('#66503a'), face: material('#ad9367'), cloth: material('#343e36'),
   armor: material('#907b48', { metalness: .58, roughness: .38 }), black: material('#111b17'),
@@ -53,7 +54,7 @@ const ctx=textureCanvas.getContext('2d');ctx.fillStyle='#74786a';ctx.fillRect(0,
 for(let i=0;i<5500;i++){const l=Math.floor(rand(70,150));ctx.fillStyle=`rgba(${l},${l+4},${l-5},${rand(.03,.19)})`;ctx.fillRect(rand(0,256),rand(0,256),rand(1,11),rand(1,6));}
 ctx.strokeStyle='#4f584a60';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,rand(20,80));ctx.lineTo(95,90);ctx.lineTo(133,158);ctx.stroke();
 const stoneTexture=new THREE.CanvasTexture(textureCanvas);stoneTexture.encoding=THREE.sRGBEncoding;stoneTexture.anisotropy=4;
-const floorMaterial=material('#acb19d',{map:stoneTexture});
+const floorMaterial=material('#acb19d',{map:stoneTexture},'floor');
 cyl(scene,M.stoneDark,0,-.65,0,17,.95,17);
 cyl(scene,M.stone,0,-.23,0,16.3,.28,16.3);
 const tilePositions=[];
