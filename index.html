@@ -443,12 +443,21 @@ const isSmall = innerWidth < 700 || touchDevice;
 const SUN_DIR = new THREE.Vector3(0.42, 0.62, 0.30).normalize();
 
 /* ---------- 天空 ---------- */
+/* 天空是一张着色器渐变，不走色调映射，颜色都是显示空间的；雾色也是显示空间（three 的雾在
+   tonemapping/encoding 之后混），所以 fogC 直接喂给天空当地平线那圈霾，远处的楼和海面
+   淡进雾里时，颜色和天边是同一个，不会出现一条带。云是 3 层值噪声在高度 1 的平面上投影出来的，
+   不再是那十团二十面体。 */
 const skyU = {
   top:  {value: new THREE.Color(0x679eaf)},
   mid:  {value: new THREE.Color(0x9fc9e0)},
   bot:  {value: new THREE.Color(0xf0e0c4)},
   sunD: {value: SUN_DIR.clone()},
-  sunC: {value: new THREE.Color(0xfff0c8)}
+  sunC: {value: new THREE.Color(0xfff0c8)},
+  fogC: {value: new THREE.Color(0xdde2d0)},
+  cloudC:{value: new THREE.Color(0xfff8ee)},   // 云被太阳照到的一面
+  cloudD:{value: new THREE.Color(0xb9c4d0)},   // 云底
+  uCloud:{value: 0.55},                        // 云量 0~1
+  uTime: {value: 0}
 };
 const sky = new THREE.Mesh(
   new THREE.SphereGeometry(1900, 40, 24),
@@ -462,22 +471,58 @@ const sky = new THREE.Mesh(
       }`,
     fragmentShader:`
       uniform vec3 top; uniform vec3 mid; uniform vec3 bot;
-      uniform vec3 sunD; uniform vec3 sunC;
+      uniform vec3 sunD; uniform vec3 sunC; uniform vec3 fogC;
+      uniform vec3 cloudC; uniform vec3 cloudD;
+      uniform float uCloud; uniform float uTime;
       varying vec3 vDir;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vnoise(vec2 p){
+        vec2 i = floor(p), f = fract(p);
+        f = f*f*(3.0-2.0*f);
+        float a = hash(i), b = hash(i+vec2(1.0,0.0)), c = hash(i+vec2(0.0,1.0)), d = hash(i+vec2(1.0,1.0));
+        return mix(mix(a,b,f.x), mix(c,d,f.x), f.y);
+      }
+      float fbm(vec2 p){
+        float v = 0.0, a = 0.5;
+        for(int i=0;i<3;i++){ v += a*vnoise(p); p = p*2.03 + vec2(17.3, 9.1); a *= 0.5; }
+        return v;
+      }
       void main(){
-        float h = clamp(vDir.y*0.5+0.5, 0.0, 1.0);
+        vec3 d = normalize(vDir);
+        float h = clamp(d.y*0.5+0.5, 0.0, 1.0);
         vec3 c = mix(bot, mid, smoothstep(0.44, 0.55, h));
         c = mix(c, top, smoothstep(0.52, 0.86, h));
-        float s = max(dot(normalize(vDir), normalize(sunD)), 0.0);
-        c += sunC * pow(s, 260.0) * 1.5;              // 日轮
-        c += sunC * pow(s, 8.0) * 0.16;               // 光晕
+        vec3 sd = normalize(sunD);
+        float s = max(dot(d, sd), 0.0);
+        float up = smoothstep(-0.02, 0.18, d.y);         // 0 贴地平线，1 抬头
+        c += sunC * pow(s, 260.0) * 1.5;                 // 日轮
+        c += mix(fogC, sunC, up) * pow(s, 8.0) * 0.16;   // 光晕，贴近地平线时并进霾色
+        // 云层：视线投到高度 1 的平面上取噪声，3 个八度；地平线以下不算
+        if(d.y > 0.02){
+          vec2 p = d.xz / max(d.y, 0.05);
+          vec2 q = p*0.38 + uTime*vec2(0.006, 0.002);
+          float big = vnoise(q*0.22 + vec2(3.7, 8.1));   // 大尺度分布：云要成团成片，不是满天均匀的碎屑
+          float amp = 0.6 + 0.8*big;
+          float n  = fbm(q) * amp + (vnoise(q*7.1 + vec2(2.0, 5.0)) - 0.5) * 0.06;   // 末尾那项是边缘的碎絮
+          vec2 toSun = normalize(sd.xz + vec2(1e-4, 0.0)) * 0.08;
+          float n2 = fbm(q + toSun) * amp;               // 往太阳那边偏一点再采一次：厚的一侧是云底
+          float lo = 0.56 - uCloud*0.16;                 // 云量 .55 时阈值 .47：成片的云团，不是零星几缕
+          float cov = smoothstep(lo, lo + 0.09, n) * smoothstep(0.02, 0.14, d.y);
+          float thick = smoothstep(lo, lo + 0.28, n);
+          float lit = clamp(0.85 - 0.55*thick + (n - n2)*5.0, 0.0, 1.0);   // 厚处是灰的云底，边上亮
+          vec3 cc = mix(cloudD, cloudC, lit);
+          cc += sunC * pow(s, 6.0) * 0.30 * (1.0 - thick);  // 薄的地方透光
+          c = mix(c, cc, cov * 0.92);
+        }
+        c = mix(fogC, c, up);                            // 地平线那圈霾
         gl_FragColor = vec4(c, 1.0);
       }`
   })
 );
 sky.frustumCulled = false;
 scene.add(sky);
-scene.fog = new THREE.FogExp2(0xbcd7e4, 0.00085);
+// 雾的浓度按时段走（periods[].fogD），这里只是开局值；FogExp2 的衰减是 density² × 距离²
+scene.fog = new THREE.FogExp2(0xdde2d0, 0.0016);
 
 /* ---------- 光 ---------- */
 // 半球光和补光让位给环境贴图：这两盏原本是在手工替代天空的漫射，
@@ -492,12 +537,18 @@ sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 520;
 sun.shadow.camera.left = -130; sun.shadow.camera.right = 130;
 sun.shadow.camera.top = 130;   sun.shadow.camera.bottom = -130;
-sun.shadow.bias = -0.0008;
-sun.shadow.normalBias = 0.6;
+// 原来 normalBias 0.6 米：影子整个从脚下、墙根挪开 60 厘米，人和柱子都像悬着。
+// 阴影框在 tick() 里按模式收缩（走路 60 米、驾驶 90、俯瞰 130），纹素小了偏移才能小
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.05;
 scene.add(sun); scene.add(sun.target);
+// tick() 里阴影焦点对齐纹素用的临时量
+let SHADOW_DIST=220;
+const _shM=new THREE.Matrix4(), _shA=new THREE.Vector3(), _shB=new THREE.Vector3(), _shUp=new THREE.Vector3(), _shX=new THREE.Vector3(), _shY=new THREE.Vector3(), _shF=new THREE.Vector3();
 // 场景里没有弹射光，屋檐下和市场里只剩半球光，暗部会直接掉成黑洞。补一点常量
 // 环境光当作 GI 的替身：室内才有得看，室外几乎察觉不到，夜里跟着时段一起收。
 const fill = new THREE.AmbientLight(0xc6d2cb, 0.07); scene.add(fill);
+// 轮廓光：颜色、强度、方向都在 periods 表里（rimC / rim / rimDir），updateAtmosphere 每帧插值
 const rim = new THREE.DirectionalLight(0x8fb8d8, 0.13);
 rim.position.set(-60, 40, -80); scene.add(rim);
 
@@ -543,9 +594,19 @@ const seaUniforms = THREE.UniformsUtils.merge([
     uFoam:   {value: new THREE.Color(0xf2f8f6)},
     uMood: {value: new THREE.Color(1,1,1)},
     uShore:  {value: 0},
-    uCam:    {value: new THREE.Vector3()}
+    uCam:    {value: new THREE.Vector3()},
+    // 天空三色每帧从 skyU 抄过来：海面反射的是当下的天，日落是橙的、夜里是黑的
+    uSkyTop: {value: new THREE.Color(0x679eaf)},
+    uSkyMid: {value: new THREE.Color(0x9fc9e0)},
+    uSkyBot: {value: new THREE.Color(0xf0e0c4)}
   }
 ]);
+// 细波纹只进片元法线，不进顶点高度：船、游泳、测试都靠 CPU 的 waveHeight 对齐；手机只保留一层
+// 细波纹按到相机的距离淡出（15→90 米）：远处一个像素里塞好几个波长，不淡就是一片摩尔纹
+// 每条波纹还按屏幕导数（fwidth：相位每像素变多少）淡出：一个像素里塞不下半个波长就不画，否则就是摩尔纹
+const RIPPLE_GLSL = isSmall
+ ? `      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      float r1 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a1)));\n      sx += r1*0.03*3.927*0.83*cos(a1);\n      sz += r1*0.03*3.927*0.56*cos(a1);\n      float rip = 0.5 + 0.5*r1*sin(a1);\n`
+ : `      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      float a2 = dot(vW.xz, vec2(-0.42,0.91))*6.981 - uTime*3.4;\n      float r1 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a1)));\n      float r2 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a2)));\n      sx += r1*0.03*3.927*0.83*cos(a1) + r2*0.016*6.981*(-0.42)*cos(a2);\n      sz += r1*0.03*3.927*0.56*cos(a1) + r2*0.016*6.981*0.91*cos(a2);\n      float rip = 0.5 + 0.25*(r1*sin(a1) + r2*sin(a2));\n`;
 seaUniforms.uSunD.value.copy(SUN_DIR);
 let waveGLSL = "";
 WAVES.forEach((w,i)=>{
@@ -554,6 +615,7 @@ WAVES.forEach((w,i)=>{
 const seaMat = new THREE.ShaderMaterial({
   uniforms: seaUniforms,
   fog: true,
+  extensions: {derivatives: true},   // 细波纹按 fwidth 淡出
   vertexShader:`
     uniform float uTime;
     varying vec3 vW;
@@ -580,6 +642,7 @@ ${waveGLSL}
     uniform float uTime;
     uniform vec3 uSunD, uDeep, uShallow, uSand, uFoam, uCam;
     uniform float uShore; uniform vec3 uMood;
+    uniform vec3 uSkyTop, uSkyMid, uSkyBot;
     varying vec3 vW;
     varying float vH;
     varying float vDist;
@@ -590,14 +653,22 @@ ${waveGLSL}
       return h;
     }
     void main(){
-      // 解析法线
+      // 解析法线：大浪用差分取坡度，再叠两条 1.6 m / 0.9 m 的细波纹（只影响法线）
       float e = 0.55;
       float hL = wh(vW.xz - vec2(e,0.0)), hR = wh(vW.xz + vec2(e,0.0));
       float hD = wh(vW.xz - vec2(0.0,e)), hU = wh(vW.xz + vec2(0.0,e));
-      vec3 N = normalize(vec3(hL-hR, 2.0*e, hD-hU));
+      float sx = (hR-hL)/(2.0*e), sz = (hU-hD)/(2.0*e);
+      float dcam = length(uCam - vW);
+      float farK = 1.0 - 0.7*smoothstep(150.0, 900.0, dcam);   // 远处的浪坡压平：一个像素里好几道浪，不压就是一圈圈条纹
+      sx *= farK; sz *= farK;
+      vec3 N0 = normalize(vec3(-sx, 1.0, -sz));               // 大浪的法线：菲涅尔和映天用它，细波纹只进高光
+      float rf = 1.0 - smoothstep(15.0, 90.0, dcam);
+${RIPPLE_GLSL}
+      vec3 N = normalize(vec3(-sx, 1.0, -sz));
 
       vec3 V = normalize(uCam - vW);
       vec3 L = normalize(uSunD);
+      float moodL = dot(uMood, vec3(0.3, 0.59, 0.11));
 
       // 由岸到深的三段配色
       float ang=atan(vW.z,vW.x);
@@ -608,16 +679,21 @@ ${waveGLSL}
       vec3 base = mix(uSand, uShallow, smoothstep(0.0, 0.42, shoreT));
       base = mix(base, uDeep, smoothstep(0.35, 1.0, shoreT));
 
-      // 菲涅尔：视线越平越亮
-      float fres = pow(1.0 - max(dot(N, V), 0.0), 3.2);
-      base = mix(base, vec3(0.62,0.79,0.90), fres*0.55);
+      // 菲涅尔：视线越平越亮，映的是天空（按反射方向的仰角在三色里取），不再是一个常量蓝
+      float NV = max(dot(N0, V), 0.0);
+      float fres = pow(1.0 - NV, 3.2);
+      vec3 R = reflect(-V, N0);
+      vec3 skyRef = mix(uSkyBot, uSkyMid, smoothstep(-0.05, 0.40, R.y));   // uSkyBot 是天边那圈霾色；过渡放宽，浪与浪之间才不分层
+      skyRef = mix(skyRef, uSkyTop, smoothstep(0.30, 0.95, R.y));
+      base = mix(base, skyRef*0.9, fres*0.55);
 
-      // 阳光高光
+      // 阳光高光：指数随细波纹起伏，一整块光斑碎成一片闪点
       vec3 H = normalize(L + V);
-      float spec = pow(max(dot(N, H), 0.0), 210.0);
-      base += vec3(1.0,0.96,0.86) * spec * 1.7;
-      float sheen = pow(max(dot(N, H), 0.0), 22.0);
-      base += vec3(1.0,0.95,0.82) * sheen * 0.10;
+      float NH = max(dot(N, H), 0.0);
+      float spec = pow(NH, 90.0 + 90.0*rip) * (0.5 + 0.5*rip);
+      base += vec3(1.0,0.96,0.86) * spec * 1.5 * (0.35 + 0.65*moodL);
+      float sheen = pow(NH, 22.0);
+      base += vec3(1.0,0.95,0.82) * sheen * 0.10 * moodL;
 
       // 浪尖白沫
       float crest = smoothstep(0.60, 1.05, vH);
@@ -816,8 +892,8 @@ mat("hull",   0xf2ece0);
 mat("hullR",  0xc4553f);
 mat("hullB",  0x35688f);
 mat("sail",   0xf7f2e6, {side:THREE.DoubleSide, roughness:.9});
-mat("metal",  0xcfd4d8, {roughness:.42, metalness:.55});
-mat("brass",  0xd9a441, {roughness:.35, metalness:.65});
+mat("metal",  0xcfd4d8, {roughness:.42, metalness:.55, envMapIntensity:1.3});
+mat("brass",  0xd9a441, {roughness:.35, metalness:.65, envMapIntensity:1.3});
 mat("dark",   0x33393d);
 mat("cloth",  0xd8654f);
 mat("fishA",  0x4a86c4, {roughness:.4});
@@ -2688,11 +2764,19 @@ function tick(){
 
   seaUniforms.uCam.value.copy(camera.position);
   sky.position.set(camera.position.x, 0, camera.position.z);
-  // 阴影跟随视点
+  // 阴影跟随视点。阴影框按模式收：走路/钓鱼 60 米（每纹素 6 厘米，人和柱子的影子有形），
+  // 驾驶/航行/坐车 90，俯瞰/飞行 130。焦点在光空间里对齐到整纹素，走动时影子边缘才不爬
   const shadowFocus = mode===MODE.VIEW ? ctrl.target : camera.position;
-  const fx = Math.round(shadowFocus.x/6)*6, fz = Math.round(shadowFocus.z/6)*6;
-  sun.position.set(fx + SUN_DIR.x*220, SUN_DIR.y*220, fz + SUN_DIR.z*220);
-  sun.target.position.set(fx, 0, fz);
+  const ext = (mode===MODE.WALK||mode===MODE.FISH) ? 60 : (mode===MODE.VIEW||mode===MODE.FLY) ? 130 : 90;
+  if(sun.shadow.camera.right!==ext){const sc=sun.shadow.camera;sc.left=sc.bottom=-ext;sc.right=sc.top=ext;sc.updateProjectionMatrix();}
+  const texel = ext*2/SM;
+  _shM.lookAt(_shA.copy(SUN_DIR), _shB.set(0,0,0), _shUp.set(0,1,0));
+  _shX.setFromMatrixColumn(_shM,0); _shY.setFromMatrixColumn(_shM,1);
+  _shF.set(shadowFocus.x, 0, shadowFocus.z);   // 焦点压到海平面：飞行时相机高几百米，带着高度会把地面推出 far
+  const px=_shF.dot(_shX), py=_shF.dot(_shY);
+  _shF.addScaledVector(_shX, Math.round(px/texel)*texel-px).addScaledVector(_shY, Math.round(py/texel)*texel-py);
+  sun.position.set(_shF.x + SUN_DIR.x*SHADOW_DIST, _shF.y + SUN_DIR.y*SHADOW_DIST, _shF.z + SUN_DIR.z*SHADOW_DIST);
+  sun.target.position.copy(_shF);
   sun.target.updateMatrixWorld();
 
   Snd.update(dt, camera.position, t);
@@ -2753,10 +2837,15 @@ const periodNames=['morning','sunset','night'];
    是彻底的平光 —— 没有形体、没有方向，再多贴图和后期也救不回来。
    现在提到 8:1 上下，并且环境光让位给环境贴图（它已经在提供天空的漫射了）。
    注意 updateAtmosphere 每帧都按这张表写 sun/hemi/fill，改构造函数里的初值没用。 */
+/* 色调映射改成 pow(1.45) + 曝光 1.0 之后（见文件末尾），主光按"被晒到的灰泥、沙子不能白成一片"
+   重新定：晨光 1.25 / 日落 1.10 / 星夜 .36。fog 色取在 bot 和 mid 之间，天空着色器在地平线那圈
+   也混同一个色，远景淡进雾里时和天边接得上。fogD 是雾的浓度（FogExp2，衰减 = d²·距离²）：
+   晨光 .0016 → 600 米外的港区剩四成、400 米外的静屿剩七成、30 米内不到 1%；日落更浓，星夜要给星星留着。
+   rimC/rim/rimDir 是轮廓光；cloud/cloudC/cloudD 是天空着色器里的云量、云面色、云底色。 */
 const periods=[
- {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xb7d0cb,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.95,ambient:.20,fill:.05,mood:0xffffff,stars:0,dir:[.42,.62,.30]},
- {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xc9ac9c,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.70,ambient:.19,fill:.05,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48]},
- {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x142b40,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.42,ambient:.24,fill:.06,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3]}
+ {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0016,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
+ {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0021,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.10,ambient:.15,fill:.04,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
+ {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0013,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.36,ambient:.20,fill:.05,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
 ];
 let periodIndex=0;
 try{const saved=localStorage.getItem('windward-period-v2');if(periodNames.includes(saved)) periodIndex=periodNames.indexOf(saved);}catch{}
@@ -2818,15 +2907,11 @@ const beam=new THREE.Mesh(G.cone(10,105,24),beamMat);beam.rotation.z=Math.PI/2;b
 addObs(-22,-30,7.5);
 const dockLight=new THREE.PointLight(0xffd79c,0,34,2);dockLight.position.set(dockEndPt.x,6.6,dockEndPt.z);scene.add(dockLight);
 
-// Cloud banks, stars and a moon stay far beyond the island.
-const clouds=[];
-const cloudMat=new THREE.MeshStandardMaterial({color:0xfff8e7,roughness:1,transparent:true,opacity:.78,depthWrite:false});
-for(let i=0;i<10;i++){
- const group=new THREE.Group(),a=i/10*Math.PI*2,r=440+hash2(i,39)*170;
- group.position.set(Math.cos(a)*r,110+hash2(i,51)*55,Math.sin(a)*r);
- for(let j=0;j<4;j++){const m=add(group,G.ico(12+hash2(i,j)*9,1),cloudMat,j*18,hash2(i,j+22)*6,hash2(i,j+9)*10,false);m.scale.set(1.5,.45,1);}
- scene.add(group);clouds.push({g:group,x:group.position.x,z:group.position.z,phase:i*1.3});
-}
+// 云画在天空着色器里（见 skyU.cloud*），这里只剩星星和月亮。
+// 港区海滨大道的路灯：夜里给 8 盏点光，开局就建好（灯的数量变了所有材质都要重编译），
+// 强度在 updateAtmosphere 里随夜色开关。灯柱在 harborLamp(x,-99)，灯罩高 10.55。手机不加。
+const harborStreetLights=[];
+if(!isSmall)for(const x of [566,588,610,632,654,676,698,720]){const l=new THREE.PointLight(0xffd79c,0,30,2);l.position.set(x,10.4,-99);scene.add(l);harborStreetLights.push(l);}
 const starPositions=new Float32Array(700*3);
 for(let i=0;i<700;i++){const a=hash2(i,70)*Math.PI*2,y=.12+hash2(i,91)*.87,r=Math.sqrt(1-y*y)*1100;starPositions.set([Math.cos(a)*r,y*1100,Math.sin(a)*r],i*3);}
 const starGeo=new THREE.BufferGeometry();starGeo.setAttribute('position',new THREE.BufferAttribute(starPositions,3));
@@ -2837,7 +2922,7 @@ const moon=new THREE.Mesh(G.sph(16,24,16),moonMat);moon.position.set(-460,520,-6
 
 // Batch static scenery by material. Palms' crowns, boats, birds and fire remain animated.
 scene.updateMatrixWorld(true);
-const moving=new Set([sky,sea,island,boat.g,bobber,hookedFish.g,camp.flame,camp.flame2,beamPivot,moon,stars,...dinghies.map(d=>d.g),...gulls.map(g=>g.g),...clouds.map(c=>c.g),...schools.flatMap(s=>s.members.map(m=>m.f.g))]);
+const moving=new Set([sky,sea,island,boat.g,bobber,hookedFish.g,camp.flame,camp.flame2,beamPivot,moon,stars,...dinghies.map(d=>d.g),...gulls.map(g=>g.g),...schools.flatMap(s=>s.members.map(m=>m.f.g))]);
 const batches=new Map();
 scene.traverse(o=>{
  if(!o.isMesh || o.children.length || Array.isArray(o.material) || o.material.transparent || !o.geometry.attributes.normal) return;
@@ -2862,26 +2947,44 @@ for(const items of batches.values()){
    天空色每帧都在插值，所以不能每帧重生成；换时段时打两次就够。 */
 const ENV_GAIN=0.40;
 let envPMREM=null, envTarget=null;
+const _envA=new THREE.Color(), _envB=new THREE.Color();
 function refreshEnvironment(){
  try{
   if(!envPMREM){envPMREM=new THREE.PMREMGenerator(renderer);envPMREM.compileEquirectangularShader();}
-  const c=document.createElement('canvas');c.width=16;c.height=64;
-  const g=c.getContext('2d');if(!g||!g.createLinearGradient)return;
+  const W=128,H=64;
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const g=c.getContext('2d');if(!g||!g.createRadialGradient)return;
   // 压到四成：环境贴图接管的是天空来的漫射，按天空全亮度来会和半球光、
   // 补光叠成两遍，画面直接冲白 —— 实测平均亮度 144 冲到 187，楼全成白的了。
-  const dim=col=>'#'+col.clone().multiplyScalar(ENV_GAIN).getHexString();
-  const grad=g.createLinearGradient(0,0,0,64);
-  grad.addColorStop(0,dim(skyU.top.value));
-  grad.addColorStop(.55,dim(skyU.mid.value));
-  grad.addColorStop(1,dim(skyU.bot.value));
-  g.fillStyle=grad;g.fillRect(0,0,16,64);
+  // 这张图 128×64：上半是带地平线霾的天空渐变，下半是地面色淡进雾里，太阳按 SUN_DIR 的
+  // 方位/仰角画一个亮斑加光晕（不压暗，玻璃和金属才映得出一个太阳），再撒几道云。
+  const rgba=(col,k,a=1)=>{_envA.copy(col).multiplyScalar(k);return `rgba(${Math.round(Math.min(1,_envA.r)*255)},${Math.round(Math.min(1,_envA.g)*255)},${Math.round(Math.min(1,_envA.b)*255)},${a})`;};
+  const ss=(a,b,x)=>{x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x);};
+  const top=skyU.top.value,mid=skyU.mid.value,bot=skyU.bot.value,fogC=skyU.fogC.value,gnd=hemi.groundColor;
+  for(let y=0;y<H;y++){
+   const dy=Math.sin((0.5-(y+0.5)/H)*Math.PI);          // 第 0 行是天顶，equirect 的 v=1
+   if(dy>=0){const h=dy*0.5+0.5;_envB.copy(bot).lerp(mid,ss(.44,.55,h)).lerp(top,ss(.52,.86,h)).lerp(fogC,1-ss(-0.02,0.18,dy));}
+   else _envB.copy(fogC).lerp(gnd,ss(0,0.35,-dy));
+   g.fillStyle=rgba(_envB,ENV_GAIN);g.fillRect(0,y,W,1);
+  }
+  g.fillStyle=rgba(skyU.cloudC.value,ENV_GAIN*0.95,0.7);
+  for(const [x,y,w,h] of [[6,14,30,3],[50,11,40,3],[100,16,24,2],[30,20,22,2],[76,22,34,2]])g.fillRect(x,y,w,h);
+  const d=SUN_DIR,sx=(Math.atan2(d.z,d.x)/(2*Math.PI)+0.5)*W,sy=(0.5-Math.asin(Math.max(-1,Math.min(1,d.y)))/Math.PI)*H;
+  for(const ox of [-W,0,W]){                              // 贴图左右相接，太阳靠边时画两份
+   const halo=g.createRadialGradient(sx+ox,sy,0,sx+ox,sy,20);
+   halo.addColorStop(0,rgba(skyU.sunC.value,1,0.9));halo.addColorStop(0.3,rgba(skyU.sunC.value,1,0.35));halo.addColorStop(1,rgba(skyU.sunC.value,1,0));
+   g.fillStyle=halo;g.fillRect(sx+ox-20,sy-20,40,40);
+   g.fillStyle=rgba(skyU.sunC.value,1.0);g.beginPath();g.arc(sx+ox,sy,6,0,Math.PI*2);g.fill();
+  }
   const src=new THREE.CanvasTexture(c);src.mapping=THREE.EquirectangularReflectionMapping;
   const next=envPMREM.fromEquirectangular(src);
   envTarget?.dispose();envTarget=next;scene.environment=next.texture;
   src.dispose();
  }catch(e){ /* 没有 WebGL 或画布时照常跑，只是少了环境光 */ }
 }
-function scheduleEnvironment(){refreshEnvironment();setTimeout(refreshEnvironment,1500);}
+// 换时段：先按当下的天色烤一张，等插值到位（atmoProgress）再烤一张定稿；原来按 1.5 秒定时，帧率低时那会儿天色还在半路
+let envPending=false, atmoProgress=1, atmoWall=0;
+function scheduleEnvironment(){refreshEnvironment();envPending=true;atmoProgress=0;}
 function selectPeriod(index){
  periodIndex=index;document.body.dataset.period=periodNames[index];
  scheduleEnvironment();          // 天空变了，环境光也要跟着变
@@ -2889,19 +2992,27 @@ function selectPeriod(index){
  try{localStorage.setItem('windward-period-v2',periodNames[index]);}catch{}
 }
 function updateAtmosphere(dt,t){
- const p=periods[periodIndex],k=1-Math.exp(-dt*1.8);
+ // 插值按真实经过的时间走（一帧最多记 2 秒）：帧率低的机器上换时段也是同样的几秒到位，不会被 dt 的 0.05 上限拖成几十帧
+ const now=(typeof performance!=='undefined'&&performance.now)?performance.now()/1000:0;
+ const wall=atmoWall?Math.min(Math.max(now-atmoWall,0),2):0;atmoWall=now;
+ const p=periods[periodIndex],k=1-Math.exp(-Math.max(dt,wall)*1.8);
  tint(skyU.top.value,p.top,k);tint(skyU.mid.value,p.mid,k);tint(skyU.bot.value,p.bot,k);tint(skyU.sunC.value,p.sun,k);
+ tint(skyU.fogC.value,p.fog,k);tint(skyU.cloudC.value,p.cloudC,k);tint(skyU.cloudD.value,p.cloudD,k);skyU.uCloud.value+=(p.cloud-skyU.uCloud.value)*k;skyU.uTime.value=t;
  tint(seaUniforms.uDeep.value,p.deep,k);tint(seaUniforms.uShallow.value,p.shallow,k);tint(seaUniforms.uSand.value,p.sand,k);tint(seaUniforms.uMood.value,p.mood,k);
- tint(scene.fog.color,p.fog,k);tint(sun.color,p.sun,k);tint(hemi.color,p.amb,k);tint(hemi.groundColor,p.gnd,k);tint(fill.color,p.amb,k);
+ seaUniforms.uSkyTop.value.copy(skyU.top.value);seaUniforms.uSkyMid.value.copy(skyU.mid.value);seaUniforms.uSkyBot.value.copy(skyU.fogC.value);   // 海面贴地平线映到的是霾，不是渐变最底那格
+ scene.fog.color.copy(skyU.fogC.value);scene.fog.density+=(p.fogD-scene.fog.density)*k;   // 雾色就是天边那圈霾，远景和天接得上
+ tint(sun.color,p.sun,k);tint(hemi.color,p.amb,k);tint(hemi.groundColor,p.gnd,k);tint(fill.color,p.amb,k);
  sun.intensity+=(p.light-sun.intensity)*k;hemi.intensity+=(p.ambient-hemi.intensity)*k;fill.intensity+=(p.fill-fill.intensity)*k;
+ tint(rim.color,p.rimC,k);rim.intensity+=(p.rim-rim.intensity)*k;_a.set(...p.rimDir);rim.position.lerp(_a,k);
  _a.set(...p.dir).normalize();SUN_DIR.lerp(_a,k).normalize();skyU.sunD.value.copy(SUN_DIR);seaUniforms.uSunD.value.copy(SUN_DIR);
  starMat.opacity+=(p.stars-starMat.opacity)*k;moonMat.opacity=starMat.opacity;
  stars.position.set(camera.position.x,0,camera.position.z);stars.rotation.y=t*.001;
  seaSkirt.material.color.copy(seaUniforms.uDeep.value).multiply(seaUniforms.uMood.value);
  const night=starMat.opacity/.9;beaconLight.intensity=night*2.5;dockLight.intensity=night*1.8;
- beamMat.opacity=night*.075;beamPivot.rotation.y=t*.22;cloudMat.opacity=.78-night*.58;
- tint(cloudMat.color,periodIndex===1?0xf7ccaf:periodIndex===2?0x6b829f:0xfff8e7,k);
- for(const c of clouds){c.g.position.x=c.x+Math.sin(t*.008+c.phase)*45;c.g.position.z=c.z+Math.cos(t*.009+c.phase)*25;}
+ beamMat.opacity=night*.075;beamPivot.rotation.y=t*.22;
+ for(const l of harborStreetLights)l.intensity=night*1.4;
+ atmoProgress+=(1-atmoProgress)*k;
+ if(envPending&&atmoProgress>0.96){envPending=false;refreshEnvironment();}
 }
 selectPeriod(periodIndex);
 $('time-toggle').addEventListener('click',()=>{selectPeriod((periodIndex+1)%3);showHint(periods[periodIndex].caption);});
@@ -3235,9 +3346,9 @@ mat("grass2",  0x628c45, {roughness:.96});
 mat("path",    0xd8c9a8, {roughness:.94});
 mat("plaza",   0xe2d4b4, {roughness:.9});
 mat("water",   0x4ba3c7, {roughness:.16, metalness:.35, transparent:true, opacity:.86});
-mat("steelA",  0xe0e5ea, {roughness:.42, metalness:.55});
-mat("steelB",  0xb2bcc6, {roughness:.5,  metalness:.5});
-mat("steelDk", 0x6d7883, {roughness:.55, metalness:.45});
+mat("steelA",  0xe0e5ea, {roughness:.42, metalness:.55, envMapIntensity:1.3});
+mat("steelB",  0xb2bcc6, {roughness:.5,  metalness:.5,  envMapIntensity:1.3});
+mat("steelDk", 0x6d7883, {roughness:.55, metalness:.45, envMapIntensity:1.3});
 mat("red",     0xe0455b, {roughness:.55});
 mat("crimson", 0xb4283e, {roughness:.55});
 mat("blue",    0x2f6fc0, {roughness:.55});
@@ -3257,7 +3368,7 @@ mat("leafA",   0x3f8a45, {roughness:.94});
 mat("leafB",   0x4f9d4e, {roughness:.94});
 mat("leafC",   0x357a3d, {roughness:.94});
 mat("dark",    0x3a3f46, {roughness:.7});
-mat("gold",    0xd7a93c, {roughness:.34, metalness:.7});
+mat("gold",    0xd7a93c, {roughness:.34, metalness:.7, envMapIntensity:1.3});
 mat("asphalt", 0x4a4d55, {roughness:.88, metalness:.08});
 mat("navy",    0x27395f, {roughness:.62, metalness:.12});
 
@@ -5719,8 +5830,8 @@ function applySurfaceDetail(){
 }
 
 const HM={stone:humanMat(0xc4b396),cream:humanMat(0xe0ceb0),darkstone:humanMat(0x847d70),brick:humanMat(0x9c6150),roof:humanMat(0x475c5b),wood:humanMat(0x694e37),floor:humanMat(0xc9b390),paper:humanMat(0xeee2c7),iron:humanMat(0x303e40),red:humanMat(0x894933),green:humanMat(0x526b54),blue:humanMat(0x466875)};
-const harborWindowMat=new THREE.MeshStandardMaterial({color:0x6c918e,emissive:0xe6b568,emissiveIntensity:.1,roughness:.35,metalness:.15});harborWarmMats.push(harborWindowMat);
-const harborGlass=new THREE.MeshStandardMaterial({color:0xa1c7c3,transparent:true,opacity:.17,roughness:.2,side:THREE.DoubleSide,depthWrite:false});
+const harborWindowMat=new THREE.MeshStandardMaterial({color:0x6c918e,emissive:0xe6b568,emissiveIntensity:.1,roughness:.18,metalness:.05,envMapIntensity:1.5});harborWarmMats.push(harborWindowMat);
+const harborGlass=new THREE.MeshStandardMaterial({color:0xa1c7c3,transparent:true,opacity:.17,roughness:.18,envMapIntensity:1.5,side:THREE.DoubleSide,depthWrite:false});
 const harborSignMats=[];
 function hb(p,w,h,d,m,x,y,z,shadow=true){return add(p,G.box(w,h,d),m,x,y,z,shadow,true);}
 // 把若干几何体（各自带变换）拼成一块只有 position/normal 的 BufferGeometry。
@@ -8085,12 +8196,14 @@ scheduleEnvironment();   // 开局先把环境光挂上
 /* 色调映射：整套调色板是按 sRGB 挑的十六进制，却被当成线性值送进光照，所以颜色
    又淡又灰——石头是灰白的，草坡也是灰白的。这里在映射之前先把它还原回线性，浓度
    和明暗层次就回来了；天空和海是各自的着色器直接出图，不走这条路，不受影响。 */
-const TONE_GAMMA=1.7;
+/* 1.7 + 曝光 1.2 时被晒到的灰泥和沙子全白成一片（ACES 输入到了 5），贴图细节没了；
+   压到 1.45 / 1.0，主光强度在 periods 表里跟着降，亮面留得住纹理，暗面还有层次。 */
+const TONE_GAMMA=1.45;
 THREE.ShaderChunk.tonemapping_pars_fragment=THREE.ShaderChunk.tonemapping_pars_fragment
  .replace("vec3 CustomToneMapping( vec3 color ) { return color; }",
   "vec3 CustomToneMapping( vec3 color ) { return ACESFilmicToneMapping( pow( max( color, vec3( 0.0 ) ), vec3( "+TONE_GAMMA.toFixed(2)+" ) ) ); }");
 renderer.toneMapping=THREE.CustomToneMapping;
-renderer.toneMappingExposure=1.20;
+renderer.toneMappingExposure=1.0;
 
 setMode(MODE.VIEW);
 // 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
