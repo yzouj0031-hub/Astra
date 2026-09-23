@@ -62,8 +62,8 @@ const SHOTS = [
   { name: 'watertown-pagoda', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3, jrun: "const r=__astraJourney();r.place(['x','x',-96,58]);r.yaw=Math.PI+.9;r.pitch=.05;" },
 ];
 
-async function openMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(!o) await page.click('#journey-menu-toggle'); }
-async function closeMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(o) await page.click('#journey-menu-toggle'); await page.waitForTimeout(300); }
+async function openMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(!o) await page.click('#journey-menu-toggle', { timeout: 120000 }); }
+async function closeMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(o) await page.click('#journey-menu-toggle', { timeout: 120000 }); await page.waitForTimeout(300); }
 
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
@@ -86,11 +86,11 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     const twoFrames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
     await page.waitForTimeout(1200);
     await page.waitForTimeout(shot.wait);
-    for (const sel of (shot.click||[])) { await page.click(sel); await page.waitForTimeout(600); }
+    for (const sel of (shot.click||[])) { await page.click(sel, { timeout: 120000 }); await page.waitForTimeout(600); }
     if (shot.run) { await page.evaluate(shot.run); }
     if (shot.click || shot.run) { await page.waitForTimeout(shot.after || 3000); await twoFrames(); }
-    for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day'); await page.waitForTimeout(300); }
-    if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click(); await page.waitForTimeout(2500); }
+    for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day', { timeout: 120000 }); await page.waitForTimeout(300); }
+    if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click({ timeout: 120000 }); await page.waitForTimeout(2500); }
     if (shot.journey) await closeMenu(page);
     if (shot.jrun) { await page.evaluate(shot.jrun); await page.waitForTimeout(2500); await twoFrames(); }
     const info = await page.evaluate(j => j ? (window.__astraJourneyInfo || null) : ((window.__astra && window.__astra.info) ? window.__astra.info() : null), !!shot.journey);

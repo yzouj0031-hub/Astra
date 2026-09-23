@@ -21,7 +21,7 @@ function createWorld(scene,{mobile=false,trees=null,vehicles=null}={}){
   seed=314159;
   const colliders=[],batches=new Map(),matCache=new Map(),glows=[],reflections=[];
   const boxGeo=new T.BoxGeometry(1,1,1),cylGeo=new T.CylinderGeometry(1,1,1,10),cyl16=new T.CylinderGeometry(1,1,1,16),sphGeo=new T.SphereGeometry(1,10,8),planeGeo=new T.PlaneGeometry(1,1),dummy=new T.Object3D();
-  const torusGeo=new T.TorusGeometry(1,.06,6,18),coneOpen=new T.ConeGeometry(1,1,14,1,true),ringGeo=new T.RingGeometry(.7,1,12);
+  const torusGeo=new T.TorusGeometry(1,.06,6,18),coneOpen=new T.ConeGeometry(1,1,14,1,true),ringGeo=new T.RingGeometry(.84,1,10);
   // 按用途给材质起名（墙 / 木 / 石 / 地面 / 车道），regions.js 照名字挂程序化表面细节；
   // 发光的、车船和人身上的颜色不起名，保持原样
   const ROLE=new Map([[C.blue,'wall'],[C.teal,'wall'],[C.coral,'wall'],[C.blue2,'wall'],[C.cream,'wall'],[C.navy,'wall'],[0xc9c3ab,'wall'],
@@ -371,10 +371,10 @@ function createWorld(scene,{mobile=false,trees=null,vehicles=null}={}){
   const rainCount=mobile?700:1400,rainCoords=new Float32Array(rainCount*6);const rainGeo=new T.BufferGeometry();rainGeo.setAttribute('position',new T.BufferAttribute(rainCoords,3));const rainMat=new T.LineBasicMaterial({color:0x9bbbbf,transparent:true,opacity:.22,depthWrite:false});const rain=new T.LineSegments(rainGeo,rainMat);rain.frustumCulled=false;scene.add(rain);const rainSeeds=Array.from({length:rainCount},()=>[range(-70,70),range(0,50),range(-70,70),range(.6,1.8)]);
   /* 雨点落地的涟漪：一批圆环跟着玩家附近的地面，按哈希各自错开周期，扩开就重新落一处。
      种子在雨丝之后才抽（主序列到这里已经结束，后面没有别的东西了）。 */
-  const splashCount=mobile?48:140,splash=new T.InstancedMesh(ringGeo,new T.MeshBasicMaterial({color:0xbfd6da,transparent:true,opacity:.22,depthWrite:false,side:T.DoubleSide}),splashCount);
+  const splashCount=mobile?30:90,splash=new T.InstancedMesh(ringGeo,new T.MeshBasicMaterial({color:0xbfd6da,transparent:true,opacity:.14,depthWrite:false,side:T.DoubleSide}),splashCount);
   splash.castShadow=false;splash.receiveShadow=false;splash.frustumCulled=false;scene.add(splash);
   const splashState=Array.from({length:splashCount},(_,i)=>({x:0,z:0,cycle:-1,off:hash(i,3,11),spd:.9+hash(i,5,12)*.8}));
-  const RAD=9;
+  const RAD=7;
 
   function setRain(rainOn){
     const visible=Boolean(rainOn);
@@ -393,7 +393,7 @@ function createWorld(scene,{mobile=false,trees=null,vehicles=null}={}){
     if(rainOn){const cx=focus.x,cz=focus.z;for(let i=0;i<rainCount;i++){const a=rainSeeds[i],y=((a[1]-t*17)%50+50)%50,o=i*6,x=a[0]+cx+(50-y)*.1,z=a[2]+cz;rainCoords[o]=x;rainCoords[o+1]=y;rainCoords[o+2]=z;rainCoords[o+3]=x+.14;rainCoords[o+4]=y-a[3];rainCoords[o+5]=z;}rainGeo.attributes.position.needsUpdate=true;
       for(let i=0;i<splashCount;i++){const s=splashState[i],ph=t*s.spd+s.off,cyc=Math.floor(ph),f=ph-cyc;
         if(cyc!==s.cycle){s.cycle=cyc;s.x=cx+(hash(i,cyc,1)-.5)*2*RAD;s.z=cz+(hash(i,cyc,2)-.5)*2*RAD;s.on=isLand(s.x,s.z);}
-        const r=s.on?(.08+f*.5):0;dummy.position.set(s.x,.2,s.z);dummy.rotation.set(-Math.PI/2,0,0);dummy.scale.set(r,r,r);dummy.updateMatrix();splash.setMatrixAt(i,dummy.matrix);}
+        const r=s.on?(.05+f*.22):0;dummy.position.set(s.x,.2,s.z);dummy.rotation.set(-Math.PI/2,0,0);dummy.scale.set(r,r,r);dummy.updateMatrix();splash.setMatrixAt(i,dummy.matrix);}
       splash.instanceMatrix.needsUpdate=true;}
     // 光晕转向相机
     if(haloItems.length){const q=camera.quaternion;for(let i=0;i<haloItems.length;i++){const h=haloItems[i];dummy.position.copy(h.p);dummy.quaternion.copy(q);dummy.scale.set(h.s,h.s,1);dummy.updateMatrix();haloMesh.setMatrixAt(i,dummy.matrix);}haloMesh.instanceMatrix.needsUpdate=true;}
