@@ -804,6 +804,7 @@ mat("rock2",  0x746f64, {roughness:.95});
 mat("rockF",  0x746d60, {roughness:.95, flatShading:true, vertexColors:true});
 mat("rockF2", 0x5c574d, {roughness:.95, flatShading:true, vertexColors:true});
 mat("thatch", 0xa1803e, {roughness:1});
+mat("thatchD",0x7f6330, {roughness:1});   // 下层茅草晒得旧一点，三层叠檐才看得出层次
 mat("canvas", 0xd8c79c, {side:THREE.DoubleSide, roughness:.92});
 mat("canvas2",0x8d9878, {side:THREE.DoubleSide, roughness:.92});
 mat("teakWet",0x3a2718, {roughness:.72});
@@ -1081,14 +1082,14 @@ function buildDock(){
     // 栏杆（只做一侧，留出上下船的口）：立柱 + 顶上一根圆木扶手 + 中间下垂的绳
     if(i%2===0 && t < 0.86){
       const [ox, oz] = at(r, 2.4);
-      strut(g, ox, deckY, oz, ox, deckY+1.1, oz, 0.09, M.teakD);
+      strut(g, ox, deckY, oz, ox, deckY+1.1, oz, 0.12, M.teakD);
       railTops.push(new THREE.Vector3(ox, deckY+1.1, oz));
     }
     addObs(x + px*3.1, z + pz*3.1, 0.5);
     addObs(x - px*3.1, z - pz*3.1, 0.5);
   }
   if(railTops.length > 1){
-    add(g, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railTops), railTops.length*3, 0.07, 6, false), M.teak, 0,0,0, true);
+    add(g, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railTops), railTops.length*3, 0.09, 6, false), M.teak, 0,0,0, true);
     for(let k=1;k<railTops.length;k++){
       const a = railTops[k-1].clone(), b = railTops[k].clone(); a.y -= 0.42; b.y -= 0.42;
       const mid = a.clone().lerp(b, .5); mid.y -= 0.13;
@@ -1157,7 +1158,7 @@ function buildCamp(){
   };
   clad(7, 0, 3.0, 0, [[-1.0,1.0,0,2.85],[1.4,3.0,1.95,3.25]]); clad(7, 0, -3.0, Math.PI); clad(6, 3.5, 0, Math.PI/2); clad(6, -3.5, 0, -Math.PI/2);
   for(const [x,z] of [[-3.55,-3.05],[3.55,-3.05],[-3.55,3.05],[3.55,3.05]]) add(g, G.cyl(.16,.19,4.4,8), M.teakD, x, 2.2, z, true, true);
-  for(const [rt,rb,h,y] of [[4.3,5.5,1.1,4.45],[3.0,4.45,1.1,5.45]]){ const layer = add(g, G.cyl(rt,rb,h,4), M.thatch, 0, y, 0, true, true); layer.rotation.y = Math.PI/4; }
+  for(const [rt,rb,h,y,m] of [[4.3,5.6,1.1,4.45,M.thatchD],[3.0,4.35,1.1,5.45,M.thatch]]){ const layer = add(g, G.cyl(rt,rb,h,4), m, 0, y, 0, true, true); layer.rotation.y = Math.PI/4; }
   { const top = add(g, G.cone(3.15,1.9,4), M.thatch, 0, 6.85, 0, true, true); top.rotation.y = Math.PI/4; }
   add(g, G.cyl(.09,.12,.9,7), M.teakD, 0, 8.0, 0);
   // 门廊梁与门框、门、窗
@@ -5668,6 +5669,7 @@ function applySurfaceDetail(){
   [M.rockF,"rock",1.6,.7,.9,.5],
   [M.rockF2,"rock",1.6,.7,.9,.5],
   [M.thatch,"grass",0.9,.85,1.3,.6],
+  [M.thatchD,"grass",0.9,.85,1.3,.6],
   [M.teakWet,"timber",2.2,.8,.8,.5],
   [M.canvas,"plaster",1.4,.35,.4,.35],
   [M.canvas2,"plaster",1.4,.35,.4,.35],

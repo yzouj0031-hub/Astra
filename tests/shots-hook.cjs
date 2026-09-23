@@ -29,9 +29,11 @@ const SHOTS = [
   { name: 'island-sunset', url: GAME, wait: 4000, run: '__astra.period(1);__astra.walkTo(30,60,2.6)', after: 4000 },
   // 静屿近景（岩石 / 码头 / 营地 / 沙滩），轨道相机直接对准目标
   { name: 'island-dockclose', url: GAME, wait: 4000, run: '__astra.orbit(89.5,3,-55,24,2.4,1.25)', after: 3000 },
-  { name: 'island-campclose', url: GAME, wait: 4000, run: '__astra.orbit(87,3,0,26,3.6,1.2)', after: 3000 },
+  { name: 'island-campclose', url: GAME, wait: 4000, run: '__astra.orbit(83,2.5,1,24,1.25,1.2)', after: 3000 },
   { name: 'island-beach',     url: GAME, wait: 4000, run: '__astra.orbit(82,1,62,22,4.2,1.3)', after: 3000 },
   { name: 'island-rocks',     url: GAME, wait: 4000, run: '__astra.orbit(30,12,-26,42,5.2,1.15)', after: 3000 },
+  { name: 'island-lightclose',url: GAME, wait: 4000, run: '__astra.orbit(-22,17,-30,30,4.1,1.3)', after: 3000 },
+  { name: 'island-lightbase', url: GAME, wait: 4000, run: '__astra.walkTo(-10,-40,2.27,0.15)', after: 3000 },
   { name: 'park-view',     url: GAME, wait: 4000, run: '__astra.view("park")', after: 4000 },
   { name: 'park-gate',     url: GAME, wait: 4000, run: '__astra.park()', after: 2500 },
   { name: 'park-plaza',    url: GAME, wait: 4000, run: '__astra.walkTo(0,-505,0)', after: 2500 },
