@@ -2295,6 +2295,7 @@ const bloomOrigin=new THREE.Vector2(0,0);
    每 0.5 秒统计一次帧率，连续 2 秒低于 45 帧就降一级，最多三级；不自动升回去，免得来回跳：
    1 级：分辨率降到 1 倍、关泛光  2 级：再关阴影  3 级：分辨率降到 0.8 倍 */
 const QUALITY={level:0,low:0};
+const LAST_INFO={calls:0,triangles:0};
 function setQuality(level){
  QUALITY.level=level;
  renderer.setPixelRatio(Math.min(START_PIXEL_RATIO,[START_PIXEL_RATIO,1,1,.8][level]));
@@ -2306,7 +2307,11 @@ function setQuality(level){
  }
  renderer.setSize(innerWidth,innerHeight);
 }
+/* ?quality=lock：截图/验收用。软件渲染（Playwright 的 swiftshader）帧率只有个位数，
+   不锁的话拍出来的永远是关了阴影和泛光的第三档，看不出真机的样子。 */
+const QUALITY_LOCKED=(()=>{try{return new URL(location.href).searchParams.get('quality')==='lock';}catch{return false;}})();
 function adaptQuality(fps){
+ if(QUALITY_LOCKED)return;
  if(document.hidden||document.querySelector('dialog[open]'))return;   // 切后台、开着对话框时帧率不算数
  QUALITY.low=fps<45?QUALITY.low+1:0;
  if(QUALITY.low>=4&&QUALITY.level<3){QUALITY.low=0;setQuality(QUALITY.level+1);}
@@ -2314,6 +2319,7 @@ function adaptQuality(fps){
 function renderScene(sc,cam){
  renderer.setRenderTarget?.(null);            // 精简 renderer（测试替身）没有这个方法
  renderer.render(sc,cam);                     // 基准图：原样画到画布，不经我的手
+ if(renderer.info&&renderer.info.render){LAST_INFO.calls=renderer.info.render.calls;LAST_INFO.triangles=renderer.info.render.triangles;}   // 泛光那几趟会把 info 清掉，这里先记下场景本身的
  if(!BLOOM.on||!renderer.copyFramebufferToTexture)return;
  try{
   bloomSetup();bloomResize();
@@ -7502,6 +7508,15 @@ renderer.toneMapping=THREE.CustomToneMapping;
 renderer.toneMappingExposure=1.20;
 
 setMode(MODE.VIEW);
+// 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
+window.__astra={
+ info:()=>({calls:LAST_INFO.calls,triangles:LAST_INFO.triangles,quality:QUALITY.level,mode:mode}),
+ period:i=>selectPeriod(i),                                   // 0 晨光 1 日落 2 星夜
+ view:r=>focusRegion(r),                                      // 'island' | 'park' | 'harbor' | 'all'
+ park:()=>parkEntry(), harbor:()=>strollHarbor(), walkMode:()=>setMode(MODE.WALK),
+ walkTo:(x,z,yaw=0,pitch=-.05)=>{setMode(MODE.WALK);walk.x=x;walk.z=z;walk.yaw=yaw;walk.pitch=pitch;walk.vx=walk.vz=0;faceAway();groundPlayer();updateWalk(0,0);},
+ orbit:(x,y,z,dist,theta,phi)=>{setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(x,y,z);ctrl.target.set(x,y,z);ctrl.tDist=ctrl.dist=dist;ctrl.tTheta=ctrl.theta=theta;ctrl.tPhi=ctrl.phi=phi;applyOrbit();},
+};
 placeToggle();
 joyRelease();
 resetFishing();
