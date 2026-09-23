@@ -5351,7 +5351,8 @@ function applySurfaceDetail(){
  for(const [mat,kind,m,a,b,r,base,up] of plan) addSurfaceDetail(mat,kind,m,a,b,r,base,up);
  // 港区的路面、步道和街心分隔带是按颜色缓存出来的材质
  for(const [hex,kind,m,a,b,r] of [[0x8d927c,"slab",2.4,.85,.9,.5],[0xd0bf9d,"slab",2.0,.8,.8,.5],
-   [0x6e716b,"slab",2.4,.7,.7,.5],[0x72766d,"slab",2.4,.7,.7,.5]]) addSurfaceDetail(humanMat(hex),kind,m,a,b,r,4.15);
+   [0x6e716b,"slab",2.4,.7,.7,.5],[0x72766d,"slab",2.4,.7,.7,.5],
+   [0x9a9689,"slab",1.2,.6,.6,.45],[0x55584f,"slab",1.2,.5,.5,.45]]) addSurfaceDetail(humanMat(hex),kind,m,a,b,r,4.15);
  // 沙滩与草地是顶点着色的地形，细节乘在上面
  addSurfaceDetail(island.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
  addSurfaceDetail(parkShoreMesh.material,"sand",1.8,.45,1.2,.55,0,false,{kind:"grass",metres:1.2,lo:1.4,hi:5.0});
@@ -5396,6 +5397,14 @@ const harborWindowMat=new THREE.MeshStandardMaterial({color:0x6c918e,emissive:0x
 const harborGlass=new THREE.MeshStandardMaterial({color:0xa1c7c3,transparent:true,opacity:.17,roughness:.2,side:THREE.DoubleSide,depthWrite:false});
 const harborSignMats=[];
 function hb(p,w,h,d,m,x,y,z,shadow=true){return add(p,G.box(w,h,d),m,x,y,z,shadow,true);}
+// 把若干几何体（各自带变换）拼成一块只有 position/normal 的 BufferGeometry。
+// 港区末尾的静态合并、货架上的果蔬、路灯光晕这些共用小件都走这里
+function mergeHarborGeometry(parts){
+ const flat=parts.map(({geometry,matrix})=>{const g=geometry.clone();if(matrix)g.applyMatrix4(matrix);if(!g.index)return g;const n=g.toNonIndexed();g.dispose();return n;});
+ const length=flat.reduce((n,g)=>n+g.attributes.position.array.length,0),geometry=new THREE.BufferGeometry();
+ for(const attr of ['position','normal']){const values=new Float32Array(length);let offset=0;for(const g of flat){values.set(g.attributes[attr].array,offset);offset+=g.attributes[attr].array.length;}geometry.setAttribute(attr,new THREE.BufferAttribute(values,3));}
+ flat.forEach(g=>g.dispose());geometry.computeBoundingSphere();return geometry;
+}
 function harborSign(parent,text,x,y,z,w=16,h=2.6){
  const cv=document.createElement('canvas');cv.width=1024;cv.height=160;const cx=cv.getContext('2d');
  cx.fillStyle='#213b3c';cx.fillRect(0,0,1024,160);cx.strokeStyle='#c7ad76';cx.lineWidth=5;cx.strokeRect(10,10,1004,140);cx.fillStyle='#ead6a9';cx.font='52px "Microsoft YaHei",sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(text,512,82);
@@ -5403,16 +5412,134 @@ function harborSign(parent,text,x,y,z,w=16,h=2.6){
  const mat=new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide});harborSignMats.push(mat);
  return add(parent,new THREE.PlaneGeometry(w,h),mat,x,y,z,false);
 }
-function arch(parent,x,y,z,width,height,mat){
- const r=width/2;const geo=new THREE.TorusGeometry(r,.22,5,16,Math.PI);add(parent,geo,mat,x,y+height-r,z);
- hb(parent,.44,height-r,.5,mat,x-r,y+(height-r)/2,z);hb(parent,.44,height-r,.5,mat,x+r,y+(height-r)/2,z);
+/* ---------- 港区建筑细部 ----------
+   拱券、窗套、柱头、栏杆、檐口、屋顶这些零件都做成固定尺寸、共用几何体，好让 instanceResortMeshes 合批
+   （同尺寸同材质 ≥3 件才合），剩下的零头交给港区末尾的静态合并。
+   碰撞是从几何体推出来的（compileHarborCollisions 只认 Box/Cylinder，且世界 y 跨 4.5~6.3 才算街面障碍），
+   所以装饰件要么架在 6.3 米以上、要么压在 4.5 米以下；落在这一带的只有柱础、壁柱、勒脚、系船柱这些本来就该挡人的。 */
+// 窗玻璃分三档：亮、暗、熄。按窗心 (x,z) 的哈希定，夜里由 updateHarbor 推亮度
+const harborWindowDim=new THREE.MeshStandardMaterial({color:0x5f817f,emissive:0xd9a45c,emissiveIntensity:.04,roughness:.35,metalness:.15});
+const harborWindowDark=new THREE.MeshStandardMaterial({color:0x3f5654,emissive:0x8c7a58,emissiveIntensity:.02,roughness:.35,metalness:.15});
+function harborWindowPick(x,z){const h=hash2(Math.round(x*2),Math.round(z*2));return h<.42?harborWindowMat:h<.78?harborWindowDim:harborWindowDark;}
+const harborArchGeos=new Map();
+// 拱券：圆环段挤出（外弧 r+.45、内弧 r、厚 .5），按宽度缓存一份几何体，同宽的拱全都合批
+function archGeo(width){
+ const key=width.toFixed(2);if(harborArchGeos.has(key))return harborArchGeos.get(key);
+ const r=width/2,shape=new THREE.Shape();shape.absarc(0,0,r+.45,0,Math.PI,false);shape.lineTo(-r,0);shape.absarc(0,0,r,Math.PI,0,true);shape.closePath();
+ const g=new THREE.ExtrudeGeometry(shape,{depth:.5,bevelEnabled:false,curveSegments:9});g.translate(0,0,-.25);harborArchGeos.set(key,g);return g;
 }
-function harborColumn(parent,x,z,height=10,y=4){
- add(parent,G.cyl(.68,.86,height,10),HM.cream,x,y+height/2,z);hb(parent,2,.55,2,HM.darkstone,x,y+.2,z);hb(parent,2,.5,2,HM.cream,x,y+height-.2,z);
+// (x,y,z) 是拱脚中心，height 是拱洞总高，起拱点在 y+height-r；拱心石和起拱垫块跟着一起
+function arch(parent,x,y,z,width,height,mat,jambs=true){
+ const r=width/2,spring=y+height-r;
+ add(parent,archGeo(width),mat,x,spring,z);
+ hb(parent,.6,.8,.62,mat,x,y+height+.12,z,false);
+ for(const s of [-1,1])hb(parent,1,.32,.62,mat,x+s*(r+.1),spring-.16,z,false);
+ if(jambs)for(const s of [-1,1])hb(parent,.44,height-r,.5,mat,x+s*r,y+(height-r)/2,z);
 }
-function harborLamp(x,z){
- add(harborRoot,G.cyl(.12,.24,6.5,7),HM.iron,x,7.25,z);add(harborRoot,G.cyl(.65,.4,.3,8),HM.iron,x,10.8,z);
- add(harborRoot,G.sph(.42,8,6),lanternMat,x,10.55,z,false);add(harborRoot,G.cone(.7,.8,8),HM.iron,x,11.3,z);
+const columnCapGeo=new THREE.LatheGeometry([new THREE.Vector2(.66,0),new THREE.Vector2(.74,.22),new THREE.Vector2(.9,.42),new THREE.Vector2(1,.55)],12);
+// 石柱：方座 + 圆盘柱础、收分柱身、钟形柱帽 + 方顶板
+function harborColumn(parent,x,z,height=10,y=4,mat=HM.cream){
+ add(parent,G.cyl(.68,.86,height-1.2,12),mat,x,y+.6+(height-1.2)/2,z);
+ hb(parent,2,.45,2,HM.darkstone,x,y+.22,z);add(parent,G.cyl(.92,.98,.25,12),mat,x,y+.55,z);
+ add(parent,columnCapGeo,mat,x,y+height-.95,z);hb(parent,2.1,.4,2.1,mat,x,y+height-.2,z);
+}
+const balusterGeo=new THREE.CylinderGeometry(.09,.13,.8,5,1,true),ironBalusterGeo=new THREE.CylinderGeometry(.045,.045,.8,4,1,true);
+// 一段栏杆：沿局部 x 铺 len 长，顶栏 + 一排栏杆柱（开口筒，省端面，不投影）；yBase 是柱脚，facing 同 windowUnit
+function balustrade(parent,x,yBase,z,len,facing=0,step=.62,stone=true){
+ const g=new THREE.Group();g.position.set(x,yBase,z);g.rotation.y=facing;parent.add(g);
+ const rail=stone?HM.cream:HM.iron;
+ hb(g,len,stone?.28:.1,stone?.5:.1,rail,0,stone?.94:.9,0,false);
+ if(stone)hb(g,len,.18,.5,rail,0,.09,0,false);
+ const n=Math.max(1,Math.round(len/step));
+ for(let i=0;i<=n;i++)add(g,stone?balusterGeo:ironBalusterGeo,rail,-len/2+i*(len/n),.5,0,false);
+ return g;
+}
+// 檐口上的栏杆：转角和每 ~9 米一个墩子，中间铺栏杆段；back=false 时背面不做
+function parapet(parent,w,d,y,back=false){
+ const seg=(x0,z0,x1,z1)=>{const len=Math.hypot(x1-x0,z1-z0),n=Math.max(1,Math.round(len/9)),step=len/n,ux=(x1-x0)/len,uz=(z1-z0)/len,f=Math.atan2(-uz,ux);
+  for(let i=0;i<=n;i++)hb(parent,.9,1.35,.9,HM.cream,x0+ux*i*step,y+.67,z0+uz*i*step,false);
+  for(let i=0;i<n;i++)balustrade(parent,x0+ux*(i+.5)*step,y,z0+uz*(i+.5)*step,step-.9,f);};
+ seg(-w/2,d/2,w/2,d/2);seg(-w/2,-d/2,-w/2,d/2);seg(w/2,-d/2,w/2,d/2);if(back)seg(-w/2,-d/2,w/2,-d/2);
+}
+// 三阶檐口 + 一排齿饰；w,d 是墙体外皮尺寸，y 是墙顶，返回檐口顶面高度
+function cornice(parent,w,d,y,mat=HM.cream,dentils=true){
+ hb(parent,w+1.2,.35,d+1.2,mat,0,y+.17,0);hb(parent,w+2.2,.4,d+2.2,mat,0,y+.55,0);hb(parent,w+3.2,.5,d+3.2,mat,0,y+1,0);
+ if(dentils){for(let x=-w/2+.6;x<w/2;x+=1.1)for(const s of [-1,1])hb(parent,.5,.5,.6,mat,x,y-.3,s*(d/2+.55),false);
+  for(let z=-d/2+.6;z<d/2;z+=1.1)for(const s of [-1,1])hb(parent,.6,.5,.5,mat,s*(w/2+.55),y-.3,z,false);}
+ return y+1.25;
+}
+// 一扇窗：玻璃缩进墙里、四边窗套、出挑窗台、过梁 + 拱心石、两根窗棂。
+// (x,y,z) 是墙面上的窗心，facing 0 朝 +z、π 朝 -z、±π/2 朝 ±x。recess>0 要求墙上真有洞（地标正立面）；
+// 实心墙给 recess 0：玻璃贴在墙面、窗套向外凸 .3，靠窗套的投影出深度。尺寸固定，同样的窗合批
+function windowUnit(parent,x,y,z,facing,opts={}){
+ const w=opts.w||3.5,h=opts.h||4,recess=opts.recess??.45,frame=opts.frame||HM.paper,bar=opts.bar||HM.wood;
+ const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=facing;parent.add(g);
+ const glass=opts.glass||harborWindowPick(parent.position.x+x,parent.position.z+z);
+ const depth=recess+.3,zc=(.3-recess)/2;
+ add(g,G.box(w,h,.12),glass,0,0,-recess+.03,false,true);
+ for(const s of [-1,1])hb(g,.32,h+.64,depth,frame,s*(w/2+.16),0,zc,false);
+ hb(g,w,.32,depth,frame,0,h/2+.16,zc,false);
+ hb(g,w+1,.28,.7,frame,0,-h/2-.3,.1,false);
+ if(opts.lintel!==false){hb(g,w+1,.42,.4,frame,0,h/2+.53,.05,false);hb(g,.6,.7,.5,frame,0,h/2+.6,.1,false);}
+ for(const s of [-1,1])hb(g,.1,h,.06,bar,s*w/6,0,-recess+.12,false);hb(g,w,.1,.06,bar,0,h*.12,-recess+.12,false);
+ if(opts.shutters)for(const s of [-1,1])hb(g,.9,h+.2,.1,opts.shutters,s*(w/2+.8),0,.12,false);
+ return g;
+}
+// 一条水平墙带，按 holes（局部 x 的 [x0,x1] 区间，已排序）留洞；地标正立面的门洞和真窗洞都靠它拼
+function facadeBand(g,w,z,y0,y1,holes,mat){
+ let cursor=-w/2;for(const [x0,x1] of holes){if(x0>cursor+.01)hb(g,x0-cursor,y1-y0,1.2,mat,(x0+cursor)/2,(y0+y1)/2,z);cursor=Math.max(cursor,x1);}
+ if(cursor<w/2-.01)hb(g,w/2-cursor,y1-y0,1.2,mat,(w/2+cursor)/2,(y0+y1)/2,z);
+}
+const hipRoofGeos=new Map(),pedimentGeos=new Map(),valanceGeos=new Map();
+// 四坡屋顶：W×D 的檐口平面、脊高 H，脊沿长边；平法线、非索引，同尺寸共用一份
+function hipRoofGeo(W,D,H){
+ const key=[W,D,H].join('/');if(hipRoofGeos.has(key))return hipRoofGeos.get(key);
+ const alongX=W>=D,half=Math.abs(W-D)/2,A=[-W/2,0,-D/2],B=[W/2,0,-D/2],C=[W/2,0,D/2],E=[-W/2,0,D/2];
+ const R1=alongX?[-half,H,0]:[0,H,-half],R2=alongX?[half,H,0]:[0,H,half];
+ const tris=alongX?[[A,B,R2],[A,R2,R1],[B,C,R2],[C,E,R1],[C,R1,R2],[E,A,R1]]:[[A,B,R1],[B,C,R2],[B,R2,R1],[C,E,R2],[E,A,R1],[E,R1,R2]];
+ const pos=[],nor=[],a=new THREE.Vector3(),b=new THREE.Vector3(),n=new THREE.Vector3();
+ for(let [p,q,r] of tris){a.set(q[0]-p[0],q[1]-p[1],q[2]-p[2]);b.set(r[0]-p[0],r[1]-p[1],r[2]-p[2]);n.crossVectors(a,b).normalize();if(n.y<0){[q,r]=[r,q];n.negate();}pos.push(...p,...q,...r);nor.push(n.x,n.y,n.z,n.x,n.y,n.z,n.x,n.y,n.z);}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.computeBoundingSphere();hipRoofGeos.set(key,g);return g;
+}
+// 三角山花：底宽 w、高 h、厚 depth，居中挤出
+function pedimentGeo(w,h,depth){
+ const key=[w,h,depth].join('/');if(pedimentGeos.has(key))return pedimentGeos.get(key);
+ const s=new THREE.Shape();s.moveTo(-w/2,0);s.lineTo(w/2,0);s.lineTo(0,h);s.closePath();
+ const g=new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false});g.translate(0,0,-depth/2);pedimentGeos.set(key,g);return g;
+}
+// 遮阳篷的荷叶边：一排半圆扇贝，挂在篷布外沿下面
+function valanceGeo(w){
+ const key=w.toFixed(2);if(valanceGeos.has(key))return valanceGeos.get(key);
+ const n=Math.max(2,Math.round(w/.6)),step=w/n,s=new THREE.Shape();s.moveTo(-w/2,.2);s.lineTo(w/2,.2);s.lineTo(w/2,0);
+ for(let i=n-1;i>=0;i--)s.absarc(-w/2+(i+.5)*step,0,step/2,0,Math.PI,true);
+ s.closePath();const g=new THREE.ShapeGeometry(s);valanceGeos.set(key,g);return g;
+}
+const awningMats=[0x9a4b3c,0x3f6a5c,0x5b6f8c,0xa88a4a].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:.9,side:THREE.DoubleSide}));
+// 斜挑的布篷：贴墙一边在 (x,y,z)，向 facing 方向挑出 2.4 米、下垂 .42 弧度，外沿荷叶边 + 两根铁撑
+function awning(parent,x,y,z,w,mat,facing=0){
+ const g=new THREE.Group();g.position.set(x,y,z);g.rotation.y=facing;parent.add(g);
+ const tilt=.42,len=2.4,ez=Math.cos(tilt)*len,ey=-Math.sin(tilt)*len;
+ const cloth=add(g,new THREE.PlaneGeometry(w,len),mat,0,ey/2,ez/2,true,true);cloth.rotation.x=-Math.PI/2+tilt;
+ add(g,valanceGeo(w),mat,0,ey-.1,ez,false);
+ for(const s of [-1,1])strut(g,s*(w/2-.1),ey,ez,s*(w/2-.1),ey-1.3,0,.04,HM.iron);
+ return g;
+}
+// 烟囱：砖砌方柱 + 压顶 + 两只陶烟囱帽
+function chimney(parent,x,y,z,h=3,w=1.6){
+ hb(parent,w,h,w,HM.brick,x,y+h/2,z);hb(parent,w+.5,.35,w+.5,HM.darkstone,x,y+h+.17,z,false);
+ for(const s of [-.4,.4])add(parent,G.cyl(.22,.28,.9,8),HM.red,x+s,y+h+.75,z,false);
+}
+const harborLanternMat=new THREE.MeshStandardMaterial({color:0xffe7a9,emissive:0xffc574,emissiveIntensity:0,roughness:.5});
+const harborGlowMat=new THREE.MeshBasicMaterial({color:0xffb45e,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+const harborGlowParts=[],glowBallGeo=G.sph(1.35,8,6);
+// 维多利亚式路灯：铸铁柱脚、收分灯杆、四面玻璃灯箱带铁框、四坡小顶。海滨大道那一排另加一团夜里才亮的光晕
+function harborLamp(x,z,glow=false){
+ add(harborRoot,G.cyl(.14,.3,6.4,8),HM.iron,x,7.2,z);add(harborRoot,G.cyl(.38,.32,.5,8),HM.iron,x,4.55,z);
+ add(harborRoot,G.cyl(.36,.16,.35,8),HM.iron,x,10.55,z,false);
+ hb(harborRoot,.78,.95,.78,harborLanternMat,x,11.2,z,false);
+ for(const s of [-1,1]){hb(harborRoot,.08,1,.9,HM.iron,x+s*.4,11.2,z,false);hb(harborRoot,.9,1,.08,HM.iron,x,11.2,z+s*.4,false);}
+ add(harborRoot,G.cone(.72,.6,4),HM.iron,x,11.98,z).rotation.y=Math.PI/4;add(harborRoot,G.sph(.1,6,4),HM.iron,x,12.35,z,false);
+ if(glow)harborGlowParts.push({geometry:glowBallGeo,matrix:new THREE.Matrix4().makeTranslation(x,11.2,z)});
 }
 // Ground, stone embankment, broad promenade and an orthogonal street network.
 hb(harborRoot,620,7,430,HM.darkstone,640,.45,-305);
@@ -5420,13 +5547,37 @@ hb(harborRoot,620,.18,430,humanMat(0x8d927c),640,4,-305);
 hb(harborRoot,620,.2,37,humanMat(0xd0bf9d),640,4.14,-109);
 for(const z of [-162,-252,-342,-432])hb(harborRoot,594,.14,14,humanMat(0x6e716b),640,4.19,z);
 for(const x of [370,530,705,875,928])hb(harborRoot,13,.15,403,humanMat(0x72766d),x,4.21,-311);
-for(let x=346;x<=935;x+=22)harborLamp(x,-99);
+for(let x=346;x<=935;x+=22)harborLamp(x,-99,true);
 for(const x of [370,530,705,875])for(let z=-189;z>-485;z-=54)harborLamp(x+8,z);
+{const glow=new THREE.Mesh(mergeHarborGeometry(harborGlowParts),harborGlowMat);glow.frustumCulled=false;glow.matrixAutoUpdate=false;harborRoot.add(glow);}
+// 路缘石：每条街两侧各一道，里侧一条深色排水槽，十字路口断开（顶面 4.35 米以下，不算碰撞）
+const curbMat=humanMat(0x9a9689),gutterMat=humanMat(0x55584f),xStreets=[370,530,705,875,928],zStreets=[-162,-252,-342,-432];
+function curbRun(axis,fixed,from,to,cuts){
+ let a=from;const segs=[];for(const c of cuts){if(c-7.2>a)segs.push([a,c-7.2]);a=Math.max(a,c+7.2);}if(to>a)segs.push([a,to]);
+ for(const [s0,s1] of segs){const len=s1-s0,mid=(s0+s1)/2;
+  for(const side of [-1,1]){
+   if(axis==='z'){hb(harborRoot,len,.14,.3,curbMat,mid,4.26,fixed+side*7.15,false);hb(harborRoot,len,.03,.5,gutterMat,mid,4.28,fixed+side*6.75,false);}
+   else{hb(harborRoot,.3,.14,len,curbMat,fixed+side*6.65,4.28,mid,false);hb(harborRoot,.5,.03,len,gutterMat,fixed+side*6.25,4.3,mid,false);}
+  }}
+}
+for(const z of zStreets)curbRun('z',z,343,937,xStreets);
+for(const x of xStreets)curbRun('x',x,-512.5,-109.5,zStreets);
+// 岸沿压顶石绕海堤一圈（码头那段让开），铸铁系船柱每 22 米一根，避开五座大门前的通道
+for(const [x0,x1] of [[330,626],[650,950]])hb(harborRoot,x1-x0,.28,1.3,HM.stone,(x0+x1)/2,4.31,-90.55,false);
+for(const x of [330.55,949.45])hb(harborRoot,1.3,.28,430,HM.stone,x,4.31,-305,false);hb(harborRoot,620,.28,1.3,HM.stone,640,4.31,-519.45,false);
+for(let x=352;x<=940;x+=22){if([436,618,638,796].some(door=>Math.abs(x-door)<12))continue;
+ add(harborRoot,G.cyl(.2,.28,1.05,8),HM.iron,x,4.7,-92.2);add(harborRoot,new THREE.TorusGeometry(.26,.06,5,10),HM.iron,x,5.02,-92.2).rotation.x=Math.PI/2;add(harborRoot,G.sph(.24,8,5),HM.iron,x,5.3,-92.2,false);}
 // Dock platform; visitor arrival faces the waterfront buildings.
 hb(harborRoot,23,1.1,68,HM.wood,638,3.65,-56);
 for(let z=-24;z>=-86;z-=8){hb(harborRoot,23,.15,.22,HM.darkstone,638,4.28,z);for(const x of [628,648])add(harborRoot,G.cyl(.28,.35,8,7),HM.wood,x,.2,z);}
 harborSign(harborRoot,'維多利亞港 · VICTORIA HARBOUR',638,8,-33,24,2.8);
 for(const x of [626,650])harborColumn(harborRoot,x,-33,5,4);
+// 码头四角的木系缆桩，岸上码头两侧各堆一处木箱和酒桶
+for(const x of [627.3,648.7])for(const z of [-30,-82]){add(harborRoot,G.cyl(.3,.34,1.7,8),HM.wood,x,4.95,z);hb(harborRoot,.9,.14,.9,HM.darkstone,x,5.85,z,false);}
+for(const x of [604,660])for(const [dx,dz,k] of [[-1.2,0,0],[.6,0,1],[-.3,-1.8,2]]){
+ if(k<2)hb(harborRoot,1.6,1.5,1.6,HM.wood,x+dx,4.9+(k?.3:0),-96+dz);
+ else{add(harborRoot,G.cyl(.8,1,1.2,9),HM.wood,x+dx,4.9,-96+dz);for(const yy of [4.55,5.3])add(harborRoot,new THREE.TorusGeometry(.87,.06,5,12),HM.iron,x+dx,yy,-96+dz).rotation.x=Math.PI/2;}
+}
 
 function furnitureBox(b,w,h,d,mat,x,y,z,collide=true,floor=0){
  const mesh=hb(b.g,w,h,d,mat,x,y,z);if(collide)b.furniture.push({x,z,w,d,floor});return mesh;
@@ -5448,7 +5599,7 @@ const harborSpecs=[
  {id:'ferry',name:'渡輪會館',en:'STEAM FERRY HALL',kind:'ferry',x:801,z:-385,w:88,d:68,h:34,color:0xc6b393,subtitle:'候船大厅 · 售票柜台 · 上层航线室',rooms:['候船大厅','航线阅览室'],exhibits:['候船大厅：港湾另一边，是下一段旅程。','航线室：地图上的细线，把群岛连接在一起。']}
 ];
 function buildHarborLandmark(spec){
- const b={...spec,g:new THREE.Group(),furniture:[],doorOpen:false,exhibitPoints:[],stairX:spec.w/2-7};b.g.position.set(b.x,4.3,b.z);harborRoot.add(b.g);
+ const b={...spec,g:new THREE.Group(),furniture:[],doorOpen:false,exhibitPoints:[],stairX:spec.w/2-7};b.g.name='landmark:'+spec.id;b.g.position.set(b.x,4.3,b.z);harborRoot.add(b.g);
  const stone=humanMat(spec.color),w=b.w,d=b.d,h=b.h;
  hb(b.g,w+.8,.3,d+.8,HM.floor,0,-.15,0);
  // Front facade has a real 7 m wide entrance opening, with hinged door leaves.
@@ -5461,31 +5612,46 @@ function buildHarborLandmark(spec){
  if(facadeCursor<w/2)hb(b.g,w/2-facadeCursor,4.5,1.2,stone,(w/2+facadeCursor)/2,12.55,d/2);
  hb(b.g,w,h,1.2,stone,0,h/2,-d/2);
  for(const side of [-1,1])hb(b.g,1.2,h,d,stone,side*w/2,h/2,0);
- for(let level=0;level<Math.floor(h/8);level++){
+ // 窗：底层拱窗（窗套凸出、拱券套在外面），二层是真洞、玻璃缩进洞里，再往上过梁窗、隔层加百叶
+ const levels=Math.floor(h/8);
+ for(let level=0;level<levels;level++){
   const y=4.5+level*8;
   for(let x=-w/2+5;x<w/2-3;x+=8){if(level===0&&Math.abs(x)<7)continue;
-   hb(b.g,3.5,4,.18,level===1?harborGlass:harborWindowMat,x,y,d/2+.67);arch(b.g,x,y-2,d/2+.85,4.1,5.1,HM.cream);
-   hb(b.g,4.6,.36,1.2,HM.cream,x,y-2.25,d/2+.9);
-   hb(b.g,3.5,4,.18,harborWindowMat,x,y,-d/2-.67);
+   if(level===0){windowUnit(b.g,x,y,d/2+.6,0,{recess:0,lintel:false,frame:HM.cream});arch(b.g,x,y-2,d/2+1,4.1,5.1,HM.cream,false);}
+   else if(level===1)windowUnit(b.g,x,y,d/2+.6,0,{recess:.45,glass:harborGlass,frame:HM.cream});
+   else windowUnit(b.g,x,y,d/2+.6,0,{recess:0,frame:HM.cream,shutters:level%2?HM.green:null});
+   windowUnit(b.g,x,y,-d/2-.6,Math.PI,{recess:0,frame:HM.cream,lintel:false});
    // Inner window recesses give the rooms detail without adding transparent walls.
    if(level===0)hb(b.g,3.5,4,.18,harborWindowMat,x,y,d/2-.68);
   }
-  for(const side of [-1,1])for(let z=-d/2+6;z<d/2-2;z+=9)hb(b.g,.18,4,3.5,harborWindowMat,side*(w/2+.67),y,z);
-  for(const zz of [-d/2,d/2])hb(b.g,w+2,.6,2,HM.cream,0,level*8+8,zz);
-  for(const xx of [-w/2,w/2])hb(b.g,2,.6,d+2,HM.cream,xx,level*8+8,0);
+  for(const side of [-1,1])for(let z=-d/2+6;z<d/2-2;z+=9)windowUnit(b.g,side*(w/2+.6),y,z,side*Math.PI/2,{recess:0,frame:HM.cream,lintel:false});
+  for(const zz of [-d/2,d/2])hb(b.g,w+2,.5,1.9,HM.cream,0,level*8+8,zz);
+  for(const xx of [-w/2,w/2])hb(b.g,1.9,.5,d+2,HM.cream,xx,level*8+8,0);
  }
- hb(b.g,w+4,1.2,d+4,HM.darkstone,0,h+.6,0);
+ // 壁柱立在窗间墙上（带柱础、柱头），门洞两侧留空
+ for(let x=-w/2+9;x<w/2-7;x+=8){if(Math.abs(x)<5)continue;
+  hb(b.g,1.4,h-3.8,.36,HM.cream,x,2.6+(h-3.8)/2,d/2+.78);hb(b.g,1.8,.4,.5,HM.cream,x,2.8,d/2+.85,false);hb(b.g,1.9,.5,.5,HM.cream,x,h-1.45,d/2+.85,false);
+ }
+ // 勒脚：深色墙裙贴着墙线绕正面和两侧，门洞左右各留 8.5 米；转角砌隅石
+ for(const s of [-1,1]){hb(b.g,w/2-8.5,2.3,.2,HM.darkstone,s*(w/2+8.5)/2,1.15,d/2+.7);hb(b.g,w/2-8.5,.25,.3,HM.cream,s*(w/2+8.5)/2,2.4,d/2+.72,false);
+  hb(b.g,.2,2.3,d,HM.darkstone,s*(w/2+.7),1.15,0);hb(b.g,.3,.25,d,HM.cream,s*(w/2+.72),2.4,0,false);}
+ for(const sx of [-1,1])for(const sz of [-1,1])for(let y=3.2,k=0;y<h-1.4;y+=1,k++){const q=k%2?1.3:1.7;hb(b.g,q,.9,q,HM.cream,sx*w/2,y,sz*d/2,false);}
+ const top=cornice(b.g,w,d,h,HM.cream);
  if(b.kind==='hotel'){
-  const roof=add(b.g,G.cone(w*.69,10,4),HM.roof,0,h+6,0);roof.rotation.y=Math.PI/4;roof.scale.z=d/w;
-  for(const x of [-w*.3,w*.3])hb(b.g,3.5,8,3.5,HM.brick,x,h+8,0);
+  const roof=add(b.g,G.cone((w/2+2.6)/Math.SQRT1_2,10,4),HM.roof,0,top+5,0);roof.rotation.y=Math.PI/4;roof.scale.z=(d/2+2.6)/(w/2+2.6);
+  for(const x of [-w*.3,w*.3])chimney(b.g,x,top+2,0,5,2.4);
  }else{
+  parapet(b.g,w+1.4,d+1.4,top,true);
   const dome=add(b.g,G.sph(9,20,12),HM.roof,0,h+1,0);dome.scale.y=.8;
   add(b.g,G.cyl(2.2,2.7,3,10),HM.cream,0,h+9,0);add(b.g,G.cone(3.3,3,12),HM.roof,0,h+12,0);
  }
- // 门前留出一段没有柱子的通道，正对 8 米宽的门洞
- for(let x=-w/2+5;x<w/2;x+=9)if(Math.abs(x)>5)harborColumn(b.g,x,d/2+4,11,0);
- hb(b.g,w+4,.8,9,HM.cream,0,11.3,d/2+3);
- harborSign(b.g,b.name+' / '+b.en,0,21.5,d/2+4,w*.75,2.6);
+ // 门前留出一段没有柱子的通道，正对 8 米宽的门洞；柱廊上是额枋、檐壁、檐口三层，门上顶一座山花
+ // 额枋底面在 11.75 米以上：二楼窗户往外看那条视线（smoke.cjs 的射线，本地 11.72 米）要能穿过柱廊
+ for(let x=-w/2+5;x<w/2;x+=9)if(Math.abs(x)>5)harborColumn(b.g,x,d/2+4,11.7,0);
+ hb(b.g,w+4,.5,9,HM.cream,0,12,d/2+3);hb(b.g,w+3.6,.85,8.6,HM.paper,0,12.68,d/2+3);hb(b.g,w+5,.45,10,HM.cream,0,13.33,d/2+3);
+ add(b.g,pedimentGeo(22,3,9.6),HM.cream,0,13.55,d/2+3);add(b.g,pedimentGeo(19,2.2,9.8),HM.paper,0,13.82,d/2+3,false);
+ for(let k=0;k<3;k++)hb(b.g,14+k*1.6,.14,1.2,HM.stone,0,.07-k*.07,d/2+1.4+k*1.2,false);
+ harborSign(b.g,b.name+' / '+b.en,0,17.45,d/2+1,w*.75,1.2);
  const left=new THREE.Group(),right=new THREE.Group();left.position.set(-3.7,0,d/2+.05);right.position.set(3.7,0,d/2+.05);b.g.add(left,right);
  hb(left,3.65,7,.22,HM.wood,1.82,3.5,0);hb(right,3.65,7,.22,HM.wood,-1.82,3.5,0);b.doors=[left,right];
  arch(b.g,0,0,d/2+.85,8,9,HM.cream);
@@ -5552,22 +5718,79 @@ harborSpecs.forEach(buildHarborLandmark);
 let harborFacadeCount=0;
 for(const row of [-290,-466])for(let i=0;i<18;i++){
  const x=350+i*33,z=row;if([370,530,705,875,928].some(street=>Math.abs(x-street)<14))continue;
- const g=new THREE.Group();g.position.set(x,4.3,z);harborRoot.add(g);const w=26,d=30,h=19+(i%4)*6;
- hb(g,w,h,d,[HM.cream,HM.brick,HM.stone][i%3],0,h/2,0);hb(g,w+2,1,d+2,HM.darkstone,0,h+.5,0);
- for(let level=0;level<Math.floor(h/6);level++)for(const wx of [-8,0,8]){
-  hb(g,3.5,3.8,.15,harborWindowMat,wx,4+level*6,d/2+.1);arch(g,wx,2+level*6,d/2+.2,4,4.4,HM.cream);
-  if(level>0){hb(g,5,.3,2,HM.cream,wx,level*6+1.8,d/2+.8);hb(g,5,.6,.12,HM.iron,wx,level*6+2.5,d/2+1.8);}
+ const g=new THREE.Group();g.name='street';g.position.set(x,4.3,z);harborRoot.add(g);const w=26,d=30,h=19+(i%4)*6;
+ const wall=[HM.cream,HM.brick,HM.stone][i%3],trim=i%3===1?HM.paper:HM.cream,levels=Math.floor(h/6);
+ hb(g,w,h,d,wall,0,h/2,0);
+ // 底层商铺是矮一点的拱窗（避开 4.5~6.3 米那条碰撞带：窗台在 6.66 米以上），楼上过梁窗 + 百叶 + 铁栏杆小阳台
+ for(let level=0;level<levels;level++)for(const wx of [-8,0,8]){
+  if(level===0){windowUnit(g,wx,4.4,d/2,0,{recess:0,h:3.2,lintel:false,frame:trim});arch(g,wx,2.4,d/2+.4,4,4.5,trim,false);}
+  else{const y=4.6+level*6;windowUnit(g,wx,y,d/2,0,{recess:0,frame:trim,lintel:y+2.8<h,shutters:i%3===2?HM.green:i%3===1?HM.blue:null});
+   hb(g,5,.3,2,trim,wx,y-2.55,d/2+.8);balustrade(g,wx,y-2.4,d/2+1.65,4.8,0,.5,false);}
  }
- for(const xx of [-11,11])harborColumn(g,xx,18,6,0);
- hb(g,29,.5,7,HM.cream,0,6,17);harborSign(g,['永興茶莊','廣源洋行','海港書局','南北布行','鐘錶修理','遠洋商社'][i%6],0,7.2,19,23,2);
+ // 转角隅石和勒脚
+ for(const sx of [-1,1])for(let y=2.9,k=0;y<h-1;y+=1,k++){const q=k%2?1.2:1.5;hb(g,q,.8,q,trim,sx*w/2,y,d/2,false);}
+ hb(g,w+.3,2.3,.25,HM.darkstone,0,1.15,d/2+.05);hb(g,w+.4,.22,.35,trim,0,2.4,d/2+.05,false);
+ // 屋顶按 i%4 轮换：四坡顶带老虎窗 / 栏杆女儿墙 / 四坡顶 / 实心女儿墙；都有烟囱
+ const ctop=cornice(g,w,d,h,trim,i%2===0);
+ if(i%2===0){
+  add(g,hipRoofGeo(w+2.6,d+2.6,5.2),HM.roof,0,ctop-.05,0);
+  hb(g,3.2,2.4,2.6,trim,-6,ctop+1.15,d/2-3.5);add(g,pedimentGeo(3.6,1.2,2.9),trim,-6,ctop+2.35,d/2-3.5,false);
+  hb(g,1.8,1.2,.12,harborWindowPick(x-6,z+d/2),-6,ctop+1.5,d/2-2.17,false);
+  chimney(g,7,ctop,d/2-9,5,1.5);chimney(g,-7,ctop,-d/2+9,5,1.5);
+ }else{
+  if(i%4===1)parapet(g,w+1.2,d+1.2,ctop,false);
+  else{hb(g,w+1.6,1.1,.5,trim,0,ctop+.55,d/2+.55);hb(g,w+2,.25,.8,trim,0,ctop+1.2,d/2+.55,false);for(const sx of [-1,1])hb(g,.5,1.1,d+1.2,trim,sx*(w/2+.55),ctop+.55,0);}
+  chimney(g,w/2-2.4,ctop,0,3.2,1.5);
+ }
+ const name=['永興茶莊','廣源洋行','海港書局','南北布行','鐘錶修理','遠洋商社'][i%6];
+ if(i%2===0){
+  // 双柱雨篷 + 篷顶招牌
+  for(const xx of [-11,11])harborColumn(g,xx,18,7.2,0);
+  hb(g,29,.5,7,trim,0,7.2,17);hb(g,29.4,.3,.5,trim,0,7.55,20.5,false);harborSign(g,name,0,8.5,19,23,2);
+ }else{
+  // 三扇布篷 + 挑出墙面的悬挂招牌
+  for(const wx of [-8,0,8])awning(g,wx,6.35,d/2+.32,5.2,awningMats[(i>>1)%4]);
+  const sign=harborSign(g,name,w/2-2.2,8.6,d/2+1.6,2.8,1.4);sign.rotation.y=Math.PI/2;
+  strut(g,w/2-2.2,9.5,d/2+.3,w/2-2.2,9.5,d/2+3,.05,HM.iron);strut(g,w/2-2.2,7.9,d/2+.3,w/2-2.2,9.5,d/2+3,.04,HM.iron);
+ }
  harborBuildings.push({id:'street-'+row+'-'+i,name:'沿街商号',x,z,w,d,h,g,decorative:true,furniture:[]});harborFacadeCount++;
 }
 // A tall waterfront clock tower is a visual landmark across the water.
-const clockTower=new THREE.Group();clockTower.position.set(921,4.3,-130);harborRoot.add(clockTower);
-hb(clockTower,13,51,13,HM.brick,0,25.5,0);for(const y of [0,12,25,38,51])hb(clockTower,15,.8,15,HM.cream,0,y,0);
-for(const side of [-1,1]){const dial=add(clockTower,G.cyl(3.4,3.4,.15,32),HM.paper,0,44,side*6.65,false);dial.rotation.x=Math.PI/2;hb(clockTower,.2,4,.2,HM.iron,0,45.3,side*6.85);hb(clockTower,2.2,.2,.2,HM.iron,1,44,side*6.85);}
-add(clockTower,G.cone(11,12,4),HM.roof,0,57,0).rotation.y=Math.PI/4;harborSign(clockTower,'HARBOUR CLOCK',0,31,6.8,12,2);
-harborBuildings.push({id:'clock',name:'海滨钟楼',x:921,z:-130,w:13,d:13,h:63,g:clockTower,decorative:true,furniture:[]});
+const clockTower=new THREE.Group();clockTower.name='clock';clockTower.position.set(921,4.3,-130);harborRoot.add(clockTower);
+hb(clockTower,13,51,13,HM.brick,0,25.5,0);
+// 四角扶壁一段比一段收进去，每段顶上一层石檐
+for(const [y0,y1,q] of [[0,12,2.4],[12,25,2],[25,38,1.6],[38,51,1.2]]){
+ for(const sx of [-1,1])for(const sz of [-1,1])hb(clockTower,q,y1-y0,q,HM.cream,sx*(6.5+q*.05),(y0+y1)/2,sz*(6.5+q*.05));
+ hb(clockTower,14.4,.5,14.4,HM.cream,0,y1+.25,0);hb(clockTower,14.4+q,.6,14.4+q,HM.cream,0,y1+.8,0,false);
+}
+hb(clockTower,15.6,.6,15.6,HM.darkstone,0,.3,0);
+// 表盘：帆布画出来的罗马数字，四面都有
+const dialCanvas=document.createElement('canvas');dialCanvas.width=dialCanvas.height=256;const dcx=dialCanvas.getContext('2d');
+dcx.fillStyle='#f1e7cf';dcx.beginPath();dcx.arc(128,128,124,0,Math.PI*2);dcx.fill();dcx.strokeStyle='#2c2a26';dcx.lineWidth=6;dcx.stroke();
+dcx.fillStyle='#2c2a26';dcx.font='bold 30px serif';dcx.textAlign='center';dcx.textBaseline='middle';
+['XII','I','II','III','IV','V','VI','VII','VIII','IX','X','XI'].forEach((n,i)=>{const a=i*Math.PI/6-Math.PI/2;dcx.fillText(n,128+Math.cos(a)*96,128+Math.sin(a)*96);});
+for(let i=0;i<60;i++){const a=i*Math.PI/30;dcx.fillRect(128+Math.cos(a)*116-1,128+Math.sin(a)*116-1,i%5?2:4,i%5?2:4);}
+const dialTex=new THREE.CanvasTexture(dialCanvas);dialTex.encoding=THREE.sRGBEncoding;const dialMat=new THREE.MeshStandardMaterial({map:dialTex,roughness:.6});
+for(const side of [-1,1]){
+ for(const [ax,az] of [[0,side],[side,0]]){
+  const face=new THREE.Group();face.position.set(ax*6.5,44,az*6.5);face.rotation.y=Math.atan2(ax,az);clockTower.add(face);
+  hb(face,8.4,8.4,.5,HM.cream,0,0,.15);add(face,new THREE.TorusGeometry(3.6,.28,6,24),HM.iron,0,0,.45,false);
+  const dial=add(face,new THREE.CircleGeometry(3.4,32),dialMat,0,0,.42,false);dial.receiveShadow=false;
+  hb(face,.22,2.6,.12,HM.iron,0,1.15,.55,false);hb(face,2,.22,.12,HM.iron,.85,0,.55,false);add(face,G.sph(.25,6,4),HM.iron,0,0,.55,false);
+ }
+}
+// 钟室：四角石墩、每面一道拱洞、里面吊一口铜钟；上面栏杆女儿墙、出挑的尖顶和顶饰
+hb(clockTower,13.6,.6,13.6,HM.floor,0,51.3,0);
+for(const sx of [-1,1])for(const sz of [-1,1])hb(clockTower,2.2,8.4,2.2,HM.cream,sx*5.6,55.8,sz*5.6);
+for(const side of [-1,1]){arch(clockTower,0,51.6,side*6.5,6.2,7.4,HM.cream);const g=new THREE.Group();g.rotation.y=Math.PI/2;clockTower.add(g);arch(g,0,51.6,-side*6.5,6.2,7.4,HM.cream);}
+add(clockTower,new THREE.LatheGeometry([new THREE.Vector2(0,0),new THREE.Vector2(1.5,0),new THREE.Vector2(1.6,.35),new THREE.Vector2(1.3,.9),new THREE.Vector2(1.05,1.8),new THREE.Vector2(.9,2.4),new THREE.Vector2(.35,2.7),new THREE.Vector2(0,2.75)],14),humanMat(0x7a6438),0,54.4,0);
+strut(clockTower,0,57.1,0,0,60,0,.1,HM.wood);
+for(const side of [-1,1]){balustrade(clockTower,0,51.6,side*6.9,4.6,0);balustrade(clockTower,side*6.9,51.6,0,4.6,Math.PI/2);}
+const ctop=cornice(clockTower,13.6,13.6,60,HM.cream);
+hb(clockTower,17.6,.5,17.6,HM.darkstone,0,ctop+.2,0,false);add(clockTower,G.cone(12.2,10,4),HM.roof,0,ctop+5.4,0).rotation.y=Math.PI/4;
+add(clockTower,G.cyl(.3,.5,2.2,8),HM.iron,0,ctop+11,0);add(clockTower,G.sph(.6,8,6),HM.iron,0,ctop+12.3,0);add(clockTower,G.cone(.45,1.6,6),HM.iron,0,ctop+13.6,0);
+harborSign(clockTower,'HARBOUR CLOCK',0,31,6.8,12,2);
+harborBuildings.push({id:'clock',name:'海滨钟楼',x:921,z:-130,w:13,d:13,h:70,g:clockTower,decorative:true,furniture:[]});
 
 // Moored vessels bob with the shared waves.
 for(let i=0;i<7;i++){
@@ -5589,11 +5812,18 @@ function harborPerson(parent,x,y,z,heading=0){
  add(p.g,G.cyl(.36,.36,.07,9),HM.wood,0,2.83,0);add(p.g,G.cyl(.23,.26,.2,9),HM.cream,0,2.94,0);
  return p;
 }
+// 货架上的货：三只木箱照旧是独立盒子（街面碰撞从它们来），箱里的果蔬合成一块共用网格。
+// 原来一摊 15 个网格 636 个三角形（港区六成的三角形都花在这些没人细看的果子上），现在 4 个网格 ~230 个
+let produceGeoShared=null;
+function produceGeo(){
+ if(produceGeoShared)return produceGeoShared;
+ const ball=G.sph(.22,5,3),parts=[];
+ for(let k=0;k<3;k++)for(let j=0;j<4;j++)parts.push({geometry:ball,matrix:new THREE.Matrix4().makeTranslation((k-1)*1.15+(j%2-.5)*.45,.78,(Math.floor(j/2)-.5)*.55)});
+ return produceGeoShared=mergeHarborGeometry(parts);
+}
 function goods(parent,x,y,z,seed=0){
- for(let k=0;k<3;k++){
-  const dx=x+(k-1)*1.15;hb(parent,1,.65,1.4,HM.wood,dx,y+.32,z);
-  for(let j=0;j<4;j++)add(parent,G.sph(.22,6,5),[HM.red,HM.green,HM.paper][seed%3],dx+(j%2-.5)*.45,y+.78,z+(Math.floor(j/2)-.5)*.55);
- }
+ for(let k=0;k<3;k++)hb(parent,1,.65,1.4,HM.wood,x+(k-1)*1.15,y+.32,z);
+ add(parent,produceGeo(),[HM.red,HM.green,HM.paper][seed%3],x,y,z);
 }
 function tradingStall(x,z,index,parent=harborRoot,ox=0,oz=0){
  const m=[HM.red,HM.green,HM.blue][index%3];
@@ -5622,39 +5852,49 @@ const infillSpecs=[
  [348,-385,28,64],[386,-385,18,64],[502,-385,34,64],[547,-385,22,64],[691,-385,20,64],[728,-385,24,64],[892,-385,66,64]
 ];
 function buildInfill(x,z,w,d,index){
- const g=new THREE.Group();g.position.set(x,4.3,z);harborRoot.add(g);const h=22+(index%3)*7;
+ const g=new THREE.Group();g.name='infill';g.position.set(x,4.3,z);harborRoot.add(g);const h=22+(index%3)*7;
  const mat=[HM.brick,HM.stone,HM.cream][index%3];
  // Open arcade at street level; the upper dwelling forms a continuous street wall.
  hb(g,w,h-6,d,mat,0,6+(h-6)/2,0);
  streetSolid(g,w,6,1,mat,0,3,-d/2,x,z);
  for(const side of [-1,1])streetSolid(g,1,6,d,mat,side*w/2,3,0,x,z);
+ const trim=index%3===0?HM.paper:HM.cream;
  for(let xx=-w/2+3;xx<w/2;xx+=7){
-  for(let yy=10;yy<h;yy+=6){hb(g,2.5,3.3,.15,harborWindowMat,xx,yy,d/2+.1);hb(g,3.4,.25,1.4,HM.paper,xx,yy-1.8,d/2+.4);}
-  if(Math.abs(xx)>5){harborColumn(g,xx,d/2+1,6,0);harborStreetObstacles.push({x:x+xx,z:z+d/2+1,w:1.7,d:1.7});arch(g,xx,0,d/2+1.5,5.5,6,HM.cream);
+  for(let yy=10;yy<h;yy+=6)windowUnit(g,xx,yy,d/2,0,{recess:0,w:2.5,h:3.3,frame:trim,lintel:yy+2.5<h,shutters:index%2?HM.green:null});
+  if(Math.abs(xx)>5){harborColumn(g,xx,d/2+1,6.35,0);harborStreetObstacles.push({x:x+xx,z:z+d/2+1,w:1.7,d:1.7});
+   // 拱券跨在相邻两根柱子之间，拱脚没进柱身
+   if(Math.abs(xx+7)>5&&xx+7<w/2)arch(g,xx+3.5,0,d/2+1.5,5.6,6,trim);
    hb(g,3,3,1.2,HM.wood,xx,1.5,d/2-7);goods(g,xx,3,d/2-7,index);}
  }
- arch(g,0,0,d/2+1.5,8,6,HM.cream);
- hb(g,w+1,.7,d+1,HM.darkstone,0,h,0);
+ arch(g,0,0,d/2+1.5,8,6,trim);
+ // 二楼铁栏杆走廊压在骑楼拱廊上面，招牌挂在栏杆外侧
+ hb(g,w,.35,2.2,trim,0,6.5,d/2+1.05);balustrade(g,0,6.68,d/2+1.9,w-.6,0,.45,false);
+ const ctop=cornice(g,w,d,h,trim,false);hb(g,w+1.2,.9,.4,trim,0,ctop+.45,d/2+.4);hb(g,w+1.6,.2,.7,trim,0,ctop+.98,d/2+.4,false);
  for(const side of [-1,1]){
   streetSolid(g,2,3.8,d-18,HM.wood,side*(w/2-4),1.9,-3,x,z);
-  for(let zz=-d/2+8;zz<d/2-12;zz+=4)for(const yy of [1.2,2.7,4]){
+  for(let zz=-d/2+8;zz<d/2-12;zz+=8)for(const yy of [1.2,2.9]){
    hb(g,2.2,.15,3.9,HM.cream,side*(w/2-4),yy,zz);goods(g,side*(w/2-4),yy+.1,zz,index);
   }
  }
  const shopkeeper=harborPerson(g,w/2-5,0,d/2-10);harborStaff.push({p:shopkeeper,phase:index});
- harborSign(g,['同德藥房','福記茶樓','永安布莊','海員旅店','大昌米行','書報信局','海港雜貨'][index%7],0,6.9,d/2+1.7,Math.min(w-2,24),1.7);
- harborSign(g,['藥','茶','布','客棧','米','書','雜貨'][index%7],-w/2+2,12,d/2+2.5,2.1,6);
+ harborSign(g,['同德藥房','福記茶樓','永安布莊','海員旅店','大昌米行','書報信局','海港雜貨'][index%7],0,7.45,d/2+2.02,Math.min(w-2,24),1.5);
+ harborSign(g,['藥','茶','布','客棧','米','書','雜貨'][index%7],-w/2+2,12,d/2+2.5,2.1,6);strut(g,-w/2+2,15.2,d/2+.05,-w/2+2,15.2,d/2+2.7,.05,HM.iron);
  for(const zz of [-d/2+7,0]){hb(g,w-3,.3,1,HM.wood,0,h+2,zz);for(let j=0;j<3;j++)hb(g,1.5,2.4,.12,[HM.paper,HM.red,HM.blue][j],-3+j*3,h+.6,zz);}
  harborBuildings.push({id:'infill-'+index,name:'骑楼商号',x,z,w,d,h,g,decorative:true,walkThrough:true,furniture:[]});harborFacadeCount++;
 }
 infillSpecs.forEach((v,i)=>buildInfill(...v,i));
 
 // A covered market occupies the formerly empty central block behind the hotel.
-const market=new THREE.Group();market.position.set(618,0,-385);harborRoot.add(market);
+const market=new THREE.Group();market.name='market';market.position.set(618,0,-385);harborRoot.add(market);
 for(const side of [-1,1])streetSolid(market,1,10,64,HM.brick,side*49,9.3,0,618,-385);
 for(const z of [-32,32])for(const side of [-1,1])streetSolid(market,40,10,1,HM.brick,side*29,9.3,z,618,-385);
 for(let x=-44;x<=44;x+=11)if(x!==0)for(const z of [-29,0,29])harborColumn(market,x,z,10,4.3);
-for(const side of [-1,1]){const roof=hb(market,53,.5,67,HM.roof,side*24,16,0);roof.rotation.z=-side*.17;}
+// 双坡瓦顶架在木桁架上：每排柱子一榀（系梁、椽子、中柱），脊檩，两端砖山墙封顶
+for(const side of [-1,1]){const roof=hb(market,53,.5,67,HM.roof,side*24,19,0);roof.rotation.z=-side*.17;}
+hb(market,1.2,1,68,HM.wood,0,23.2,0);for(const side of [-1,1])hb(market,.5,1.4,68,HM.wood,side*48.6,14.9,0,false);
+for(const z of [-29,0,29]){hb(market,96,.5,.6,HM.wood,0,14.6,z);strut(market,0,14.9,z,0,23,z,.18,HM.wood);
+ for(const side of [-1,1]){strut(market,side*48,14.9,z,0,23,z,.18,HM.wood);strut(market,side*24,14.85,z,side*24,19,z,.12,HM.wood);}}
+for(const side of [-1,1])add(market,pedimentGeo(97,8.2,.7),HM.brick,0,14.85,side*32);
 harborSign(market,'中環街市 · CENTRAL MARKET',0,13,33,36,3);
 for(const x of [-32,-17,17,32])for(const z of [-19,-5,9,23])tradingStall(x,z,harborStalls.length,market,618,-385);
 harborBuildings.push({id:'market',name:'穿行街市',x:618,z:-385,w:98,d:64,h:18,g:market,decorative:true,walkThrough:true,furniture:[]});
@@ -5685,7 +5925,13 @@ for(let x=360;x<920;x+=28){
 }
 // Tram rails and one moving car, with bounded movement between the quay stops.
 for(const z of [-153,-155])hb(harborRoot,550,.07,.13,HM.iron,638,4.3,z);
-for(const x of [410,620,835]){harborSign(harborRoot,'電車站 · TRAM',x,8,-159,8,1.6);hb(harborRoot,.12,4,.12,HM.iron,x,6.2,-159);}
+// 轨枕、轨槽、架空线杆和接触网；车站一段矮站台
+for(let x=364;x<=912;x+=2.4)hb(harborRoot,2.6,.08,.5,HM.wood,x,4.23,-154,false);
+for(const z of [-152.6,-155.4])hb(harborRoot,550,.03,.3,gutterMat,638,4.265,z,false);
+// 线杆立在轨道南侧的街沿上（离轨道中线 3.5 米）：北侧 z=-148 是汽车道
+for(let x=372;x<=900;x+=40){add(harborRoot,G.cyl(.13,.18,9,8),HM.iron,x,8.75,-157.5);add(harborRoot,G.cyl(.32,.36,.4,8),HM.iron,x,4.45,-157.5);strut(harborRoot,x,13.1,-157.5,x,12.7,-154,.06,HM.iron);}
+strut(harborRoot,364,12.62,-154,912,12.62,-154,.035,HM.iron);
+for(const x of [410,620,835]){harborSign(harborRoot,'電車站 · TRAM',x,8,-159,8,1.6);hb(harborRoot,.12,4,.12,HM.iron,x,6.2,-159);hb(harborRoot,14,.12,2.4,HM.stone,x,4.31,-158.4,false);}
 const tram=new THREE.Group();harborRoot.add(tram);
 hb(tram,11,1.8,3.8,HM.green,0,1.6,0);hb(tram,11,.2,4.2,HM.cream,0,2.6,0);hb(tram,11,.3,4.2,HM.roof,0,5,0);
 for(const z of [-1.9,1.9])for(let x=-4.5;x<=4.5;x+=1.8){hb(tram,.12,2.4,.12,HM.cream,x,3.8,z);hb(tram,1.6,1.6,.1,harborGlass,x+.8,3.8,z);}
@@ -6037,6 +6283,16 @@ harborRoot.traverse(o=>{if(!harborMoves(o)){o.updateMatrix();o.matrixAutoUpdate=
 for(const b of harborInstances.batches)for(const o of b.items)if(!harborMoves(o)&&o.parent)o.parent.remove(o);
 const harborInverse=new THREE.Matrix4().copy(harborRoot.matrixWorld).invert(),harborMatrix=new THREE.Matrix4();
 const harborHiddenInstance=new THREE.Matrix4().makeScale(0,0,0);   // 路人换成 glTF 之后，方块人的实例缩成零
+// 合批剩下的静态零头（尺寸各异的檐口、路缘、屋顶……）按材质拼成一块网格，省下几百次绘制；
+// 会动的、楼梯踏面、带贴图和透明的都不碰
+{const groups=new Map(),collect=o=>{const key=o.material.uuid+o.castShadow+o.receiveShadow;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(o);};
+ harborRoot.traverse(o=>{if(!o.isMesh||o.isInstancedMesh||!o.visible||o.children.length||Array.isArray(o.material)||o.material.map||o.material.transparent||!o.geometry.attributes.normal||harborMoves(o)||o.userData.harborWalkSurface||o.userData.interior)return;collect(o);});
+ // 只有寥寥几件的实例批次也拆掉并进大网格：一次绘制画三件不划算
+ for(const b of harborInstances.batches){if(b.items.length>=12||b.items.some(harborMoves))continue;harborRoot.remove(b.mesh);b.items.forEach(collect);}
+ for(const list of groups.values()){if(list.length<2)continue;
+  const geometry=mergeHarborGeometry(list.map(o=>({geometry:o.geometry,matrix:new THREE.Matrix4().multiplyMatrices(harborInverse,o.matrixWorld)})));
+  const mesh=new THREE.Mesh(geometry,list[0].material);mesh.castShadow=list[0].castShadow;mesh.receiveShadow=list[0].receiveShadow;mesh.matrixAutoUpdate=false;harborRoot.add(mesh);
+  for(const o of list)if(o.parent)o.parent.remove(o);}}
 harborInstances.update=()=>{for(const g of harborMovingRoots)g.updateWorldMatrix(true,true);for(const b of harborMovingBatches){for(const {o,i} of b.items){if(o.userData.crowdReplaced){b.mesh.setMatrixAt(i,harborHiddenInstance);continue;}harborMatrix.multiplyMatrices(harborInverse,o.matrixWorld);b.mesh.setMatrixAt(i,harborMatrix);}b.mesh.instanceMatrix.needsUpdate=true;}};
 const harborAttractionSelect=$('harbor-building');
 for(const b of harborBuildings.filter(b=>!b.decorative)){const o=document.createElement('option');o.value=b.id;o.textContent=b.name+' · 可入内';harborAttractionSelect.appendChild(o);}harborAttractionSelect.value='customs';
@@ -6092,7 +6348,10 @@ function updateHarbor(dt,t){
   for(const b of harborLandmarks){const target=b.doorOpen?Math.PI*.47:0;b.doors[0].rotation.y+=(target-b.doors[0].rotation.y)*Math.min(1,harborAnimAcc*5);b.doors[1].rotation.y+=(-target-b.doors[1].rotation.y)*Math.min(1,harborAnimAcc*5);b.light.intensity=activeHarborBuilding===b?(periodIndex===2?1.8:1.0):0;}
   animateHarborLife(harborAnimAcc,t);
   for(const boat of harborShips){boat.g.position.y=waveHeight(boat.x,boat.z,t)+.45;boat.g.rotation.z=Math.sin(t*.6+boat.phase)*.025;}
-  harborWindowMat.emissiveIntensity=periodIndex===2?.9:periodIndex===1?.35:.08;harborInstances.update();harborAnimAcc=0;
+  harborWindowMat.emissiveIntensity=periodIndex===2?.9:periodIndex===1?.35:.08;
+  harborWindowDim.emissiveIntensity=periodIndex===2?.42:periodIndex===1?.16:.04;harborWindowDark.emissiveIntensity=periodIndex===2?.07:.02;
+  harborLanternMat.emissiveIntensity=periodIndex===2?1.7:periodIndex===1?.9:0;harborGlowMat.opacity=periodIndex===2?.3:periodIndex===1?.12:0;
+  harborInstances.update();harborAnimAcc=0;
  }
  harborNearby=null;
  if(mode===MODE.WALK&&region==='harbor'&&!document.querySelector('dialog[open]')&&activeHarborBuilding){

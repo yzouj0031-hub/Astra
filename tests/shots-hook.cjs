@@ -22,6 +22,11 @@ const SHOTS = [
   { name: 'harbor-view',   url: GAME, wait: 4000, run: '__astra.view("harbor")', after: 4000 },
   { name: 'harbor-night',  url: GAME, wait: 4000, run: '__astra.period(2);__astra.harbor()', after: 4000 },
   { name: 'harbor-street', url: GAME, wait: 4000, run: '__astra.walkTo(700,-60,2.2)', after: 2500 },
+  { name: 'harbor-facade', url: GAME, wait: 4000, run: '__astra.walkTo(618,-152,0)', after: 2500 },
+  { name: 'harbor-shops',  url: GAME, wait: 4000, run: '__astra.walkTo(600,-262,0)', after: 2500 },
+  { name: 'harbor-arcade', url: GAME, wait: 4000, run: '__astra.walkTo(722,-332,0)', after: 2500 },
+  { name: 'harbor-clock',  url: GAME, wait: 4000, run: '__astra.orbit(921,42,-130,95,.9,1.25)', after: 3000 },
+  { name: 'harbor-facade-night', url: GAME, wait: 4000, run: '__astra.period(2);__astra.walkTo(618,-152,0)', after: 4000 },
   { name: 'island-view',   url: GAME, wait: 4000, run: '__astra.view("island")', after: 4000 },
   { name: 'island-dock',   url: GAME, wait: 4000, run: '__astra.walkMode()', after: 2500 },
   { name: 'island-camp',   url: GAME, wait: 4000, run: '__astra.walkTo(-40,40,-2.3)', after: 2500 },
@@ -69,7 +74,7 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     if (shot.journey) await closeMenu(page);
     const info = await page.evaluate(() => (window.__astra && window.__astra.info) ? window.__astra.info() : null);
     const file = path.join(OUT, shot.name + '.png');
-    await page.screenshot({ path: file });
+    await page.screenshot({ path: file, timeout: 180000 });
     console.log('拍了', file, ((Date.now()-t0)/1000).toFixed(0)+'s', info ? JSON.stringify(info) : '');
     } catch (e) { console.log('失败', shot.name, String(e.message||e).split('\n')[0]); }
     await page.close();
