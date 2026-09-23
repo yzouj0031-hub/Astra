@@ -43,6 +43,12 @@ const SHOTS = [
   { name: 'park-gate',     url: GAME, wait: 4000, run: '__astra.park()', after: 2500 },
   { name: 'park-plaza',    url: GAME, wait: 4000, run: '__astra.walkTo(0,-505,0)', after: 2500 },
   { name: 'park-night',    url: GAME, wait: 4000, run: '__astra.period(2);__astra.walkTo(0,-470,0)', after: 4000 },
+  // 乐园近景：全景轨道机位（focusRegion 的渐变在软件渲染下追不上，直接给终值）、过山车、摩天轮、摊位、长椅路灯
+  { name: 'park-overview', url: GAME, wait: 4000, run: '__astra.orbit(0,9,-549,405,.55,.94)', after: 4000 },
+  { name: 'park-coaster',  url: GAME, wait: 4000, run: '__astra.walkTo(-26,-490.5,0.885,0.08)', after: 2500 },
+  { name: 'park-ferris',   url: GAME, wait: 4000, run: '__astra.orbit(0,22,-560.7,80,2.9,1.15)', after: 3000 },
+  { name: 'park-stall',    url: GAME, wait: 4000, run: '__astra.walkTo(-15.6,-486.6,0.54,0.02)', after: 2500 },
+  { name: 'park-bench',    url: GAME, wait: 4000, run: '__astra.walkTo(7.8,-508.7,-2.27,0)', after: 2500 },
   { name: 'watertown-dusk', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown' },
   { name: 'watertown-noon', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3 },
   { name: 'watertown-hill', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3, stop: 2 },

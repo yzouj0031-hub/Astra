@@ -3347,8 +3347,8 @@ function mat(name, color, opts){
 }
 mat("grass",   0x6f9a4e, {roughness:.96});
 mat("grass2",  0x628c45, {roughness:.96});
-mat("path",    0xd8c9a8, {roughness:.94});
-mat("plaza",   0xe2d4b4, {roughness:.9});
+mat("path",    0xd8c9a8, {roughness:.94, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-2});
+mat("plaza",   0xe2d4b4, {roughness:.9, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-3});
 mat("water",   0x4ba3c7, {roughness:.16, metalness:.35, transparent:true, opacity:.86});
 mat("steelA",  0xe0e5ea, {roughness:.42, metalness:.55, envMapIntensity:1.3});
 mat("steelB",  0xb2bcc6, {roughness:.5,  metalness:.5,  envMapIntensity:1.3});
@@ -3426,6 +3426,34 @@ function strut(parent, ax,ay,az, bx,by,bz, radius, material){
   m.castShadow = true;
   parent.add(m);
   return m;
+}
+
+/* 把若干带变换的几何体拼成一块只有 position/normal(/uv) 的 BufferGeometry。
+   条纹棚顶的奇偶扇区、摊位雨棚的条纹都靠它把几十个楔子并成两块 */
+function mergeGeo(parts){
+  const flat = parts.map(p=>{ const g = p.geo.clone(); if(p.matrix) g.applyMatrix4(p.matrix); if(!g.index) return g; const n = g.toNonIndexed(); g.dispose(); return n; });
+  const attrs = ['position','normal'].concat(flat.every(g=>g.attributes.uv) ? ['uv'] : []);
+  const out = new THREE.BufferGeometry();
+  for(const a of attrs){
+    const size = flat[0].attributes[a].itemSize, len = flat.reduce((n,g)=>n+g.attributes[a].array.length,0);
+    const arr = new Float32Array(len); let off = 0;
+    for(const g of flat){ arr.set(g.attributes[a].array, off); off += g.attributes[a].array.length; }
+    out.setAttribute(a, new THREE.BufferAttribute(arr, size));
+  }
+  flat.forEach(g=>g.dispose()); out.computeBoundingSphere(); return out;
+}
+// 单面几何体补上反面（反转绕序、法线取反），薄雨棚从下面看也有面
+function doubleSided(geo){
+  const src = geo.index ? geo.toNonIndexed() : geo;
+  const P = src.attributes.position.array, N = src.attributes.normal.array, n = P.length;
+  const pos = new Float32Array(n*2), nrm = new Float32Array(n*2);
+  pos.set(P,0); nrm.set(N,0);
+  for(let t=0;t<n;t+=9){ for(let v=0;v<3;v++){ const s=t+v*3, d=n+t+(2-v)*3; pos[d]=P[s]; pos[d+1]=P[s+1]; pos[d+2]=P[s+2]; nrm[d]=-N[s]; nrm[d+1]=-N[s+1]; nrm[d+2]=-N[s+2]; } }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos,3)); out.setAttribute('normal', new THREE.BufferAttribute(nrm,3));
+  if(src.attributes.uv){ const U = src.attributes.uv.array, uv = new Float32Array(U.length*2); uv.set(U,0); const m = U.length; for(let t=0;t<m;t+=6){ for(let v=0;v<3;v++){ const s=t+v*2, d=m+t+(2-v)*2; uv[d]=U[s]; uv[d+1]=U[s+1]; } } out.setAttribute('uv', new THREE.BufferAttribute(uv,2)); }
+  if(src!==geo) src.dispose();
+  out.computeBoundingSphere(); return out;
 }
 
 /* ============================================================
@@ -3550,88 +3578,199 @@ function tree(x,z,s,kind){
   return null;
 }
 
-function lamp(x,z){
+/* ---------- 文字招牌：画布贴图，一块一张（贴图材质不进合批，招牌本来就是零头） ---------- */
+function textSign(parent, text, w, h, x, y, z, bg, fg, sub){
+  const cv = document.createElement("canvas"); cv.width = 512; cv.height = Math.round(512*h/w);
+  const c = cv.getContext("2d");
+  c.fillStyle = bg||"#f7efdf"; c.fillRect(0,0,cv.width,cv.height);
+  c.strokeStyle = fg||"#3a3f46"; c.lineWidth = 6; c.strokeRect(9,9,cv.width-18,cv.height-18);
+  c.fillStyle = fg||"#3a3f46"; c.textAlign = "center"; c.textBaseline = "middle";
+  if(sub){
+    c.font = "bold "+Math.round(cv.height*.42)+"px 'Microsoft YaHei',sans-serif"; c.fillText(text, cv.width/2, cv.height*.36);
+    c.font = "bold "+Math.round(cv.height*.24)+"px sans-serif"; c.fillText(sub, cv.width/2, cv.height*.74);
+  }else{
+    c.font = "bold "+Math.round(cv.height*.56)+"px 'Microsoft YaHei',sans-serif"; c.fillText(text, cv.width/2, cv.height*.52);
+  }
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({map:tex}));
+  m.position.set(x,y,z); parent.add(m); return m;
+}
+
+/* ---------- 路灯：车削底座、凹槽杆、弯臂挂四面灯笼。全部共用几何体，44 盏合成十来个批次 ---------- */
+const LAMP = (()=>{
+  const base = new THREE.LatheGeometry([[.62,0],[.62,.1],[.5,.16],[.34,.3],[.28,.5],[.36,.62],[.26,.74],[.2,.92],[.19,1.1]]
+                 .map(p=>new THREE.Vector2(p[0],p[1])), 8);
+  const pole = new THREE.CylinderGeometry(.12,.17,5.2,16,1);
+  { // 凹槽：隔一条棱压进去一圈
+    const pos = pole.attributes.position;
+    for(let i=0;i<pos.count;i++){
+      const x=pos.getX(i), z=pos.getZ(i); if(Math.abs(x)+Math.abs(z) < 1e-4) continue;
+      const k = Math.round(Math.atan2(x,z)/(Math.PI*2/16));
+      if(k%2){ pos.setX(i,x*.84); pos.setZ(i,z*.84); }
+    }
+    pole.computeVertexNormals();
+  }
+  const collar = new THREE.TorusGeometry(.21,.045,4,8);
+  const arm = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(
+                new THREE.Vector3(0,5.4,0), new THREE.Vector3(.12,6.75,0), new THREE.Vector3(1.15,6.6,0)), 8, .055, 4, false);
+  const hook = new THREE.CylinderGeometry(.035,.035,.32,4);
+  const plate = new THREE.BoxGeometry(.72,.06,.72);
+  const pane = new THREE.BoxGeometry(.6,.84,.04);
+  const rib = new THREE.BoxGeometry(.05,.84,.05);
+  const cap = new THREE.ConeGeometry(.56,.44,4);
+  const finial = new THREE.SphereGeometry(.09,5,4);
+  return {base,pole,collar,arm,hook,plate,pane,rib,cap,finial};
+})();
+function lamp(x,z,facing){
   const g = new THREE.Group(); g.position.set(x,0,z);
-  addMesh(g, G.cyl(.5,.7,.5,10), M.dark, 0,.25,0);
-  addMesh(g, G.cyl(.17,.22,6.4,8), M.dark, 0,3.4,0);
-  addMesh(g, G.cyl(.5,.28,.7,10), M.dark, 0,6.9,0);
-  const b = addMesh(g, G.sph(.46,12,10), bulbMat, 0,6.5,0, false);
-  addMesh(g, G.cone(.85,.7,10), M.dark, 0,7.35,0);
+  // 弯臂默认伸向园区中心，路灯站在路边灯笼就悬在路上
+  g.rotation.y = facing===undefined ? Math.atan2(z,-x) : facing;
+  addMesh(g, LAMP.base, M.dark, 0,0,0);
+  addMesh(g, LAMP.pole, M.dark, 0,3.6,0);
+  addMesh(g, LAMP.collar, M.gold, 0,2.3,0, false).rotation.x = Math.PI/2;
+  addMesh(g, LAMP.collar, M.gold, 0,5.05,0, false).rotation.x = Math.PI/2;
+  addMesh(g, LAMP.finial, M.gold, 0,6.28,0, false);
+  addMesh(g, LAMP.arm, M.dark, 0,0,0);
+  const lx = 1.15, ly = 5.85;
+  addMesh(g, LAMP.hook, M.dark, lx,6.42,0, false);
+  addMesh(g, LAMP.plate, M.dark, lx,ly-.45,0, false);
+  for(let k=0;k<4;k++){
+    const a = k*Math.PI/2;
+    const p = addMesh(g, LAMP.pane, windowMat, lx+Math.sin(a)*.32, ly, Math.cos(a)*.32, false);
+    p.rotation.y = a;
+    addMesh(g, LAMP.rib, M.dark, lx+Math.sin(a+Math.PI/4)*.45, ly, Math.cos(a+Math.PI/4)*.45, false).rotation.y = a+Math.PI/4;
+  }
+  addMesh(g, LAMP.cap, M.dark, lx,ly+.62,0).rotation.y = Math.PI/4;
+  addMesh(g, LAMP.finial, M.gold, lx,ly+.9,0, false);
   scene.add(g);
   addObstacle(x, z, 1.1);
   return g;
 }
 
+/* ---------- 长椅：五条座板三条靠背板、铸铁弧形端架、扶手 ---------- */
+const BENCH = {
+  slat: G.box(4.4,.07,.24), back: G.box(4.4,.2,.06),
+  arc: new THREE.TorusGeometry(.6,.045,5,10,Math.PI),
+  leg: G.cyl(.055,.07,.92,6), armrest: G.box(.06,.06,1.25),
+  armPost: G.cyl(.035,.035,.55,5), backPost: G.box(.07,.95,.07), stretcher: G.cyl(.04,.04,3.7,5)
+};
 function bench(x,z,rot){
   const g = new THREE.Group(); g.position.set(x,0,z); g.rotation.y = rot||0;
-  addMesh(g, G.box(4.4,.28,1.5), M.wood, 0,.95,0);
-  addMesh(g, G.box(4.4,1.3,.24), M.wood, 0,1.6,-.62);
-  addMesh(g, G.box(.26,.95,1.4), M.steelDk, -1.9,.48,0);
-  addMesh(g, G.box(.26,.95,1.4), M.steelDk, 1.9,.48,0);
+  for(let i=0;i<5;i++) addMesh(g, BENCH.slat, M.wood, 0,.95, -.6+i*.3);
+  for(let i=0;i<3;i++){ const b = addMesh(g, BENCH.back, M.wood, 0,1.28+i*.3, -.74-i*.07); b.rotation.x = -.22; }
+  [-1.95,1.95].forEach(sx=>{
+    addMesh(g, BENCH.leg, M.steelDk, sx,.46,.55);
+    addMesh(g, BENCH.leg, M.steelDk, sx,.46,-.55);
+    const arc = addMesh(g, BENCH.arc, M.steelDk, sx,.86,0, false); arc.rotation.y = Math.PI/2; arc.rotation.x = Math.PI;
+    const bp = addMesh(g, BENCH.backPost, M.steelDk, sx,1.5,-.78); bp.rotation.x = -.22;
+    addMesh(g, BENCH.armrest, M.steelDk, sx,1.55,-.05, false);
+    addMesh(g, BENCH.armPost, M.steelDk, sx,1.25,.5, false);
+  });
+  addMesh(g, BENCH.stretcher, M.steelDk, 0,.28,0, false).rotation.z = Math.PI/2;
   scene.add(g);
   addObstacle(x, z, 2.9);
   return g;
 }
 
-// 条纹遮阳棚顶
+// 条纹遮阳棚顶：奇偶扇区各并成一块几何体，一顶两次绘制
 function stripedCanopy(radius, height, segs, matA, matB){
   const g = new THREE.Group();
-  const step = Math.PI*2/segs;
-  for(let i=0;i<segs;i++){
-    const geo = new THREE.ConeGeometry(radius, height, 3, 1, false, i*step, step);
-    const m = new THREE.Mesh(geo, i%2 ? matA : matB);
-    m.castShadow = true;
-    g.add(m);
-  }
+  const step = Math.PI*2/segs, halves = [[],[]];
+  for(let i=0;i<segs;i++) halves[i%2].push({geo:new THREE.ConeGeometry(radius, height, 3, 1, false, i*step, step)});
+  halves.forEach((parts,k)=>{ const m = new THREE.Mesh(mergeGeo(parts), k ? matA : matB); m.castShadow = true; g.add(m); });
   return g;
 }
 
+/* ---------- 摊位：坡屋顶、弧形条纹雨棚带荷叶边、柜台上的货、菜单牌、檐下灯泡、有字的招牌 ---------- */
+const STALL = (()=>{
+  const gableShape = new THREE.Shape(); gableShape.moveTo(-3.55,0); gableShape.lineTo(3.55,0); gableShape.lineTo(0,1.7); gableShape.closePath();
+  const gable = new THREE.ExtrudeGeometry(gableShape, {depth:.2, bevelEnabled:false}); gable.translate(0,0,-.1);
+  const awn = [[],[]], SEG = 8, r = 2.2, span = 1.1;
+  for(let i=0;i<SEG;i++) awn[i%2].push({geo:new THREE.CylinderGeometry(r,r,7.4,1,1,true, i*span/SEG, span/SEG)});
+  const awning = awn.map(parts=>doubleSided(mergeGeo(parts)));
+  return {
+    body: G.box(7,4.2,5), wainscot: G.box(7.1,1.2,5.1), panel: G.box(3.5,.16,5.7), gable, ridge: G.box(.3,.22,5.9),
+    awning, scallop: new THREE.CylinderGeometry(.44,.44,.14,6,1,false,-Math.PI/2,Math.PI),
+    post: G.cyl(.09,.09,3.0,6), bracket: G.cyl(.045,.045,1.0,4),
+    frame: G.box(6.2,1.5,.12), pane: G.box(5.8,1.1,.1), counter: G.box(5.6,.4,1.2),
+    jar: G.cyl(.2,.2,.42,8), tin: G.box(.42,.32,.42), cone: G.cone(.2,.5,6), ball: G.sph(.2,7,5), bottle: G.cyl(.09,.13,.5,6),
+    board: G.box(1.3,1.0,.08), paper: G.box(1.1,.8,.03), bulb: G.sph(.11,5,4), signBack: G.box(4.8,1.15,.16)
+  };
+})();
+const STALL_GOODS = [["jar",M.red],["tin",M.yellow],["cone",M.mint],["ball",M.skyblue],["bottle",M.orange],["jar",M.purple],["tin",M.pink]];
 function stall(x,z,rot,matA,matB,label){
   const g = new THREE.Group(); g.position.set(x,0,z); g.rotation.y = rot||0;
-  addMesh(g, G.box(7,4.2,5), M.cream, 0,2.1,0, true, true);
-  addMesh(g, G.box(7.4,.5,5.4), M.woodDk, 0,4.35,0);
-  // 条纹雨棚
-  for(let i=0;i<7;i++){
-    const s = new THREE.Mesh(G.box(1,.18,3.2), i%2?matA:matB);
-    s.position.set(-3+i, 4.0, 3.1);
-    s.rotation.x = -0.34;
-    s.castShadow = true;
-    g.add(s);
+  addMesh(g, STALL.body, M.cream, 0,2.1,0, true, true);
+  addMesh(g, STALL.wainscot, M.wood, 0,.6,0, true, true);
+  // 坡屋顶：两片斜板 + 前后山墙 + 脊
+  addMesh(g, STALL.panel, matA, -1.62,5.05,0).rotation.z = 0.46;
+  addMesh(g, STALL.panel, matA,  1.62,5.05,0).rotation.z = -0.46;
+  addMesh(g, STALL.gable, M.cream, 0,4.3, 2.45);
+  addMesh(g, STALL.gable, M.cream, 0,4.3,-2.45);
+  addMesh(g, STALL.ridge, M.woodDk, 0,5.9,0);
+  // 弧形条纹雨棚，前沿一排荷叶边
+  STALL.awning.forEach((geo,k)=>{ const a = new THREE.Mesh(geo, k?matA:matB); a.rotation.z = Math.PI/2; a.position.set(0,1.95,2.5); a.castShadow = true; g.add(a); });
+  for(let i=0;i<8;i++){
+    const s = addMesh(g, STALL.scallop, i%2?matA:matB, -3.22+i*.92, 2.85, 4.42, false);
+    s.rotation.x = Math.PI/2;
   }
-  addMesh(g, G.cyl(.11,.11,3.2,6), M.steelDk, -3.2,1.6,4.4);
-  addMesh(g, G.cyl(.11,.11,3.2,6), M.steelDk,  3.2,1.6,4.4);
-  addMesh(g, G.box(6,1.1,.2), windowMat, 0,3.1,2.56, false);
-  addMesh(g, G.box(5.6,.4,1.2), M.wood, 0,2.4,2.9);
+  addMesh(g, STALL.post, M.steelDk, -3.3,1.5,4.3);
+  addMesh(g, STALL.post, M.steelDk,  3.3,1.5,4.3);
+  [-3.3,3.3].forEach(bx=>{ const b = addMesh(g, STALL.bracket, M.steelDk, bx,3.55,3.15, false); b.rotation.x = -Math.PI/4; });
+  // 售货窗、柜台和台面上的货
+  addMesh(g, STALL.frame, M.woodDk, 0,3.1,2.5, false);
+  addMesh(g, STALL.pane, windowMat, 0,3.1,2.56, false);
+  addMesh(g, STALL.counter, M.wood, 0,2.4,2.9);
+  for(let i=0;i<STALL_GOODS.length;i++){
+    const [kind, gm] = STALL_GOODS[i];
+    const gx = -2.4 + i*.8, gz = 2.55 + (i%2)*.5;
+    addMesh(g, STALL[kind], gm, gx, 2.6 + (kind==="cone"?.25:kind==="ball"?.2:kind==="bottle"?.25:.2), gz, false);
+  }
+  // 菜单牌
+  addMesh(g, STALL.board, M.woodDk, -2.65,3.25,2.62, false);
+  addMesh(g, STALL.paper, M.cream, -2.65,3.25,2.68, false);
+  // 檐下一串小灯泡
+  for(let i=0;i<8;i++) addMesh(g, STALL.bulb, bulbMat, -3.15+i*.9, 3.95, 3.0, false);
   if(label!==false){
-    const sign = addMesh(g, G.box(4.6,1.0,.24), matA, 0,5.0,2.2);
-    addMesh(g, G.box(4.0,.5,.12), M.cream, 0,5.0,2.36, false);
+    addMesh(g, STALL.signBack, matA, 0,5.35,3.05);
+    textSign(g, label||"星辉小铺", 4.5,.95, 0,5.35,3.14, "#f7efdf", "#3a3f46");
   }
   scene.add(g);
   addObstacle(x, z, 5.4);
   addBlocker(x, 3.0, z, 4.6);
   return g;
 }
+
+/* ---------- 灯串：真有一根缆，灯泡带灯头挂在缆下 ---------- */
+const BULB = {bulb:G.sph(.17,6,5), cap:G.cyl(.06,.07,.12,5), pole:G.cyl(.07,.1,6.3,6), knob:G.sph(.14,6,5)};
 function bulbString(ax,ay,az,bx,by,bz,count,sag){
-  const g = new THREE.Group();
-  const geo = G.sph(.19,8,6);
-  for(let i=0;i<=count;i++){
-    const t = i/count;
-    const x = ax+(bx-ax)*t, z = az+(bz-az)*t;
-    const y = ay+(by-ay)*t - Math.sin(t*Math.PI)*(sag||1.6);
-    const b = new THREE.Mesh(geo, bulbMat);
-    b.position.set(x,y,z);
-    g.add(b);
+  const g = new THREE.Group(); g.position.set(ax,ay,az);
+  const dx=bx-ax, dy=by-ay, dz=bz-az;
+  const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0,0,0), new THREE.Vector3(dx/2, dy/2-2*(sag||1.6), dz/2), new THREE.Vector3(dx,dy,dz));
+  addMesh(g, new THREE.TubeGeometry(curve, 16, .035, 4, false), M.dark, 0,0,0, false);
+  for(let i=1;i<count;i++){
+    const p = curve.getPoint(i/count);
+    addMesh(g, BULB.cap, M.dark, p.x,p.y-.08,p.z, false);
+    addMesh(g, BULB.bulb, bulbMat, p.x,p.y-.25,p.z, false);
   }
   scene.add(g);
   return g;
 }
+function stringPole(x,z){
+  addMesh(scene, BULB.pole, M.dark, x,3.15,z);
+  addMesh(scene, BULB.knob, M.gold, x,6.4,z, false);
+  addObstacle(x, z, .5);
+}
 
+/* ---------- 栏杆 ---------- */
+const FENCE = {post:G.cyl(.13,.16,1.9,6), qpost:G.cyl(.08,.1,1.1,5), ball:G.sph(.12,5,4)};
 function fenceRun(x1,z1,x2,z2,posts){
   const g = new THREE.Group();
   const dx=(x2-x1)/posts, dz=(z2-z1)/posts;
   const seg = Math.hypot(dx,dz);
   for(let i=0;i<=posts;i++){
-    addMesh(g, G.cyl(.13,.16,1.9,6), M.white, x1+dx*i, .95, z1+dz*i);
+    addMesh(g, FENCE.post, M.white, x1+dx*i, .95, z1+dz*i);
+    addMesh(g, FENCE.ball, M.gold, x1+dx*i, 1.98, z1+dz*i, false);
     // 沿栏杆铺一串碰撞圆，让整段栏杆连成一堵墙
     const n = Math.max(1, Math.ceil(seg/1.6));
     for(let k=0;k<n && i<posts;k++){
@@ -3641,6 +3780,98 @@ function fenceRun(x1,z1,x2,z2,posts){
   strut(g, x1,1.5,z1, x2,1.5,z2, .075, M.white);
   strut(g, x1,.8,z1, x2,.8,z2, .075, M.white);
   scene.add(g);
+}
+// 排队栏：一圈矮柱两道圆环栏杆，缺口对着排队的人群；只有柱子登记碰撞
+function fenceRing(cx,cz,r,posts,gapAngle,gapWidth){
+  const g = new THREE.Group(); g.position.set(cx,0,cz); scene.add(g);
+  const half = Math.asin(Math.min(1,(gapWidth||9)/2/r)), a0 = gapAngle+half, len = Math.PI*2-2*half;
+  for(let i=0;i<=posts;i++){
+    const a = a0+len*i/posts, x = Math.cos(a)*r, z = Math.sin(a)*r;
+    addMesh(g, FENCE.qpost, M.white, x,.55,z);
+    addMesh(g, FENCE.ball, M.gold, x,1.16,z, false);
+    addObstacle(cx+x, cz+z, .9);
+  }
+  for(const y of [.5,.98]){
+    const t = new THREE.Mesh(new THREE.TorusGeometry(r,.04,4,Math.max(12,Math.round(len*r/1.1)),len), M.white);
+    t.rotation.x = -Math.PI/2;
+    const pv = new THREE.Group(); pv.position.y = y; pv.rotation.y = -(a0+len); pv.add(t); g.add(pv);
+  }
+  return g;
+}
+// 路缘：绕圆一圈的圆环段，路口留空。gaps 是 [路径角(度), 半宽(米)]；keep(a0,a1) 可以再剔掉几段
+function kerbArcs(cx,cz,r,gaps,tube,keep){
+  const gs = gaps.map(q=>({a:q[0]*Math.PI/180, h:Math.asin(Math.min(1,q[1]/r))+0.02})).sort((p,q)=>p.a-q.a);
+  for(let i=0;i<gs.length;i++){
+    const nx = gs[(i+1)%gs.length];
+    const a0 = gs[i].a + gs[i].h, a1 = (i+1<gs.length ? nx.a : nx.a+Math.PI*2) - nx.h;
+    const len = a1-a0; if(len <= 0.05) continue;
+    if(keep && !keep(a0,a1)) continue;
+    const t = new THREE.Mesh(new THREE.TorusGeometry(r, tube||.26, 5, Math.max(4,Math.round(len*r/2.2)), len), M.white);
+    t.rotation.x = -Math.PI/2; t.receiveShadow = true;
+    const pv = new THREE.Group(); pv.position.set(cx,.08,cz); pv.rotation.y = -a1; pv.add(t); scene.add(pv);
+  }
+}
+const KERB_GEOS = new Map();
+// 直路缘：沿一条路的两侧各铺一根方条，同长的共用几何体
+function kerbStrip(x1,z1,x2,z2,width){
+  const dx=x2-x1, dz=z2-z1, len=Math.hypot(dx,dz), key=len.toFixed(2);
+  if(!KERB_GEOS.has(key)) KERB_GEOS.set(key, G.box(.28,.2,len));
+  const nx = -dz/len, nz = dx/len, off = width/2+.14;
+  for(const s of [-1,1]){
+    const k = addMesh(scene, KERB_GEOS.get(key), M.white, (x1+x2)/2 + nx*off*s, .1, (z1+z2)/2 + nz*off*s, false, true);
+    k.rotation.y = Math.atan2(dx,dz);
+  }
+}
+
+/* ---------- 花坛：路缘围一圈土，里面撒 alpha 镂空的花簇卡片（一个 InstancedMesh） ---------- */
+const flowerSpots = [];
+function flowerRingBed(cx,cz,r0,r1,n){
+  const soil = new THREE.Mesh(new THREE.RingGeometry(r0,r1,48), M.bark);
+  soil.rotation.x = -Math.PI/2; soil.position.set(cx,.06,cz); soil.receiveShadow = true; scene.add(soil);
+  const k = new THREE.Mesh(new THREE.TorusGeometry(r1+.1,.24,5,64), M.white); k.rotation.x = -Math.PI/2; k.position.set(cx,.1,cz); k.receiveShadow = true; scene.add(k);
+  for(let i=0;i<n;i++){ const a = i/n*Math.PI*2 + Math.random()*.3, rr = r0+.35+Math.random()*(r1-r0-.7); flowerSpots.push([cx+Math.cos(a)*rr, cz+Math.sin(a)*rr]); }
+}
+function flowerRoundBed(cx,cz,r,n){
+  const soil = new THREE.Mesh(new THREE.CircleGeometry(r,14), M.bark);
+  soil.rotation.x = -Math.PI/2; soil.position.set(cx,.06,cz); soil.receiveShadow = true; scene.add(soil);
+  const k = new THREE.Mesh(new THREE.TorusGeometry(r,.2,5,18), M.white); k.rotation.x = -Math.PI/2; k.position.set(cx,.1,cz); k.receiveShadow = true; scene.add(k);
+  for(let i=0;i<n;i++){ const a = Math.random()*Math.PI*2, rr = Math.sqrt(Math.random())*(r-.5); flowerSpots.push([cx+Math.cos(a)*rr, cz+Math.sin(a)*rr]); }
+  addObstacle(cx, cz, r+.3);
+}
+function flowerBoxBed(cx,cz,w,d,n){
+  const soil = addMesh(scene, G.box(w,.12,d), M.bark, cx,.06,cz, false, true);
+  addMesh(scene, G.box(w+.4,.3,.24), M.white, cx,.12,cz-d/2-.1, false, true);
+  addMesh(scene, G.box(w+.4,.3,.24), M.white, cx,.12,cz+d/2+.1, false, true);
+  addMesh(scene, G.box(.24,.3,d), M.white, cx-w/2-.1,.12,cz, false, true);
+  addMesh(scene, G.box(.24,.3,d), M.white, cx+w/2+.1,.12,cz, false, true);
+  for(let i=0;i<n;i++) flowerSpots.push([cx+(Math.random()-.5)*(w-.8), cz+(Math.random()-.5)*(d-.8)]);
+  addObstacle(cx, cz, Math.max(w,d)/2+.4);
+}
+function buildFlowers(){
+  const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+  const c = cv.getContext("2d");
+  c.clearRect(0,0,64,64);
+  const leafCols = ["#3f8a45","#4f9d4e","#357a3d"];
+  for(let i=0;i<9;i++){ c.fillStyle = leafCols[i%3]; c.beginPath(); c.ellipse(10+Math.random()*44, 40+Math.random()*18, 7+Math.random()*6, 4+Math.random()*3, Math.random()*3, 0, Math.PI*2); c.fill(); }
+  const petal = ["#f07ba0","#e0455b","#f5c03a","#fbfbf7","#8a5bbf","#ef8b3c"];
+  for(let i=0;i<11;i++){ c.fillStyle = petal[i%petal.length]; c.beginPath(); c.arc(8+Math.random()*48, 12+Math.random()*30, 3.2+Math.random()*2.2, 0, Math.PI*2); c.fill();
+    c.fillStyle = "#fff3b0"; c.beginPath(); c.arc(8+Math.random()*48, 12+Math.random()*30, 1.1, 0, Math.PI*2); c.fill(); }
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding;
+  const mat = new THREE.MeshStandardMaterial({map:tex, alphaTest:.45, side:THREE.DoubleSide, roughness:.92, metalness:0});
+  const card = new THREE.PlaneGeometry(.95,.8); card.translate(0,.36,0);
+  const spots = isSmall ? flowerSpots.filter((_,i)=>i%2===0) : flowerSpots;
+  const mesh = new THREE.InstancedMesh(card, mat, spots.length*2);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0,1,0);
+  spots.forEach((sp,i)=>{
+    const yaw = Math.random()*Math.PI, sc = .8+Math.random()*.45;
+    for(let k=0;k<2;k++){
+      q.setFromAxisAngle(up, yaw + k*Math.PI/2); s.set(sc,sc,sc); p.set(sp[0], .1, sp[1]);
+      m4.compose(p,q,s); mesh.setMatrixAt(i*2+k, m4);
+    }
+  });
+  mesh.instanceMatrix.needsUpdate = true; mesh.castShadow = false; mesh.receiveShadow = true; mesh.frustumCulled = false;
+  scene.add(mesh);
+  return mesh;
 }
 
 /* ============================================================
@@ -4721,8 +4952,8 @@ function buildGate(pz){
   }
 
   // 售票亭
-  stall(-22, pz+2, 0.35, M.blue, M.cream);
-  stall( 22, pz+2, -0.35, M.red, M.cream);
+  stall(-22, pz+2, 0.35, M.blue, M.cream, "售票处");
+  stall( 22, pz+2, -0.35, M.red, M.cream, "游客中心");
 
   fenceRun(-16,pz, -46,pz-2, 12);
   fenceRun( 16,pz,  46,pz-2, 12);
@@ -4803,11 +5034,11 @@ addObstacle(100,-166,20);    addBlocker(100,5,-166,19);       // 碰碰车馆
 addObstacle(0,-232,19);      addBlocker(0,7,-236,17);         // 露天剧场
 
 /* 摊位、长椅、灯柱、树 */
-[[-30,26,0.7,M.pink,M.cream],[30,26,-0.7,M.mint,M.cream],
- [-44,4,1.5,M.yellow,M.crimson],[44,-6,-1.6,M.purple,M.cream],
- [-16,58,0.25,M.orange,M.cream],[16,58,-0.25,M.skyblue,M.cream],
- [-62,30,1.1,M.green,M.cream],[58,62,-1.2,M.red,M.cream]
-].forEach(s=>stall(s[0],s[1],s[2],s[3],s[4]));
+[[-30,26,0.7,M.pink,M.cream,"棉花糖"],[30,26,-0.7,M.mint,M.cream,"冰淇淋"],
+ [-44,4,1.5,M.yellow,M.crimson,"爆米花"],[44,-6,-1.6,M.purple,M.cream,"气球"],
+ [-16,58,0.25,M.orange,M.cream,"热狗"],[16,58,-0.25,M.skyblue,M.cream,"汽水"],
+ [-62,30,1.1,M.green,M.cream,"纪念品"],[58,62,-1.2,M.red,M.cream,"糖葫芦"]
+].forEach(s=>stall(s[0],s[1],s[2],s[3],s[4],s[5]));
 
 for(let i=0;i<16;i++){
   const a = i/16*Math.PI*2;
@@ -4821,21 +5052,44 @@ for(let i=0;i<8;i++){
 lamp(-9, 74); lamp(9, 74); lamp(-9, 52); lamp(9, 52);
 
 // 新区市集、休息区与路灯
-stall(-44,-150, 0.05,M.pink,M.cream);
-stall( 44,-150,-0.05,M.mint,M.cream);
-stall(-42,-188, 0.15,M.orange,M.cream);
-stall( 42,-188,-0.15,M.skyblue,M.cream);
+stall(-44,-150, 0.05,M.pink,M.cream,"奶茶");
+stall( 44,-150,-0.05,M.mint,M.cream,"炸鸡");
+stall(-42,-188, 0.15,M.orange,M.cream,"套圈");
+stall( 42,-188,-0.15,M.skyblue,M.cream,"烤肠");
 bench(-24,-178,0.1); bench(24,-178,-0.1);
 bench(-30,-210,0); bench(30,-210,Math.PI);
 [-14,14].forEach(x=>{ lamp(x,-94); lamp(x,-118); lamp(x,-142); });
 [-72,-48,-24,24,48,72].forEach(x=>lamp(x,-166));
 lamp(-18,-204); lamp(18,-204); lamp(-18,-220); lamp(18,-220);
 
-// 灯串（广场到大门）
+// 灯串（广场到大门）：挂在灯杆顶上，z=52/74 两对正好是路灯
 for(let i=0;i<6;i++){
-  const z1 = 30+i*11, z2 = 30+(i+1)*11;
-  bulbString(-9, 7.4, z1, 9, 7.4, z1, 9, 2.0);
+  const z1 = 30+i*11;
+  bulbString(-9, 6.3, z1, 9, 6.3, z1, 9, 1.6);
+  if(z1!==52 && z1!==74){ stringPole(-9,z1); stringPole(9,z1); }
 }
+
+/* 路缘、排队栏、花坛（都是静态件，交给园区末尾的静态合并） */
+kerbArcs(0,0,26.4, [[90,6.5],[-90,4.5],[0,4.5],[180,4.5],[40,3.5],[-40,3.5],[140,3.5],[-140,3.5]], .26);
+kerbArcs(0,-164,24.3, [[0,4.5],[60,4.5],[120,4.5],[180,4.5],[-90,5.5]], .24,
+  (a0,a1)=>{ const mid=((a0+a1)/2*180/Math.PI+360)%360; return !(mid>0&&mid<60) && !(mid>120&&mid<180); });
+[90,-90,0,180,-40,40,-140,140].forEach(a=>{ const r=a*Math.PI/180; kerbStrip(Math.cos(r)*27.4,Math.sin(r)*27.4, Math.cos(r)*51.4,Math.sin(r)*51.4, a===90?13:(Math.abs(a)===40||Math.abs(a)===140)?7:9); });
+kerbStrip(0,63.6,0,94,13);
+kerbStrip(-14,-74,-14,-143,9); kerbStrip(14,-74,14,-143,9);
+kerbStrip(-25,-162.2,-84,-165,9); kerbStrip(25,-162.2,84,-165,9);
+fenceRing(-34,-30,15,40, Math.PI/2, 10);            // 木马：缺口朝 +z 的排队人群
+fenceRing(62,-46,12,32, Math.atan2(10,-6), 9);      // 飞椅
+fenceRing(-30,-62,11,30, Math.atan2(6,8), 9);       // 跳楼机
+fenceRing(44,46,14,36, Math.atan2(-6,-6), 9);       // 咖啡杯
+fenceRing(-100,-166,17,44, Math.atan2(2,22), 10);   // 星际飞行器
+fenceRing(100,-166,21,52, Math.atan2(2,-22), 10);   // 碰碰车
+flowerRingBed(0,0,9.8,10.7,84);                     // 喷泉外圈
+[90,-90,0,180,-40,40,-140,140].forEach(a=>{
+  const w = a===90?6.5:(Math.abs(a)===40||Math.abs(a)===140)?3.5:4.5, off = Math.asin((w+2.2)/31.5);
+  for(const s of [-1,1]){ const r = a*Math.PI/180 + off*s; flowerRoundBed(Math.cos(r)*31.5, Math.sin(r)*31.5, 2.0, 7); }
+});
+flowerBoxBed(-30,90,5,2.6,12); flowerBoxBed(30,90,5,2.6,12);
+buildFlowers();
 
 // 树林
 const treeSpots = [];
@@ -5555,7 +5809,8 @@ resortRoot.traverse(o=>{
 for(const list of staticParkGroups.values()){
  if(list.length<3)continue;const parts=list.map(o=>{const transform=new THREE.Matrix4().multiplyMatrices(parkInverse,o.matrixWorld);const g=o.geometry.clone().applyMatrix4(transform);if(!g.index)return g;const flat=g.toNonIndexed();g.dispose();return flat;});
  const length=parts.reduce((n,g)=>n+g.attributes.position.array.length,0),geometry=new THREE.BufferGeometry();
- for(const attr of ['position','normal']){const values=new Float32Array(length);let offset=0;for(const g of parts){values.set(g.attributes[attr].array,offset);offset+=g.attributes[attr].array.length;}geometry.setAttribute(attr,new THREE.BufferAttribute(values,3));}
+ const attrs=['position','normal'].concat(['uv','color'].filter(a=>parts.every(g=>g.attributes[a])));
+ for(const attr of attrs){const size=parts[0].attributes[attr].itemSize,total=parts.reduce((n,g)=>n+g.attributes[attr].array.length,0),values=new Float32Array(total);let offset=0;for(const g of parts){values.set(g.attributes[attr].array,offset);offset+=g.attributes[attr].array.length;}geometry.setAttribute(attr,new THREE.BufferAttribute(values,size));}
  const mesh=new THREE.Mesh(geometry,list[0].material);mesh.castShadow=list[0].castShadow;mesh.receiveShadow=list[0].receiveShadow;geometry.computeBoundingSphere();resortRoot.add(mesh);list.forEach(o=>o.visible=false);parts.forEach(g=>g.dispose());
 }
 const attractionSelect=$('attraction-select');
