@@ -2306,7 +2306,11 @@ function setQuality(level){
  }
  renderer.setSize(innerWidth,innerHeight);
 }
+/* ?quality=lock：截图/验收用。软件渲染（Playwright 的 swiftshader）帧率只有个位数，
+   不锁的话拍出来的永远是关了阴影和泛光的第三档，看不出真机的样子。 */
+const QUALITY_LOCKED=(()=>{try{return new URL(location.href).searchParams.get('quality')==='lock';}catch{return false;}})();
 function adaptQuality(fps){
+ if(QUALITY_LOCKED)return;
  if(document.hidden||document.querySelector('dialog[open]'))return;   // 切后台、开着对话框时帧率不算数
  QUALITY.low=fps<45?QUALITY.low+1:0;
  if(QUALITY.low>=4&&QUALITY.level<3){QUALITY.low=0;setQuality(QUALITY.level+1);}
@@ -7670,6 +7674,8 @@ renderer.toneMapping=THREE.CustomToneMapping;
 renderer.toneMappingExposure=1.20;
 
 setMode(MODE.VIEW);
+// 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
+window.__astra={info:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,quality:QUALITY.level,mode:mode})};
 placeToggle();
 joyRelease();
 resetFishing();
