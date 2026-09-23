@@ -17,3 +17,5 @@ renders/_*.png
 assets/_src/
 # 美术参考图（手机截图、翻拍的屏幕照片）：只在本地给 CLAUDE.md 的验收流程用，仓库是公开的，不上传
 refs/
+# 代理并行实施时的临时 git 工作树
+.claude/worktrees/
