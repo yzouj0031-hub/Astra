@@ -4,25 +4,42 @@ const C=root.AstraJourneyCore;
 root.AstraRegionFactories=root.AstraRegionFactories||{};
 function rect(x,z,w,d,height=12){return {minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,height};}
 /* 表面细节：区域把材质起好名，这里统一套上主场景那套程序化贴图。
-   名字 -> [贴图种类, 一张铺多少米, 明暗, 起伏, 粗糙度]。
+   名字 -> [贴图种类, 一张铺多少米, 明暗, 起伏, 粗糙度, 地面高度, 只铺朝上的面, 叠层, 偏色]。
    没起名的材质不动 —— 水面、天空、灯笼这些自带着色器的不该被贴图。 */
-// 数值比海岛那边保守：水乡不走色调映射（NoToneMapping），
-// ACES 那条压缩曲线不在，同样的 amt 反差会直接顶出来 ——
-// 第一版照抄海岛的 .85，路面立刻成了棋盘格。
 const SURFACES={
- wall:  ['plaster',2.6,.42,.55,.4 ],
- roof:  ['tile',   1.2,.55,.85,.5 ],
- wood:  ['timber', 1.6,.5, .7, .5 ],
- stone: ['slab',   1.1,.45,.75,.5 ],
- ground:['grass',  2.6,.4, .6, .55],
- misc:  ['plaster',2.0,.35,.4, .45],
+ // 烟雨渡不走色调映射（NoToneMapping）、用的是 Phong：ACES 那条压缩曲线不在，
+ // 同样的 amt 反差会直接顶出来 —— 第一版照抄海岛的 .85，路面立刻成了棋盘格。
+ // 所以明暗减半、偏色也压到一半。粉墙是淡淡的旧砖透出来，黛瓦、木板正常铺。
+ watertown:{
+  wall:  ['brick',    2.0,.3, .55,.4, 0,false,null,.4],
+  roof:  ['rooftile', 1.6,.5, .8, .5, 0,true, null,.5],
+  wood:  ['plank',    1.8,.5, .7, .5, 0,false,null,.5],
+  stone: ['flagstone',1.7,.36,.7, .5, 0,false,null,.5],
+  ground:['grass',    2.6,.4, .6, .55,0,false,null,.5],
+  misc:  ['plaster',  2.0,.35,.4, .45,0,false,null,.5],
+ },
+ // 雨港、静山寺和海岛一样走 ACES + sRGB，用海岛那档强度
+ rainport:{
+  wall:  ['brick',    2.0,.8, 1.0,.5 ],
+  wood:  ['plank',    2.0,.8, .9, .5 ],
+  stone: ['ashlar',   2.4,.8, .9, .5 ],
+  ground:['flagstone',1.6,.8, 1.0,.5 ],
+  road:  ['slab',     2.4,.55,.7, .5 ],
+ },
+ temple:{
+  stone: ['ashlar',   2.2,.8, .9, .5 ],
+  wall:  ['plaster',  2.4,.8, .8, .45],
+  roof:  ['rooftile', 1.6,.8, 1.0,.55,0,true],
+  wood:  ['plank',    1.8,.7, .8, .5 ],
+  floor: ['rock',     1.6,.6, .8, .5 ],
+ },
 };
-function dressRegion(scene,surface){
- if(!surface)return 0;
+function dressRegion(scene,surface,table){
+ if(!surface||!table)return 0;
  let n=0;const seen=new Set();
  scene.traverse(o=>{
   for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){
-   const plan=SURFACES[m.name];
+   const plan=table[m.name];
    if(!plan||seen.has(m))continue;
    seen.add(m);surface(m,...plan);n++;
   }
@@ -44,6 +61,7 @@ function createRegion(T,id,services){
   world.player.visible=false;
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.g.position.set(p.x,.17,p.z);}}
   world.setRain(true);
+  dressRegion(scene,surface,SURFACES.rainport);
   world.lightCycle=()=>{hemi.intensity=.35+day*.5;sun.intensity=.15+day*.65;scene.background.set(day?'#58757d':'#102d3e').convertSRGBToLinear();scene.fog.color.copy(scene.background);};
  }else if(id==='watertown'){
   // trees 是宿主加载好的 glTF 树（journeys/assets.js）。浏览器里 runtime.js 会先 await
@@ -52,12 +70,13 @@ function createRegion(T,id,services){
   solids=world.obstacles.map(o=>({minX:o.x0,maxX:o.x1,minZ:o.z0,maxZ:o.z1,height:o.h||9.5}));
   land=(x,z)=>Math.abs(x)<175&&z>-95&&z<145&&!world.isWater(x,z);
   ground=world.groundY;world.player.g.visible=false;
-  dressRegion(scene,surface);
+  dressRegion(scene,surface,SURFACES.watertown);
   // Start every walker on a legal surface, including the foot of the bridges.
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.per.g.position.set(p.x,ground(p.x,p.z),p.z);}}
  }else{
   world=factory(T,{mobile,trees});scene=world.scene;camera=world.camera;
   world.hero.root.visible=false;
+  dressRegion(scene,surface,SURFACES.temple);
   // Floor height follows the actual temple plinth and the front steps.
   ground=(x,z)=>Math.abs(x)<9.1&&z>=-25.2&&z<=-16.6?1.2:Math.abs(x)<3.6&&z>-16.6&&z<-14.4?C.clamp((-z-14.4)/2.2,0,1)*1.2:0;
   land=(x,z)=>(Math.hypot(x,z)<15.8)||(Math.abs(x)<3.55&&z<=-13&&z>=-17)||(Math.abs(x)<8.85&&z>=-25.1&&z<=-16.6);

@@ -17,9 +17,14 @@ function createWorld(scene,{mobile=false,trees=null,vehicles=null}={}){
   seed=314159;
   const colliders=[],batches=new Map(),matCache=new Map(),glows=[],reflections=[];
   const boxGeo=new T.BoxGeometry(1,1,1),cylGeo=new T.CylinderGeometry(1,1,1,10),dummy=new T.Object3D();
+  // 按用途给材质起名（墙 / 木 / 石 / 地面 / 车道），regions.js 照名字挂程序化表面细节；
+  // 发光的、车船和人身上的颜色不起名，保持原样
+  const ROLE=new Map([[C.blue,'wall'],[C.teal,'wall'],[C.coral,'wall'],[C.blue2,'wall'],[C.cream,'wall'],[C.navy,'wall'],[0xc9c3ab,'wall'],
+   [C.wood,'wood'],[0x7d7164,'wood'],[0x273942,'stone'],[0x354d57,'stone'],[0x334b59,'stone'],
+   [0x43535b,'ground'],[0x829295,'ground'],[0x243442,'ground'],[0x202f3c,'road']]);
   const material=(color,glow=0)=>{
     const key=color+':'+glow;
-    if(!matCache.has(key))matCache.set(key,new T.MeshStandardMaterial({color,roughness:.68,metalness:.12,emissive:glow?color:0,emissiveIntensity:glow}));
+    if(!matCache.has(key)){const m=new T.MeshStandardMaterial({color,roughness:.68,metalness:.12,emissive:glow?color:0,emissiveIntensity:glow});if(!glow&&ROLE.has(color))m.name=ROLE.get(color);matCache.set(key,m);}
     return matCache.get(key);
   };
   const batch=(geo,mat,pos,scale,rot=[0,0,0])=>{
