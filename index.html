@@ -500,16 +500,19 @@ const sky = new THREE.Mesh(
         // 云层：视线投到高度 1 的平面上取噪声，3 个八度；地平线以下不算
         if(d.y > 0.02){
           vec2 p = d.xz / max(d.y, 0.05);
-          vec2 q = p*0.75 + uTime*vec2(0.008, 0.003);
-          float n  = fbm(q);
-          vec2 toSun = normalize(sd.xz + vec2(1e-4, 0.0)) * 0.10;
-          float n2 = fbm(q + toSun);                     // 往太阳那边偏一点再采一次：厚的一侧是云底
-          float lo = 0.62 - uCloud*0.14;
-          float cov = smoothstep(lo, lo + 0.22, n) * smoothstep(0.02, 0.16, d.y);
-          float lit = clamp(0.55 + (n - n2)*7.0, 0.0, 1.0);
+          vec2 q = p*0.38 + uTime*vec2(0.006, 0.002);
+          float big = vnoise(q*0.22 + vec2(3.7, 8.1));   // 大尺度分布：云要成团成片，不是满天均匀的碎屑
+          float amp = 0.6 + 0.8*big;
+          float n  = fbm(q) * amp + (vnoise(q*7.1 + vec2(2.0, 5.0)) - 0.5) * 0.06;   // 末尾那项是边缘的碎絮
+          vec2 toSun = normalize(sd.xz + vec2(1e-4, 0.0)) * 0.08;
+          float n2 = fbm(q + toSun) * amp;               // 往太阳那边偏一点再采一次：厚的一侧是云底
+          float lo = 0.66 - uCloud*0.18;
+          float cov = smoothstep(lo, lo + 0.09, n) * smoothstep(0.02, 0.14, d.y);
+          float thick = smoothstep(lo, lo + 0.28, n);
+          float lit = clamp(0.85 - 0.55*thick + (n - n2)*5.0, 0.0, 1.0);   // 厚处是灰的云底，边上亮
           vec3 cc = mix(cloudD, cloudC, lit);
-          cc += sunC * pow(s, 6.0) * 0.30 * (1.0 - cov);  // 薄的地方透光
-          c = mix(c, cc, cov * 0.88);
+          cc += sunC * pow(s, 6.0) * 0.30 * (1.0 - thick);  // 薄的地方透光
+          c = mix(c, cc, cov * 0.92);
         }
         c = mix(fogC, c, up);                            // 地平线那圈霾
         gl_FragColor = vec4(c, 1.0);
@@ -599,9 +602,10 @@ const seaUniforms = THREE.UniformsUtils.merge([
 ]);
 // 细波纹只进片元法线，不进顶点高度：船、游泳、测试都靠 CPU 的 waveHeight 对齐；手机只保留一层
 // 细波纹按到相机的距离淡出（15→90 米）：远处一个像素里塞好几个波长，不淡就是一片摩尔纹
+// 每条波纹还按屏幕导数（fwidth：相位每像素变多少）淡出：一个像素里塞不下半个波长就不画，否则就是摩尔纹
 const RIPPLE_GLSL = isSmall
- ? `      float rf = 1.0 - smoothstep(15.0, 90.0, length(uCam - vW));\n      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      sx += rf*0.03*3.927*0.83*cos(a1);\n      sz += rf*0.03*3.927*0.56*cos(a1);\n      float rip = 0.5 + 0.5*rf*sin(a1);\n`
- : `      float rf = 1.0 - smoothstep(15.0, 90.0, length(uCam - vW));\n      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      float a2 = dot(vW.xz, vec2(-0.42,0.91))*6.981 - uTime*3.4;\n      sx += rf*(0.03*3.927*0.83*cos(a1) + 0.016*6.981*(-0.42)*cos(a2));\n      sz += rf*(0.03*3.927*0.56*cos(a1) + 0.016*6.981*0.91*cos(a2));\n      float rip = 0.5 + 0.25*rf*(sin(a1) + sin(a2));\n`;
+ ? `      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      float r1 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a1)));\n      sx += r1*0.03*3.927*0.83*cos(a1);\n      sz += r1*0.03*3.927*0.56*cos(a1);\n      float rip = 0.5 + 0.5*r1*sin(a1);\n`
+ : `      float a1 = dot(vW.xz, vec2(0.83,0.56))*3.927 + uTime*2.6;\n      float a2 = dot(vW.xz, vec2(-0.42,0.91))*6.981 - uTime*3.4;\n      float r1 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a1)));\n      float r2 = rf * (1.0 - smoothstep(0.7, 1.8, fwidth(a2)));\n      sx += r1*0.03*3.927*0.83*cos(a1) + r2*0.016*6.981*(-0.42)*cos(a2);\n      sz += r1*0.03*3.927*0.56*cos(a1) + r2*0.016*6.981*0.91*cos(a2);\n      float rip = 0.5 + 0.25*(r1*sin(a1) + r2*sin(a2));\n`;
 seaUniforms.uSunD.value.copy(SUN_DIR);
 let waveGLSL = "";
 WAVES.forEach((w,i)=>{
@@ -610,6 +614,7 @@ WAVES.forEach((w,i)=>{
 const seaMat = new THREE.ShaderMaterial({
   uniforms: seaUniforms,
   fog: true,
+  extensions: {derivatives: true},   // 细波纹按 fwidth 淡出
   vertexShader:`
     uniform float uTime;
     varying vec3 vW;
@@ -652,6 +657,11 @@ ${waveGLSL}
       float hL = wh(vW.xz - vec2(e,0.0)), hR = wh(vW.xz + vec2(e,0.0));
       float hD = wh(vW.xz - vec2(0.0,e)), hU = wh(vW.xz + vec2(0.0,e));
       float sx = (hR-hL)/(2.0*e), sz = (hU-hD)/(2.0*e);
+      float dcam = length(uCam - vW);
+      float farK = 1.0 - 0.7*smoothstep(150.0, 900.0, dcam);   // 远处的浪坡压平：一个像素里好几道浪，不压就是一圈圈条纹
+      sx *= farK; sz *= farK;
+      vec3 N0 = normalize(vec3(-sx, 1.0, -sz));               // 大浪的法线：菲涅尔和映天用它，细波纹只进高光
+      float rf = 1.0 - smoothstep(15.0, 90.0, dcam);
 ${RIPPLE_GLSL}
       vec3 N = normalize(vec3(-sx, 1.0, -sz));
 
@@ -669,12 +679,12 @@ ${RIPPLE_GLSL}
       base = mix(base, uDeep, smoothstep(0.35, 1.0, shoreT));
 
       // 菲涅尔：视线越平越亮，映的是天空（按反射方向的仰角在三色里取），不再是一个常量蓝
-      float NV = max(dot(N, V), 0.0);
+      float NV = max(dot(N0, V), 0.0);
       float fres = pow(1.0 - NV, 3.2);
-      vec3 R = reflect(-V, N);
-      vec3 skyRef = mix(uSkyBot, uSkyMid, smoothstep(0.0, 0.22, R.y));   // uSkyBot 是天边那圈霾色
-      skyRef = mix(skyRef, uSkyTop, smoothstep(0.18, 0.75, R.y));
-      base = mix(base, skyRef, 0.05 + fres*0.62);
+      vec3 R = reflect(-V, N0);
+      vec3 skyRef = mix(uSkyBot, uSkyMid, smoothstep(-0.05, 0.40, R.y));   // uSkyBot 是天边那圈霾色；过渡放宽，浪与浪之间才不分层
+      skyRef = mix(skyRef, uSkyTop, smoothstep(0.30, 0.95, R.y));
+      base = mix(base, skyRef*0.9, fres*0.55);
 
       // 阳光高光：指数随细波纹起伏，一整块光斑碎成一片闪点
       vec3 H = normalize(L + V);
@@ -2567,7 +2577,7 @@ const periodNames=['morning','sunset','night'];
    晨光 .0019 → 600 米外的港区剩三成、30 米内不到 1%；日落更浓，星夜要给星星留着。
    rimC/rim/rimDir 是轮廓光；cloud/cloudC/cloudD 是天空着色器里的云量、云面色、云底色。 */
 const periods=[
- {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0019,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0xb9c4d0},
+ {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0019,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
  {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0024,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.10,ambient:.15,fill:.04,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
  {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0015,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.36,ambient:.20,fill:.05,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
 ];
