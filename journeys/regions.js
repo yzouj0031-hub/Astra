@@ -141,6 +141,7 @@ function createRegion(T,id,services){
    if(!active)return;clock+=dt;phase+=dt;
    world.foliage?.tick(clock);   // 山寺的林子跟着风摆
    if(id==='temple')world.tick?.(clock);   // 雾片漂移
+   if(id==='watertown')world.tickWind?.(clock);   // 烟雨渡的柳条竹叶
    const old={x:pos.x,z:pos.z};
    const ix=input.x,iz=input.z,mag=Math.min(1,Math.hypot(ix,iz));
    const dx=Math.cos(region.yaw)*ix+Math.sin(region.yaw)*iz,dz=-Math.sin(region.yaw)*ix+Math.cos(region.yaw)*iz;
