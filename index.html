@@ -506,7 +506,7 @@ const sky = new THREE.Mesh(
           float n  = fbm(q) * amp + (vnoise(q*7.1 + vec2(2.0, 5.0)) - 0.5) * 0.06;   // 末尾那项是边缘的碎絮
           vec2 toSun = normalize(sd.xz + vec2(1e-4, 0.0)) * 0.08;
           float n2 = fbm(q + toSun) * amp;               // 往太阳那边偏一点再采一次：厚的一侧是云底
-          float lo = 0.66 - uCloud*0.18;
+          float lo = 0.56 - uCloud*0.16;                 // 云量 .55 时阈值 .47：成片的云团，不是零星几缕
           float cov = smoothstep(lo, lo + 0.09, n) * smoothstep(0.02, 0.14, d.y);
           float thick = smoothstep(lo, lo + 0.28, n);
           float lit = clamp(0.85 - 0.55*thick + (n - n2)*5.0, 0.0, 1.0);   // 厚处是灰的云底，边上亮
@@ -522,7 +522,7 @@ const sky = new THREE.Mesh(
 sky.frustumCulled = false;
 scene.add(sky);
 // 雾的浓度按时段走（periods[].fogD），这里只是开局值；FogExp2 的衰减是 density² × 距离²
-scene.fog = new THREE.FogExp2(0xdde2d0, 0.0019);
+scene.fog = new THREE.FogExp2(0xdde2d0, 0.0016);
 
 /* ---------- 光 ---------- */
 // 半球光和补光让位给环境贴图：这两盏原本是在手工替代天空的漫射，
@@ -543,6 +543,7 @@ sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.05;
 scene.add(sun); scene.add(sun.target);
 // tick() 里阴影焦点对齐纹素用的临时量
+let SHADOW_DIST=220;
 const _shM=new THREE.Matrix4(), _shA=new THREE.Vector3(), _shB=new THREE.Vector3(), _shUp=new THREE.Vector3(), _shX=new THREE.Vector3(), _shY=new THREE.Vector3(), _shF=new THREE.Vector3();
 // 场景里没有弹射光，屋檐下和市场里只剩半球光，暗部会直接掉成黑洞。补一点常量
 // 环境光当作 GI 的替身：室内才有得看，室外几乎察觉不到，夜里跟着时段一起收。
@@ -2509,7 +2510,7 @@ function tick(){
   _shF.set(shadowFocus.x, 0, shadowFocus.z);   // 焦点压到海平面：飞行时相机高几百米，带着高度会把地面推出 far
   const px=_shF.dot(_shX), py=_shF.dot(_shY);
   _shF.addScaledVector(_shX, Math.round(px/texel)*texel-px).addScaledVector(_shY, Math.round(py/texel)*texel-py);
-  sun.position.set(_shF.x + SUN_DIR.x*220, _shF.y + SUN_DIR.y*220, _shF.z + SUN_DIR.z*220);
+  sun.position.set(_shF.x + SUN_DIR.x*SHADOW_DIST, _shF.y + SUN_DIR.y*SHADOW_DIST, _shF.z + SUN_DIR.z*SHADOW_DIST);
   sun.target.position.copy(_shF);
   sun.target.updateMatrixWorld();
 
@@ -2574,12 +2575,12 @@ const periodNames=['morning','sunset','night'];
 /* 色调映射改成 pow(1.45) + 曝光 1.0 之后（见文件末尾），主光按"被晒到的灰泥、沙子不能白成一片"
    重新定：晨光 1.25 / 日落 1.10 / 星夜 .36。fog 色取在 bot 和 mid 之间，天空着色器在地平线那圈
    也混同一个色，远景淡进雾里时和天边接得上。fogD 是雾的浓度（FogExp2，衰减 = d²·距离²）：
-   晨光 .0019 → 600 米外的港区剩三成、30 米内不到 1%；日落更浓，星夜要给星星留着。
+   晨光 .0016 → 600 米外的港区剩四成、400 米外的静屿剩七成、30 米内不到 1%；日落更浓，星夜要给星星留着。
    rimC/rim/rimDir 是轮廓光；cloud/cloudC/cloudD 是天空着色器里的云量、云面色、云底色。 */
 const periods=[
- {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0019,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
- {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0024,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.10,ambient:.15,fill:.04,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
- {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0015,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.36,ambient:.20,fill:.05,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
+ {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0016,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
+ {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0021,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.10,ambient:.15,fill:.04,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
+ {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0013,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.36,ambient:.20,fill:.05,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
 ];
 let periodIndex=0;
 try{const saved=localStorage.getItem('windward-period-v2');if(periodNames.includes(saved)) periodIndex=periodNames.indexOf(saved);}catch{}
@@ -7627,6 +7628,13 @@ window.__astra={
  view:r=>focusRegion(r),                                      // 'island' | 'park' | 'harbor' | 'all'
  park:()=>parkEntry(), harbor:()=>strollHarbor(), walkMode:()=>setMode(MODE.WALK),
  walkTo:(x,z,yaw=0,pitch=-.05)=>{setMode(MODE.WALK);walk.x=x;walk.z=z;walk.yaw=yaw;walk.pitch=pitch;walk.vx=walk.vz=0;faceAway();groundPlayer();updateWalk(0,0);},
+ setDir:(d)=>{periods[periodIndex].dir=d;},
+ shadowDump:()=>{const m=sun.shadow.map;if(!m)return null;const w=m.width,h=m.height,S=256,st=w/S;const buf=new Uint8Array(w*h*4);renderer.readRenderTargetPixels(m,0,0,w,h,buf);const c=document.createElement('canvas');c.width=S;c.height=S;const g=c.getContext('2d');const img=g.createImageData(S,S);for(let y=0;y<S;y++)for(let x=0;x<S;x++){const i=((Math.floor(y*st))*w+Math.floor(x*st))*4;const a=buf[i+3];const o=(y*S+x)*4;img.data[o]=img.data[o+1]=img.data[o+2]=a;img.data[o+3]=255;}g.putImageData(img,0,0);return c.toDataURL('image/png');},
+ envOff:(v)=>{if(v)scene.environment=null;else refreshEnvironment();},
+ setAmbient:(a,f)=>{periods[periodIndex].ambient=a;periods[periodIndex].fill=f;},
+ shadowStats:()=>{const m=sun.shadow.map;if(!m)return null;const w=m.width,h=m.height;const buf=new Uint8Array(w*h*4);renderer.readRenderTargetPixels(m,0,0,w,h,buf);const hist=new Array(10).fill(0);let n=0;for(let i=0;i<buf.length;i+=16){const d=buf[i]/255+buf[i+1]/65025;hist[Math.min(9,Math.floor(d*10))]++;n++;}return {w,h,hist:hist.map(x=>+(x/n).toFixed(3))};},
+ shadowExp:(o)=>{if(o.cast!==undefined){sun.castShadow=o.cast;scene.traverse(m=>{if(m.material)for(const x of [].concat(m.material))x.needsUpdate=true;});}const sc=sun.shadow.camera;if(o.near!==undefined)sc.near=o.near;if(o.far!==undefined)sc.far=o.far;sc.updateProjectionMatrix();if(o.bias!==undefined)sun.shadow.bias=o.bias;if(o.nb!==undefined)sun.shadow.normalBias=o.nb;if(o.type!==undefined){renderer.shadowMap.type=o.type;scene.traverse(m=>{if(m.material)for(const x of [].concat(m.material))x.needsUpdate=true;});}if(o.dist)SHADOW_DIST=o.dist;if(o.size){sun.shadow.mapSize.set(o.size,o.size);sun.shadow.map?.dispose();sun.shadow.map=null;}},
+ dbgShadow:()=>{const sc=sun.shadow.camera;const pr=v=>v.clone().applyMatrix4(sc.matrixWorldInverse).applyMatrix4(sc.projectionMatrix).toArray().map(n=>+n.toFixed(3));let casters=0,recv=0;scene.traverse(o=>{if(o.isMesh||o.isInstancedMesh){if(o.castShadow)casters++;if(o.receiveShadow)recv++;}});return {ext:[sc.left,sc.right,sc.top,sc.bottom,sc.near,sc.far],sunPos:sun.position.toArray().map(n=>+n.toFixed(1)),tgt:sun.target.position.toArray().map(n=>+n.toFixed(1)),cam:camera.position.toArray().map(n=>+n.toFixed(1)),camNdc:pr(camera.position),groundNdc:pr(new THREE.Vector3(camera.position.x,4,camera.position.z)),sme:renderer.shadowMap.enabled,smType:renderer.shadowMap.type,mapSize:sun.shadow.mapSize.toArray(),hasMap:!!sun.shadow.map,cast:sun.castShadow,casters,recv,bias:sun.shadow.bias,nb:sun.shadow.normalBias,sunDir:SUN_DIR.toArray().map(n=>+n.toFixed(3)),mode};},
  orbit:(x,y,z,dist,theta,phi)=>{setMode(MODE.VIEW);ctrl.auto=false;ctrl.tTarget.set(x,y,z);ctrl.target.set(x,y,z);ctrl.tDist=ctrl.dist=dist;ctrl.tTheta=ctrl.theta=theta;ctrl.tPhi=ctrl.phi=phi;applyOrbit();},
 };
 placeToggle();
