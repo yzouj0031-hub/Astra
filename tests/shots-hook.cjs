@@ -82,7 +82,7 @@ async function closeMenu(page){ const o = await page.evaluate(()=>{const m=docum
     for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day'); await page.waitForTimeout(300); }
     if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click(); await page.waitForTimeout(2500); }
     if (shot.journey) await closeMenu(page);
-    const info = await page.evaluate(() => (window.__astra && window.__astra.info) ? window.__astra.info() : null);
+    const info = await page.evaluate(j => j ? (window.__astraJourneyInfo || null) : ((window.__astra && window.__astra.info) ? window.__astra.info() : null), !!shot.journey);
     const file = path.join(OUT, shot.name + '.png');
     await page.screenshot({ path: file, timeout: 180000 });   // 软件渲染下一帧可能要一分多钟，别按默认 30 秒放弃
     console.log('拍了', file, ((Date.now()-t0)/1000).toFixed(0)+'s', info ? JSON.stringify(info) : '');

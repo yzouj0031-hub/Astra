@@ -205,7 +205,9 @@ function init(host){
   if(Math.floor(time*6)!==Math.floor((time-dt)*6))minimap();
   frameCount++;frameTime+=dt;
   if(frameTime>2){if(frameCount/frameTime<(mobile?45:27))lowFrames++;/* 手机上掉到 27 帧早就明显卡了，45 帧就开始降 */else lowFrames=0;if(lowFrames>=2&&quality&&!QUALITY_LOCKED){quality=0;renderer.setPixelRatio(1);renderer.shadowMap.enabled=false;active.scene.traverse(o=>{if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});}frameCount=frameTime=0;}
-  renderer.render(active.scene,active.camera);return true;
+  renderer.render(active.scene,active.camera);
+  if(renderer.info&&renderer.info.render)root.__astraJourneyInfo={calls:renderer.info.render.calls,triangles:renderer.info.render.triangles};   // 验收截图读这个：旅行地区不经主世界的 renderScene，那边的读数是主世界的旧值
+  return true;
  }
  function updateAudio(){if(ambient)ambient.gain.setTargetAtTime(soundOn&&active&&!book.open&&!menu.open? .045:0,audio.currentTime,.3);}
  function sound(){
