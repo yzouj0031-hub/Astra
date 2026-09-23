@@ -3375,6 +3375,9 @@ mat("dark",    0x3a3f46, {roughness:.7});
 mat("gold",    0xd7a93c, {roughness:.34, metalness:.7, envMapIntensity:1.3});
 mat("asphalt", 0x4a4d55, {roughness:.88, metalness:.08});
 mat("navy",    0x27395f, {roughness:.62, metalness:.12});
+mat("tent",    0xf3e9d6, {roughness:.8, side:THREE.DoubleSide});
+mat("flagA",   0xe0455b, {roughness:.6, side:THREE.DoubleSide});
+mat("flagB",   0x2f6fc0, {roughness:.6, side:THREE.DoubleSide});
 
 // 发光材质（夜间用）
 function glowMat(color, intensity){
@@ -3874,6 +3877,26 @@ function buildFlowers(){
   return mesh;
 }
 
+/* ---------- 各设施共用的小几何体 ---------- */
+// 桶形座椅：车削半壳（背面 -z），飞椅、跳楼机、碰碰车都用它
+const BUCKET = new THREE.LatheGeometry([[.05,0],[.58,0],[.72,.14],[.78,.5],[.76,.95],[.62,1.1]].map(p=>new THREE.Vector2(p[0],p[1])), 9, 0, Math.PI);
+const RESTRAINT = new THREE.TorusGeometry(.34,.05,4,8,Math.PI);
+// 荷叶边帷幔：一块半圆，转一圈按周长摆
+const VALANCE = new THREE.CylinderGeometry(1.0,1.0,.12,7,1,false,-Math.PI/2,Math.PI);
+function valanceRing(parent, r, y, matA, matB){
+  const n = Math.max(8, Math.round(r*Math.PI));
+  for(let i=0;i<n;i++){
+    const a = i/n*Math.PI*2;
+    const v = addMesh(parent, VALANCE, i%2?matA:matB, Math.cos(a)*r, y, Math.sin(a)*r, false);
+    v.rotation.order = "YXZ"; v.rotation.x = Math.PI/2; v.rotation.y = Math.PI/2 - a;
+  }
+}
+const SMALL_BULB = G.sph(.2,5,4);
+class Helix extends THREE.Curve{
+  constructor(r,h,turns){ super(); this.r=r; this.h=h; this.turns=turns; }
+  getPoint(t, o){ const a = t*this.turns*Math.PI*2; return (o||new THREE.Vector3()).set(Math.cos(a)*this.r, t*this.h, Math.sin(a)*this.r); }
+}
+
 /* ============================================================
    动态设施容器
    ============================================================ */
@@ -3907,15 +3930,33 @@ function buildFerrisWheel(px, pz){
 
   // 地基
   addMesh(root, G.box(20,1.2,14), M.steelDk, 0,.6,0, true, true);
-  // A 字支架（前后各一组）
+  // 格构 A 字支架（前后各一组）：每条腿两根弦杆 + 之字形腹杆
   [-6.5, 6.5].forEach(zs=>{
     // 顶端必须留在旋转轮毂和辐条之外，避免轮体每转一圈就穿过支柱
     const topZ = Math.sign(zs) * 4.3;
-    strut(root, -13,1,zs, 0,hubY,topZ, 1.0, M.steelA);
-    strut(root,  13,1,zs, 0,hubY,topZ, 1.0, M.steelA);
+    for(const sx of [-1,1]){
+      const ax=13*sx, ay=1, az=zs, bx=0, by=hubY, bz=topZ, N=9;
+      for(const w of [-.6,.6]) strut(root, ax,ay,az+w, bx,by,bz+w, .3, M.steelA);
+      for(let k=0;k<N;k++){
+        const t0=k/N, t1=(k+1)/N;
+        strut(root, ax+(bx-ax)*t0, ay+(by-ay)*t0, az+(bz-az)*t0-.6, ax+(bx-ax)*t1, ay+(by-ay)*t1, az+(bz-az)*t1+.6, .09, M.steelB);
+        strut(root, ax+(bx-ax)*t0, ay+(by-ay)*t0, az+(bz-az)*t0+.6, ax+(bx-ax)*t1, ay+(by-ay)*t1, az+(bz-az)*t1-.6, .09, M.steelB);
+      }
+    }
     strut(root, -9,12,zs, 9,12,zs, .38, M.steelB);
     strut(root, -5,21,zs, 5,21,zs, .34, M.steelB);
   });
+  // 上车月台：甲板 + 台阶 + 栏杆 + 操作亭（吊舱最低点在 y≈2.3，甲板面 2.0）
+  addMesh(root, G.box(9,1.9,3.2), M.steelDk, 0,.95,3.7, true, true);
+  addMesh(root, G.box(9.2,.12,3.4), M.wood, 0,1.96,3.7, false, true);
+  [[5.85,1.5],[6.85,1.0],[7.85,.5]].forEach(([z,y])=>addMesh(root, G.box(4,.5,1.0), M.steelDk, 0,y-.25,z, true, true));
+  for(const sx of [-1,1]){
+    for(const z of [2.3,3.7,5.1]) addMesh(root, FENCE.qpost, M.white, sx*4.4,2.55,z);
+    strut(root, sx*4.4,3.05,2.3, sx*4.4,3.05,5.1, .04, M.white);
+  }
+  addMesh(root, G.box(2.4,2.6,2.2), M.cream, 7.2,1.3,4.6, true, true);
+  addMesh(root, G.box(2.7,.2,2.5), M.crimson, 7.2,2.7,4.6);
+  addMesh(root, G.box(1.6,.9,.1), windowMat, 7.2,1.6,3.44, false);
   strut(root, 0,hubY,-2.3, 0,hubY,2.3, 1.1, M.steelDk);
 
   // 轮体
@@ -3949,9 +3990,14 @@ function buildFerrisWheel(px, pz){
     const nb = new THREE.Mesh(G.sph(.5,10,8), spokeCols[i%3]);
     nb.position.set(Math.cos(a)*(R+1.0), Math.sin(a)*(R+1.0), 0);
     wheel.add(nb);
+    // 辐条上一串小灯泡（朝园区那一面）
+    for(let k=1;k<=6;k++){ const r = R*k/7.2; addMesh(wheel, SMALL_BULB, bulbMat, Math.cos(a)*r, Math.sin(a)*r, 2.2, false); }
   }
 
-  // 吊舱
+  // 吊舱：一份车削壳体（外张的底、收腰、玻璃带、穹顶）六色轮换，每色三舱刚好合批
+  const gondolaGeo = new THREE.LatheGeometry([[0,-3.75],[1.25,-3.75],[1.58,-3.55],[1.5,-3.3],[1.36,-3.05],[1.36,-2.1],[1.44,-1.9],[1.52,-1.65],[1.42,-1.45],[1.1,-1.22],[.6,-1.06],[0,-1.0]]
+                       .map(p=>new THREE.Vector2(p[0],p[1])), 14);
+  const glassGeo = new THREE.CylinderGeometry(1.41,1.41,.9,14,1,true), jambGeo = G.box(.1,1.5,.08), lintelGeo = G.box(1.2,.1,.08);
   const cabinList = [];
   const cabinCols = [M.red, M.yellow, M.skyblue, M.mint, M.purple, M.orange];
   for(let i=0;i<cabins;i++){
@@ -3963,12 +4009,13 @@ function buildFerrisWheel(px, pz){
     const cab = new THREE.Group();
     arm.add(cab);
     addMesh(cab, G.cyl(.16,.16,1.4,6), M.steelDk, 0,-.7,0);
-    const body = addMesh(cab, G.cyl(1.5,1.35,2.1,14), cabinCols[i%6], 0,-2.5,0);
+    const body = addMesh(cab, gondolaGeo, cabinCols[i%6], 0,0,0);
     body.receiveShadow = true;
-    addMesh(cab, G.sph(1.5,14,8), cabinCols[i%6], 0,-1.55,0).scale.y=.45;
-    addMesh(cab, G.cyl(1.55,1.55,.28,14), M.cream, 0,-3.6,0);
-    addMesh(cab, G.tor(1.42,.12,6,16), M.cream, 0,-2.2,0).rotation.x=Math.PI/2;
-    const gl = addMesh(cab, G.cyl(1.38,1.28,1.0,14), windowMat, 0,-2.5,0, false);
+    addMesh(cab, glassGeo, windowMat, 0,-2.58,0, false);
+    addMesh(cab, G.tor(1.5,.08,5,16), M.cream, 0,-2.1,0, false).rotation.x=Math.PI/2;
+    addMesh(cab, G.tor(1.5,.08,5,16), M.cream, 0,-3.05,0, false).rotation.x=Math.PI/2;
+    addMesh(cab, jambGeo, M.cream, -.6,-2.6,1.42, false); addMesh(cab, jambGeo, M.cream, .6,-2.6,1.42, false);
+    addMesh(cab, lintelGeo, M.cream, 0,-1.9,1.42, false);
 
     if(i===0){                                   // 这一舱可以坐进去
       addMesh(cab, G.box(2.1,.16,.62), M.cream, 0,-2.95,-.72);   // 长凳
@@ -4028,13 +4075,22 @@ function buildCarousel(px, pz){
   addMesh(spinner, G.sph(1.05,14,10), M.gold, 0,15.9,0);
   addMesh(spinner, G.cone(.5,1.5,8), neonPink, 0,17.1,0, false);
 
-  // 顶棚边缘灯泡
+  // 圆板：镜面板一圈；两圈灯泡；下沿红白荷叶边
+  addMesh(spinner, new THREE.CylinderGeometry(R+1.5,R+1.5,1.45,40,1,true), M.cream, 0,10.35,0);
+  const mirrorGeo = G.box(1.1,.85,.06), mirrorFrame = G.box(1.3,1.05,.04);
+  for(let i=0;i<20;i++){
+    const a = i/20*Math.PI*2;
+    addMesh(spinner, mirrorFrame, M.gold, Math.cos(a)*(R+1.52), 10.35, Math.sin(a)*(R+1.52), false).rotation.y = Math.PI/2 - a;
+    addMesh(spinner, mirrorGeo, M.steelA, Math.cos(a)*(R+1.56), 10.35, Math.sin(a)*(R+1.56), false).rotation.y = Math.PI/2 - a;
+  }
   for(let i=0;i<28;i++){
     const a = i/28*Math.PI*2;
-    const b = new THREE.Mesh(G.sph(.24,8,6), bulbMat);
-    b.position.set(Math.cos(a)*(R+1.3), 9.1, Math.sin(a)*(R+1.3));
-    spinner.add(b);
+    addMesh(spinner, SMALL_BULB, bulbMat, Math.cos(a)*(R+1.3), 9.1, Math.sin(a)*(R+1.3), false);
+    addMesh(spinner, SMALL_BULB, bulbMat, Math.cos(a+.11)*(R+1.55), 11.2, Math.sin(a+.11)*(R+1.55), false);
   }
+  valanceRing(spinner, R+1.5, 9.05, M.red, M.cream);
+  // 麻花柱：一根共用的螺旋管缠在直杆外面
+  const twistGeo = new THREE.TubeGeometry(new Helix(.12,8.6,7), 60, .06, 3, false);
 
   // 木马
   const horseMats = [M.white, M.cream, M.pink, M.skyblue];
@@ -4049,6 +4105,7 @@ function buildCarousel(px, pz){
     spinner.add(holder);
 
     addMesh(holder, G.cyl(.16,.16,9.0,8), M.gold, 0,5.0,0);
+    addMesh(holder, twistGeo, M.gold, 0,.6,0, false);
 
     const h = new THREE.Group();
     holder.add(h);
@@ -4159,10 +4216,15 @@ function buildCoaster(px, pz){
   spine.castShadow = true;
   root.add(spine);
 
-  // 轨枕
+  // 下弦杆：和主梁、腹杆一起把轨道撑成一榀桁架
+  const chord = new THREE.Mesh(new THREE.TubeGeometry(curve, 300, .18, 5, true), M.steelDk);
+  chord.position.y = -1.9; chord.castShadow = true; root.add(chord);
+
+  // 轨枕（带截面）+ 轨座 + 腹杆
   const TIES = isSmall ? 96 : 150;
   const frames = curve.computeFrenetFrames(TIES, true);
-  const tieGeo = G.box(3.1,.2,.42);
+  const tieGeo = G.box(3.1,.22,.42), chairGeo = G.box(.34,.24,.42), webGeo = G.cyl(.06,.06,1.0,5);
+  const _tp = new THREE.Vector3();
   for(let i=0;i<TIES;i++){
     const t = i/TIES;
     const p = curve.getPointAt(t);
@@ -4172,26 +4234,60 @@ function buildCoaster(px, pz){
     tie.quaternion.setFromRotationMatrix(m4);
     tie.castShadow = true;
     root.add(tie);
+    for(const s of [-1,1]){
+      _tp.copy(p).addScaledVector(frames.binormals[i], 1.25*s).addScaledVector(frames.normals[i], .2);
+      const ch = addMesh(root, chairGeo, M.steelDk, _tp.x,_tp.y,_tp.z, false); ch.quaternion.copy(tie.quaternion);
+    }
+    addMesh(root, webGeo, M.steelB, p.x, p.y-1.4, p.z, false);
   }
 
-  // 支撑柱
+  // 支撑排架：两条细腿 + X 形斜撑 + 顶帽，代替一根孤零零的粗柱
+  const bentCap = G.box(2.6,.36,.7), bentFoot = G.box(1.2,.4,1.2), legGeos = new Map();
   for(let i=0;i<44;i++){
     const t = i/44;
     const p = curve.getPointAt(t);
     if(p.y < 3.2) continue;
-    const h = p.y - 0.9;
-    const col = new THREE.Mesh(G.cyl(.3,.42,h,8), M.steelA);
-    col.position.set(p.x, h/2, p.z);
-    col.castShadow = true;
-    root.add(col);
-    // 斜撑
-    if(i%2===0 && p.y>8){
-      strut(root, p.x, h*0.55, p.z, p.x+ (p.x>0?3.5:-3.5), 0.2, p.z + (p.z>0?3.0:-3.0), .17, M.steelB);
-      strut(root, p.x, h*0.55, p.z, p.x+ (p.x>0?-3.0:3.0), 0.2, p.z + (p.z>0?-3.5:3.5), .17, M.steelB);
+    const h = p.y - 1.0;
+    const tn = curve.getTangentAt(t), bl = Math.hypot(tn.x,tn.z)||1, nx = -tn.z/bl, nz = tn.x/bl;
+    const key = h.toFixed(1);
+    if(!legGeos.has(key)) legGeos.set(key, G.cyl(.16,.22,h,7));
+    for(const s of [-1,1]){
+      addMesh(root, legGeos.get(key), M.steelA, p.x+nx*.8*s, h/2, p.z+nz*.8*s);
+      addMesh(root, bentFoot, M.steelDk, p.x+nx*.8*s, .2, p.z+nz*.8*s, true, true);
     }
-    addMesh(root, G.box(2.0,.5,2.0), M.steelDk, p.x, .25, p.z, true, true);
+    for(let y=2.2; y<h-1.5; y+=4){
+      const y2 = Math.min(h-.6, y+4);
+      strut(root, p.x-nx*.8, y, p.z-nz*.8, p.x+nx*.8, y2, p.z+nz*.8, .07, M.steelB);
+      strut(root, p.x+nx*.8, y, p.z+nz*.8, p.x-nx*.8, y2, p.z-nz*.8, .07, M.steelB);
+    }
+    addMesh(root, bentCap, M.steelDk, p.x, h-.18, p.z).rotation.y = Math.atan2(-nz,nx);
     addObstacle(px + p.x, pz + p.z, 1.7);      // 柱子挡人（root 有偏移，要换成世界坐标）
   }
+
+  // 提升段的检修步道：木板 + 扶手（外侧）
+  const plankGeo = G.box(1.1,.08,.5), railPostGeo = G.cyl(.04,.04,1.0,4), railPts = [];
+  let plankN = 0;
+  for(let t=.07; t<=.25; t+=.006){
+    const p = curve.getPointAt(t), tn = curve.getTangentAt(t);
+    const bl = Math.hypot(tn.x,tn.z)||1, nx = -tn.z/bl, nz = tn.x/bl;
+    const pl = addMesh(root, plankGeo, M.wood, p.x+nx*2.2, p.y-.55, p.z+nz*2.2);
+    pl.rotation.order = "YXZ"; pl.rotation.y = Math.atan2(-nz,nx); pl.rotation.x = Math.atan2(tn.y, bl);
+    if(plankN%5===0) addMesh(root, railPostGeo, M.white, p.x+nx*2.7, p.y-.05, p.z+nz*2.7, false);
+    railPts.push(new THREE.Vector3(p.x+nx*2.7, p.y+.45, p.z+nz*2.7));
+    plankN++;
+  }
+  addMesh(root, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 40, .045, 4, false), M.white, 0,0,0, false);
+
+  // 车站：轨道最低段外侧的月台、立柱、坡顶和排队栏
+  addMesh(root, G.box(16,1.5,3.2), M.plaza, 6,.75,43.2, true, true);
+  addMesh(root, G.box(16.2,.12,3.4), M.wood, 6,1.56,43.2, false, true);
+  addMesh(root, G.box(16,.3,.3), M.yellow, 6,1.6,41.7, false);
+  [[-1,42],[13,42],[-1,44.6],[13,44.6]].forEach(([x,z])=>addMesh(root, G.cyl(.16,.2,5.2,7), M.steelA, x,4.1,z));
+  const sroof = addMesh(root, G.box(18,.2,5.2), M.crimson, 6,6.9,43.3); sroof.rotation.x = 0.16;
+  addMesh(root, G.box(18,.5,.14), M.cream, 6,6.7,40.75, false);
+  textSign(root, "飞越过山车", 5,.9, 6,5.9,40.7, "#f7efdf", "#b4283e");
+  addObstacle(px+2, pz+43.2, 3.2); addObstacle(px+10, pz+43.2, 3.2);
+  fenceRun(px-2, pz+45.6, px+14, pz+45.6, 6);
 
   // 列车
   const train = new THREE.Group();
@@ -4332,6 +4428,7 @@ function buildSwingRide(px, pz){
   const seats = [];
   const NS = 16;
   const seatCols = [M.red,M.yellow,M.mint,M.purple,M.orange,M.skyblue];
+  const chainGeo = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(0,0,0), new THREE.Vector3(0,-3.7,-.45), new THREE.Vector3(0,-7.4,0)), 12, .045, 4, false);
   for(let i=0;i<NS;i++){
     const a = i/NS*Math.PI*2;
     const pivot = new THREE.Group();
@@ -4341,16 +4438,17 @@ function buildSwingRide(px, pz){
 
     const swing = new THREE.Group();
     pivot.add(swing);
-    // 两根吊链
-    strut(swing, -.6,0,0, -.6,-7.4,0, .05, M.steelDk);
-    strut(swing,  .6,0,0,  .6,-7.4,0, .05, M.steelDk);
+    // 两根微微外鼓的吊链
+    addMesh(swing, chainGeo, M.steelDk, -.6,0,0, false);
+    addMesh(swing, chainGeo, M.steelDk,  .6,0,0, false);
     const seat = new THREE.Group();
     seat.position.y = -7.6;
     swing.add(seat);
     const sc = seatCols[i%6];
-    addMesh(seat, G.box(1.7,.28,1.5), sc, 0,0,0).receiveShadow=true;
-    addMesh(seat, G.box(1.7,1.6,.22), sc, 0,.8,-.65);
-    addMesh(seat, G.box(1.7,.16,.16), M.steelDk, 0,.6,.7);
+    const shell = addMesh(seat, BUCKET, sc, 0,-.1,-.1); shell.rotation.y = Math.PI/2; shell.scale.set(1.1,1.35,1.0); shell.receiveShadow = true;
+    addMesh(seat, G.box(1.3,.16,1.1), sc, 0,0,.05, false);
+    addMesh(seat, G.box(1.3,.16,.16), M.steelDk, 0,.55,.68, false);
+    for(const rx of [-.3,.3]){ const r = addMesh(seat, RESTRAINT, M.steelDk, rx,1.02,-.05, false); r.rotation.y = Math.PI/2; }
     // 乘客
     addMesh(seat, G.cyl(.28,.32,.9,8), [M.pink,M.green,M.skyblue,M.yellow][i%4], 0,.6,0);
     addMesh(seat, G.sph(.3,10,8), M.cream, 0,1.22,0);
@@ -4412,16 +4510,29 @@ function buildPirateShip(px, pz){
   ship.position.y = -14.6;
   pend.add(ship);
 
-  // 船体
-  const hull = addMesh(ship, G.box(15,2.6,4.4), M.woodDk, 0,0,0);
-  hull.receiveShadow = true;
-  addMesh(ship, G.box(15.4,.5,4.8), M.gold, 0,1.35,0);
-  addMesh(ship, G.box(13,1.6,4.2), M.wood, 0,2.0,0);
-  // 船首船尾翘起
-  const bowGeo = G.box(3.4,3.0,4.2);
-  const bow = addMesh(ship, bowGeo, M.woodDk, 8.0,1.3,0); bow.rotation.z = -0.4;
-  const stern = addMesh(ship, bowGeo, M.woodDk, -8.0,1.3,0); stern.rotation.z = 0.4;
-  addMesh(ship, G.cone(.9,2.6,8), M.gold, 9.6,3.4,0).rotation.z=-1.0;
+  // 船体：舷弧轮廓挤出加倒角，外板条、金色腰带、栏杆柱缆绳、船首像
+  const hullShape = new THREE.Shape();
+  hullShape.moveTo(-6.8,-1.3); hullShape.lineTo(6.8,-1.3);
+  hullShape.quadraticCurveTo(8.8,-1.0, 9.4,2.6);       // 船首上翘
+  hullShape.quadraticCurveTo(1.0,1.15, -8.4,2.3);      // 舷弧
+  hullShape.quadraticCurveTo(-8.4,0.2, -6.8,-1.3);     // 船尾
+  const hullGeo = new THREE.ExtrudeGeometry(hullShape, {depth:4.0, bevelEnabled:true, bevelThickness:.5, bevelSize:.45, bevelSegments:3, curveSegments:10});
+  hullGeo.translate(0,0,-2.0);
+  const hull = addMesh(ship, hullGeo, M.woodDk, 0,0,0); hull.receiveShadow = true;
+  addMesh(ship, G.box(13.6,.4,3.9), M.wood, 0,2.1,0, true, true);      // 甲板
+  const plankStrip = G.box(13.4,.14,.06);
+  for(const s of [-1,1]) for(const y of [-.75,-.15,.45,1.05]) addMesh(ship, plankStrip, M.wood, 0,y,s*2.53, false);
+  const sheer = new THREE.QuadraticBezierCurve3(new THREE.Vector3(9.4,2.6,0), new THREE.Vector3(1.0,1.15,0), new THREE.Vector3(-8.4,2.3,0));
+  const ropePost = G.cyl(.05,.05,.7,4);
+  for(const s of [-1,1]){
+    const sc = sheer.clone(); sc.v0.z = sc.v1.z = sc.v2.z = s*2.56;
+    addMesh(ship, new THREE.TubeGeometry(sc, 12, .09, 5, false), M.gold, 0,-.32,0, false);
+    const ropePts = [];
+    for(let k=0;k<=8;k++){ const p = sheer.getPoint(k/8); addMesh(ship, ropePost, M.woodDk, p.x, p.y+.32, s*2.2, false); ropePts.push(new THREE.Vector3(p.x, p.y+.7, s*2.2)); }
+    addMesh(ship, new THREE.TubeGeometry(new THREE.CatmullRomCurve3(ropePts), 24, .035, 4, false), M.cream, 0,0,0, false);
+  }
+  addMesh(ship, G.cone(.9,2.6,8), M.gold, 9.9,3.7,0).rotation.z=-1.0;
+  addMesh(ship, G.sph(.5,8,6), M.gold, 10.9,4.4,0);
   // 桅杆 + 旗
   addMesh(ship, G.cyl(.24,.3,9,8), M.wood, 0,6.0,0);
   const flag = addMesh(ship, G.box(3.0,1.6,.1), M.crimson, 1.6,9.6,0);
@@ -4441,7 +4552,7 @@ function buildPirateShip(px, pz){
 
   // 舷窗
   for(let i=0;i<6;i++){
-    addMesh(ship, G.cyl(.32,.32,.15,10), windowMat, -6+i*2.4, .4, 2.25, false).rotation.x=Math.PI/2;
+    addMesh(ship, G.cyl(.32,.32,.15,10), windowMat, -6+i*2.4, .15, 2.5, false).rotation.x=Math.PI/2;
   }
 
   animators.push((dt,t,speed)=>{
@@ -4507,11 +4618,12 @@ function buildDropTower(px, pz){
     s.position.set(Math.cos(a)*5.0, -1.4, Math.sin(a)*5.0);
     s.rotation.y=-a+Math.PI/2;
     carrier.add(s);
-    addMesh(s, G.box(1.5,1.7,1.4), seatCols[i%6], 0,0,0).receiveShadow=true;
+    const shell = addMesh(s, BUCKET, seatCols[i%6], 0,-.75,-.2); shell.rotation.y = Math.PI/2; shell.scale.set(1.05,1.5,1.0); shell.receiveShadow = true;
     addMesh(s, G.box(1.4,.22,1.2), M.steelDk, 0,-.9,0);
+    addMesh(s, G.box(1.2,.16,1.0), seatCols[i%6], 0,-.62,.1, false);
     addMesh(s, G.cyl(.26,.3,.8,8), M.cream, 0,.25,.2);
     addMesh(s, G.sph(.28,10,8), M.cream, 0,.85,.2);
-    addMesh(s, G.box(1.3,.18,.18), M.gold, 0,.5,.62);
+    for(const rx of [-.3,.3]){ const r = addMesh(s, RESTRAINT, M.steelDk, rx,.95,.05, false); r.rotation.y = Math.PI/2; }
     if(i===0){
       // 座椅朝外（+Z），相机 -Z 需转 180°，并略微俯视看地面
       // 越过乘客头部和前护栏，让上升、下坠时都能看清园区
@@ -4656,15 +4768,34 @@ function buildBumperCars(px, pz){
   }
   const roof = new THREE.Mesh(new THREE.TorusGeometry(R+1.0,.42,8,52), M.gold);
   roof.rotation.x=Math.PI/2; roof.position.y=8.8; roof.castShadow=true; root.add(roof);
+  // 浅锥顶棚 + 荷叶边 + 顶棚下的杆格和灯泡
+  const tent = addMesh(root, new THREE.ConeGeometry(R+2.4,3.4,36,1,true), M.tent, 0,10.55,0, true);
+  valanceRing(root, R+2.2, 8.5, M.skyblue, M.cream);
+  addMesh(root, G.cone(.5,1.4,8), M.gold, 0,12.9,0, false);
+  const gridLong = G.cyl(.06,.06,36,5), gridShort = G.cyl(.06,.06,28,5);
+  for(const s of [-1,1]){
+    addMesh(root, gridLong, M.steelDk, 0,8.55,s*4, false).rotation.z=Math.PI/2;
+    addMesh(root, gridLong, M.steelDk, s*4,8.55,0, false).rotation.x=Math.PI/2;
+    addMesh(root, gridShort, M.steelDk, 0,8.55,s*12, false).rotation.z=Math.PI/2;
+    addMesh(root, gridShort, M.steelDk, s*12,8.55,0, false).rotation.x=Math.PI/2;
+  }
+  for(const gx of [-12,-4,4,12]) for(const gz of [-12,-4,4,12]) addMesh(root, SMALL_BULB, bulbMat, gx,8.3,gz, false);
 
-  const carCols=[M.red,M.yellow,M.skyblue,M.mint,M.purple,M.orange,M.pink,M.blue];
+  // 车身：圆角矩形挤出 + 倒角，三色各三辆好合批；座舱是桶形壳
+  const carShape = new THREE.Shape();
+  carShape.moveTo(-.7,-1.6); carShape.lineTo(.7,-1.6); carShape.quadraticCurveTo(1.3,-1.6,1.3,-1.0); carShape.lineTo(1.3,1.0);
+  carShape.quadraticCurveTo(1.3,1.6,.7,1.6); carShape.lineTo(-.7,1.6); carShape.quadraticCurveTo(-1.3,1.6,-1.3,1.0); carShape.lineTo(-1.3,-1.0); carShape.quadraticCurveTo(-1.3,-1.6,-.7,-1.6);
+  const carBody = new THREE.ExtrudeGeometry(carShape, {depth:.5, bevelEnabled:true, bevelThickness:.22, bevelSize:.2, bevelSegments:3, curveSegments:6});
+  carBody.rotateX(-Math.PI/2);
+  const carCols=[M.red,M.yellow,M.skyblue];
   const cars=[];
   for(let i=0;i<8;i++){
     const c=new THREE.Group(); root.add(c);
-    const cm=carCols[i%carCols.length];
-    addMesh(c,G.box(2.8,.72,3.4),cm,0,1.45,0).receiveShadow=true;
-    addMesh(c,G.box(2.3,.58,1.25),M.dark,0,1.95,-.35);
-    addMesh(c,G.tor(1.75,.18,7,20),M.cream,0,1.35,0).rotation.x=Math.PI/2;
+    const cm=carCols[i%3];
+    addMesh(c,carBody,cm,0,1.3,0).receiveShadow=true;
+    const well=addMesh(c,BUCKET,M.dark,0,1.62,-.35); well.rotation.y=Math.PI/2; well.scale.set(1.0,.9,.95);
+    addMesh(c,G.box(1.1,.14,.9),M.cream,0,1.68,-.2,false);
+    const bumper=addMesh(c,G.tor(1.9,.16,7,22),M.cream,0,1.35,0); bumper.rotation.x=Math.PI/2; bumper.scale.set(.85,1.05,1);
     addMesh(c,G.cyl(.07,.07,4.9,5),M.steelDk,0,4.15,0);
     addMesh(c,G.sph(.18,8,6),bulbMat,0,6.6,0,false);
     if(i===0){
@@ -4922,33 +5053,61 @@ function buildStage(px,pz){
 function buildGate(pz){
   const root = new THREE.Group(); root.position.set(0,0,pz); scene.add(root);
 
-  [-11, 11].forEach(x=>{
+  const flagShape = new THREE.Shape(); flagShape.moveTo(0,0); flagShape.lineTo(1.7,-.35); flagShape.lineTo(0,-.75); flagShape.closePath();
+  const flagGeo = new THREE.ShapeGeometry(flagShape), flagPole = G.cyl(.05,.05,3.2,4);
+  const mullionV = G.box(.08,1.8,.06), mullionH = G.box(1.1,.08,.06), sill = G.box(1.4,.16,.36);
+  [-11, 11].forEach((x,ti)=>{
     addMesh(root, G.box(5.5,1.2,5.5), M.cream, x,.6,0, true, true);
     addMesh(root, G.cyl(2.1,2.4,13,14), M.cream, x,7.1,0, true, true);
     addMesh(root, G.cyl(2.6,2.6,.8,14), M.gold, x,13.9,0);
     addMesh(root, G.cone(2.5,4.0,14), M.crimson, x,16.3,0);
     addMesh(root, G.sph(.6,10,8), M.gold, x,18.6,0);
     addMesh(root, G.cone(.4,1.2,8), neonMint, x,19.6,0, false);
-    // 塔身窗
+    // 塔身束带、窗棂、窗台
+    addMesh(root, G.tor(2.36,.12,5,18), M.gold, x,3.6,0, false).rotation.x = Math.PI/2;
+    addMesh(root, G.tor(2.22,.12,5,18), M.gold, x,10.2,0, false).rotation.x = Math.PI/2;
     for(let k=0;k<3;k++){
       addMesh(root, G.box(1.1,1.8,.2), windowMat, x, 5+k*3.2, 2.35, false);
+      addMesh(root, mullionV, M.dark, x, 5+k*3.2, 2.47, false);
+      addMesh(root, mullionH, M.dark, x, 5+k*3.2, 2.47, false);
+      addMesh(root, sill, M.cream, x, 4.05+k*3.2, 2.4, false);
+    }
+    // 三角旗
+    addMesh(root, flagPole, M.dark, x,21.6,0, false);
+    for(let k=0;k<2;k++){
+      const f = addMesh(root, flagGeo, k?M.flagB:M.flagA, x, 23.1-k*.95, 0, false);
+      f.rotation.y = ti ? -.5 : .5;
     }
   });
 
-  // 拱门
+  // 拱门：红色主拱 + 外圈金拱挂灯泡
   const arch = new THREE.Mesh(new THREE.TorusGeometry(11, 1.1, 10, 32, Math.PI), M.crimson);
   arch.position.y = 13.2; arch.castShadow = true;
   root.add(arch);
+  const arch2 = new THREE.Mesh(new THREE.TorusGeometry(12.5, .32, 6, 32, Math.PI), M.gold);
+  arch2.position.y = 13.2; arch2.castShadow = true;
+  root.add(arch2);
   addMesh(root, G.box(24,2.4,1.6), M.gold, 0,13.2,0);
   addMesh(root, G.box(15,3.2,.5), M.cream, 0,17.0,.9);
-  addMesh(root, G.box(13,1.4,.3), M.crimson, 0,17.0,1.2);
+  textSign(root, "星辉乐园", 13.8, 2.7, 0,17.0,1.17, "#f7efdf", "#b4283e", "STARLIGHT FUNFAIR");
+  textSign(root, "星辉乐园", 13.8, 2.7, 0,17.0,.63, "#f7efdf", "#b4283e", "STARLIGHT FUNFAIR").rotation.y = Math.PI;
 
-  // 拱门灯泡
+  // 拱门灯泡：坐在金拱正面
   for(let i=0;i<=22;i++){
     const a = Math.PI*i/22;
     const b = new THREE.Mesh(G.sph(.3,8,6), bulbMat);
-    b.position.set(Math.cos(a)*12.3, 13.2 + Math.sin(a)*12.3, 0);
+    b.position.set(Math.cos(a)*12.5, 13.2 + Math.sin(a)*12.5, .4);
     root.add(b);
+  }
+  // 检票闸机：两台立在主道两侧，中间 9 米通道留空
+  const tsPost = G.cyl(.09,.09,1.0,6), tsArm = G.cyl(.03,.03,.7,4), tsBox = G.box(.5,.42,.32), tsRail = G.box(1.3,.05,.05);
+  for(const s of [-1,1]){
+    const x = s*6.3, z = -1.5;
+    addMesh(root, tsPost, M.steelDk, x,.5,z);
+    addMesh(root, tsBox, M.crimson, x,1.1,z, false);
+    for(let k=0;k<3;k++){ const a = k*Math.PI*2/3; const arm = addMesh(root, tsArm, M.steelA, x+Math.cos(a)*.3, .95-Math.sin(a)*.1, z+Math.sin(a)*.3, false); arm.rotation.order="YXZ"; arm.rotation.y = -a; arm.rotation.x = Math.PI/2; }
+    addMesh(root, tsRail, M.steelA, x+s*.9,.9,z, false);
+    addObstacle(x, pz+z, .8);
   }
 
   // 售票亭
@@ -4966,34 +5125,47 @@ function buildGate(pz){
 
 function buildFountain(){
   const root = new THREE.Group(); scene.add(root);
-  addMesh(root, G.cyl(9,9.6,1.4,32), M.cream, 0,.7,0, true, true);
-  const w1 = addMesh(root, G.cyl(8.2,8.2,.4,32), M.water, 0,1.3,0, false, true);
-  addMesh(root, G.cyl(4.4,5.0,1.6,24), M.cream, 0,1.8,0, true, true);
-  const w2 = addMesh(root, G.cyl(4.0,4.0,.3,24), M.water, 0,2.6,0, false);
-  addMesh(root, G.cyl(1.0,1.4,4.2,16), M.gold, 0,4.0,0);
-  addMesh(root, G.cyl(2.6,2.6,.4,20), M.cream, 0,6.0,0);
-  addMesh(root, G.sph(1.0,14,10), M.gold, 0,7.0,0);
+  const V2 = p=>new THREE.Vector2(p[0],p[1]);
+  // 三层车削水盘：外池带翻边、中盘外张、基座收腰
+  addMesh(root, new THREE.LatheGeometry([[8.0,0],[9.6,0],[9.75,.55],[9.55,1.05],[9.1,1.35],[8.4,1.42],[8.15,1.25],[8.15,1.0],[8.0,1.0]].map(V2), 40), M.cream, 0,0,0, true, true);
+  addMesh(root, G.cyl(8.15,8.15,1.0,40), M.cream, 0,.5,0, false, true);
+  const w1 = addMesh(root, G.cyl(8.1,8.1,.36,32), M.water, 0,1.2,0, false, true);
+  addMesh(root, new THREE.LatheGeometry([[0,1.0],[1.6,1.0],[1.5,1.8],[1.9,2.5],[3.6,3.0],[4.9,3.35],[5.1,3.65],[4.85,3.8],[4.4,3.65],[4.25,3.4],[4.25,3.2],[0,3.1]].map(V2), 30), M.cream, 0,0,0, true, true);
+  const w2 = addMesh(root, G.cyl(4.2,4.2,.3,24), M.water, 0,3.45,0, false);
+  addMesh(root, new THREE.LatheGeometry([[0,3.3],[1.5,3.3],[1.1,3.9],[.85,4.7],[1.0,5.5],[1.7,5.95],[2.5,6.1],[2.55,6.35],[2.2,6.3],[1.2,6.55],[0,6.6]].map(V2), 20), M.gold, 0,0,0, true, true);
+  addMesh(root, G.sph(.85,14,10), M.gold, 0,7.2,0);
 
-  // 水柱
+  // 弧形水柱：从顶盏抛向外池的贝塞尔弧，水珠沿弧飞
   const jets = [];
   for(let i=0;i<8;i++){
-    const a=i/8*Math.PI*2;
-    const j = new THREE.Mesh(G.cyl(.1,.24,3.4,7), M.water);
-    j.position.set(Math.cos(a)*2.2, 7.6, Math.sin(a)*2.2);
-    j.rotation.z = Math.cos(a)*0.45;
-    j.rotation.x = -Math.sin(a)*0.45;
+    const a = i/8*Math.PI*2, ca = Math.cos(a), sa = Math.sin(a);
+    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(ca*1.2,7.4,sa*1.2), new THREE.Vector3(ca*4.2,10.4,sa*4.2), new THREE.Vector3(ca*7.0,1.5,sa*7.0));
+    const j = new THREE.Mesh(new THREE.TubeGeometry(curve, 18, .12, 5, false), M.water);
     root.add(j);
-    jets.push({j, phase:i*0.7, baseY:7.6});
+    jets.push({j, curve, phase:i*0.7});
   }
   const center = new THREE.Mesh(G.cyl(.16,.34,4.6,8), M.water);
   center.position.y = 9.6; root.add(center);
+  const dropMat = new THREE.MeshStandardMaterial({color:0xd8f3ff, roughness:.2, metalness:.1, transparent:true, opacity:.85});
+  const NDROP = isSmall ? 32 : 64;
+  const drops = new THREE.InstancedMesh(G.sph(.13,5,4), dropMat, NDROP);
+  drops.frustumCulled = false; root.add(drops);
+  const _dm = new THREE.Matrix4(), _dp = new THREE.Vector3(), _dq = new THREE.Quaternion(), _ds = new THREE.Vector3();
 
   animators.push((dt,t,speed)=>{
     for(let i=0;i<jets.length;i++){
-      const s = 0.75 + Math.sin(t*2.2 + jets[i].phase)*0.25;
+      const s = 0.92 + Math.sin(t*2.2 + jets[i].phase)*0.08;
       jets[i].j.scale.y = s;
-      jets[i].j.position.y = jets[i].baseY + s*0.4;
     }
+    for(let i=0;i<NDROP;i++){
+      const jet = jets[i%8], u = ((t*0.5 + (i/8|0)/8 + i*0.013) % 1 + 1) % 1;
+      jet.curve.getPoint(u, _dp);
+      _dp.y += Math.sin(t*3+i)*.08;
+      const sc = .7 + Math.sin(u*Math.PI)*.6;
+      _ds.set(sc,sc,sc);
+      _dm.compose(_dp,_dq,_ds); drops.setMatrixAt(i,_dm);
+    }
+    drops.instanceMatrix.needsUpdate = true;
     center.scale.y = 0.85 + Math.sin(t*1.7)*0.2;
     w1.rotation.y += dt*0.1;
   });
@@ -5771,7 +5943,7 @@ const resortRoot=parkModule.root;resortRoot.position.copy(resortOrigin);resortRo
 // World collisions share the park's original obstacle footprints.
 for(const o of parkModule.obstacles)addObs(o.x*resortScale,-510+o.z*resortScale,o.r*resortScale);
 // Merge repeated render geometry while preserving the moving scene hierarchy and seats.
-function instanceResortMeshes(root){
+function instanceResortMeshes(root,keep){
  const groups=new Map(),batches=[];
  root.updateMatrixWorld(true);
  root.traverse(o=>{
@@ -5781,7 +5953,7 @@ function instanceResortMeshes(root){
   if(!groups.has(key))groups.set(key,[]);groups.get(key).push(o);
  });
  for(const items of groups.values()){
-  if(items.length<3)continue;
+  if(items.length<3||(keep&&!keep(items)))continue;
   const mesh=new THREE.InstancedMesh(items[0].geometry,items[0].material,items.length);
   mesh.castShadow=items[0].castShadow;mesh.receiveShadow=items[0].receiveShadow;mesh.frustumCulled=false;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);root.add(mesh);items.forEach(o=>o.visible=false);batches.push({mesh,items});
@@ -5790,16 +5962,19 @@ function instanceResortMeshes(root){
  return {batches,update(){root.updateMatrixWorld(true);inverse.copy(root.matrixWorld).invert();for(const b of batches){b.items.forEach((o,i)=>{matrix.multiplyMatrices(inverse,o.matrixWorld);b.mesh.setMatrixAt(i,matrix);});b.mesh.instanceMatrix.needsUpdate=true;}}};
 }
 const boardwalkInstances=instanceResortMeshes(boardwalk);boardwalkInstances.update();
-const resortInstances=instanceResortMeshes(resortRoot);
-resortInstances.update();
-// Identify animated subtrees, then consolidate the remaining static scenery.
+// Identify animated subtrees first: a handful of static parts is cheaper inside the per-material merge below than as an instanced batch of its own,
+// so only animated groups (which must stay instanced) and large static groups get an InstancedMesh.
 const observedTransforms=new Map(),animatedParkNodes=new Set();
+resortRoot.updateMatrixWorld(true);
 resortRoot.traverse(o=>{o.updateMatrix();observedTransforms.set(o,o.matrix.clone());});
 for(const sampleTime of [0,9.7,31.2,67.5]){
  parkModule.animate(.016,sampleTime);
  resortRoot.traverse(o=>{o.updateMatrix();const original=observedTransforms.get(o);if(original&&!original.equals(o.matrix))animatedParkNodes.add(o);});
 }
 parkModule.animate(0,0);resortRoot.updateMatrixWorld(true);
+const parkAnimated=o=>{for(let a=o;a&&a!==resortRoot;a=a.parent)if(animatedParkNodes.has(a))return true;return false;};
+const resortInstances=instanceResortMeshes(resortRoot,items=>items.length>=10||items.some(parkAnimated));
+resortInstances.update();
 const staticParkGroups=new Map(),parkInverse=new THREE.Matrix4().copy(resortRoot.matrixWorld).invert();
 resortRoot.traverse(o=>{
  if(!o.isMesh||o.isInstancedMesh||!o.visible||o.children.length||Array.isArray(o.material)||o.material.map||o.material.transparent||!o.geometry.attributes.normal)return;
