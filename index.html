@@ -3639,7 +3639,7 @@ function lamp(x,z,facing){
   addMesh(g, LAMP.plate, M.dark, lx,ly-.45,0, false);
   for(let k=0;k<4;k++){
     const a = k*Math.PI/2;
-    const p = addMesh(g, LAMP.pane, windowMat, lx+Math.sin(a)*.32, ly, Math.cos(a)*.32, false);
+    const p = addMesh(g, LAMP.pane, bulbMat, lx+Math.sin(a)*.32, ly, Math.cos(a)*.32, false);   // 夜里要和灯串一样亮，windowMat 太暗
     p.rotation.y = a;
     addMesh(g, LAMP.rib, M.dark, lx+Math.sin(a+Math.PI/4)*.45, ly, Math.cos(a+Math.PI/4)*.45, false).rotation.y = a+Math.PI/4;
   }
@@ -3689,7 +3689,7 @@ const STALL = (()=>{
   const gableShape = new THREE.Shape(); gableShape.moveTo(-3.55,0); gableShape.lineTo(3.55,0); gableShape.lineTo(0,1.7); gableShape.closePath();
   const gable = new THREE.ExtrudeGeometry(gableShape, {depth:.2, bevelEnabled:false}); gable.translate(0,0,-.1);
   const awn = [[],[]], SEG = 8, r = 2.2, span = 1.1;
-  for(let i=0;i<SEG;i++) awn[i%2].push({geo:new THREE.CylinderGeometry(r,r,7.4,1,1,true, i*span/SEG, span/SEG)});
+  for(let i=0;i<SEG;i++) awn[i%2].push({geo:new THREE.CylinderGeometry(r,r,7.4,1,1,true, Math.PI/2-span+i*span/SEG, span/SEG)});   // 顶在墙上（y≈4.1），前沿落到荷叶边那一排
   const awning = awn.map(parts=>doubleSided(mergeGeo(parts)));
   return {
     body: G.box(7,4.2,5), wainscot: G.box(7.1,1.2,5.1), panel: G.box(3.5,.16,5.7), gable, ridge: G.box(.3,.22,5.9),
