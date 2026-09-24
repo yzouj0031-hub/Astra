@@ -2843,9 +2843,9 @@ const periodNames=['morning','sunset','night'];
    晨光 .0016 → 600 米外的港区剩四成、400 米外的静屿剩七成、30 米内不到 1%；日落更浓，星夜要给星星留着。
    rimC/rim/rimDir 是轮廓光；cloud/cloudC/cloudD 是天空着色器里的云量、云面色、云底色。 */
 const periods=[
- {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0016,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.25,ambient:.16,fill:.04,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
- {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0021,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.10,ambient:.15,fill:.04,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
- {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0013,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.36,ambient:.20,fill:.05,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
+ {label:'☀ 晨光',caption:'晨光轻落，潮声刚好。',top:0x679eaf,mid:0xc0ddd9,bot:0xf0e6cb,deep:0x285f71,shallow:0x55aeb1,sand:0x9bccbe,fog:0xdbe2d2,fogD:.0016,sun:0xfff1d4,amb:0xcbe6e5,gnd:0x93897a,light:1.45,ambient:.10,fill:.02,mood:0xffffff,stars:0,dir:[.42,.62,.30],rimC:0x8fb8d8,rim:.13,rimDir:[-60,40,-80],cloud:.55,cloudC:0xfff8ee,cloudD:0x9caabb},
+ {label:'◒ 日落',caption:'天色渐暖，晚风不急。',top:0x657c9e,mid:0xdeb19e,bot:0xffd3a5,deep:0x405968,shallow:0x859c99,sand:0xc3b9a0,fog:0xebc2a2,fogD:.0021,sun:0xffb779,amb:0xe8c3a6,gnd:0x8f7a63,light:1.28,ambient:.10,fill:.02,mood:0xefc6b2,stars:0,dir:[.7,.23,-.48],rimC:0xffb08a,rim:.20,rimDir:[-70,30,48],cloud:.68,cloudC:0xffc9a0,cloudD:0x8d7a90},
+ {label:'☾ 星夜',caption:'灯塔亮起，满海星光。',top:0x071328,mid:0x182b49,bot:0x365165,deep:0x163144,shallow:0x315b67,sand:0x548084,fog:0x243d55,fogD:.0013,sun:0x9cbfd9,amb:0x44607f,gnd:0x2f3a46,light:.42,ambient:.14,fill:.03,mood:0x53667f,stars:.9,dir:[-.42,.65,-.3],rimC:0x3d5a80,rim:.08,rimDir:[-60,40,-80],cloud:.38,cloudC:0x3a4a63,cloudD:0x18233a}
 ];
 let periodIndex=0;
 try{const saved=localStorage.getItem('windward-period-v2');if(periodNames.includes(saved)) periodIndex=periodNames.indexOf(saved);}catch{}
@@ -2945,7 +2945,7 @@ for(const items of batches.values()){
    都表现不出来，石头、铜件、玻璃看着都像同一种塑料。拿天空那三色渐变现画一张
    equirect 过 PMREM，全场标准材质立刻接上来自天空的间接光和反射。
    天空色每帧都在插值，所以不能每帧重生成；换时段时打两次就够。 */
-const ENV_GAIN=0.40;
+const ENV_GAIN=0.25;   // 实测：0.40 时港区暗部被环境贴图抬到 63% 亮度，影子看不出来；0.25 配合下面的主光/半球光，暗部 ~40%、亮部 ~90%
 let envPMREM=null, envTarget=null;
 const _envA=new THREE.Color(), _envB=new THREE.Color();
 function refreshEnvironment(){
@@ -8801,7 +8801,7 @@ THREE.ShaderChunk.tonemapping_pars_fragment=THREE.ShaderChunk.tonemapping_pars_f
  .replace("vec3 CustomToneMapping( vec3 color ) { return color; }",
   "vec3 CustomToneMapping( vec3 color ) { return ACESFilmicToneMapping( pow( max( color, vec3( 0.0 ) ), vec3( "+TONE_GAMMA.toFixed(2)+" ) ) ); }");
 renderer.toneMapping=THREE.CustomToneMapping;
-renderer.toneMappingExposure=1.0;
+renderer.toneMappingExposure=.88;
 
 setMode(MODE.VIEW);
 // 验收截图脚本用：读三角形数和绘制次数，不碰任何游戏状态
