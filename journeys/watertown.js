@@ -53,15 +53,15 @@ function tint(hex, amt){ // 轻微色偏，避免整片颜色太平
 /* ---------- 合批：成百上千个小几何体合成一个 mesh，颜色写进顶点 ---------- */
 class Batch {
   constructor(){ this.pos=[]; this.nor=[]; this.col=[]; this.uv=[]; this.idx=[]; this.n=0; }
-  add(geo, matrix, color, uvBox){
+  add(geo, matrix, color, uvBox, colorFn){
     const p=geo.attributes.position, nrm=geo.attributes.normal, uv=geo.attributes.uv;
     const nm=new T.Matrix3().getNormalMatrix(matrix);
-    const v=new T.Vector3(), nv=new T.Vector3();
+    const v=new T.Vector3(), nv=new T.Vector3(), lv=new T.Vector3(), cc=new T.Color();
     const c=(color&&color.isColor)?color:new T.Color(color);
     for(let i=0;i<p.count;i++){
-      v.fromBufferAttribute(p,i).applyMatrix4(matrix); this.pos.push(v.x,v.y,v.z);
+      lv.fromBufferAttribute(p,i); v.copy(lv).applyMatrix4(matrix); this.pos.push(v.x,v.y,v.z);
       nv.fromBufferAttribute(nrm,i).applyMatrix3(nm).normalize(); this.nor.push(nv.x,nv.y,nv.z);
-      this.col.push(c.r,c.g,c.b);
+      if(colorFn){ cc.copy(c); colorFn(cc,lv,v); this.col.push(cc.r,cc.g,cc.b); } else this.col.push(c.r,c.g,c.b);
       if(uv){ let u=uv.getX(i), w=uv.getY(i); if(uvBox){ u=uvBox[0]+u*(uvBox[2]-uvBox[0]); w=uvBox[1]+w*(uvBox[3]-uvBox[1]); } this.uv.push(u,w); }
       else this.uv.push(0,0);
     }
@@ -95,6 +95,20 @@ const G = {
   arm:new T.BoxGeometry(0.145,0.56,0.16).translate(0,-0.28,0),
   shoe:new T.BoxGeometry(0.2,0.1,0.28).translate(0,-0.05,0.03),
 };
+G.torus=new T.TorusGeometry(1,0.22,5,10);
+G.disc6=new T.CircleGeometry(1,6); G.cyl16=new T.CylinderGeometry(1,1,1,16); G.cone16=new T.ConeGeometry(1,1,16);
+/* 坐标哈希：给每扇窗、每块石头一个稳定的"随机"，不碰主随机序列 */
+const hsh=(x,z,k=0)=>{ const v=Math.sin(x*12.9898+z*78.233+k*37.719)*43758.5453; return v-Math.floor(v); };
+/* 参数曲面网格：fn(s,t) -> [x,y,z]。法线朝下就翻；flip 强制翻（做底面用） */
+function grid(nS,nT,fn,flip=false){
+  const pos=[],uv=[],idx=[];
+  for(let i=0;i<=nS;i++)for(let j=0;j<=nT;j++){ const q=fn(i/nS,j/nT); pos.push(q[0],q[1],q[2]); uv.push(j/nT,i/nS); }
+  for(let i=0;i<nS;i++)for(let j=0;j<nT;j++){ const a=i*(nT+1)+j,b=a+nT+1; idx.push(a,b,a+1,a+1,b,b+1); }
+  const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new T.Float32BufferAttribute(uv,2)); g.setIndex(idx); g.computeVertexNormals();
+  const n=g.attributes.normal; let sum=0; for(let i=0;i<n.count;i++) sum+=n.getY(i);
+  if((sum<0)!==flip){ for(let i=0;i<n.count;i++) n.setXYZ(i,-n.getX(i),-n.getY(i),-n.getZ(i)); const ix=g.index; for(let i=0;i<ix.count;i+=3){ const a=ix.getX(i+1),b=ix.getX(i+2); ix.setX(i+1,b); ix.setX(i+2,a); } }
+  return g;
+}
 const _p=new T.Vector3(), _q=new T.Quaternion(), _s=new T.Vector3(), _e=new T.Euler();
 function M(px,py,pz, sx=1,sy=1,sz=1, rx=0,ry=0,rz=0){
   _e.set(rx,ry,rz); _q.setFromEuler(_e); _p.set(px,py,pz); _s.set(sx,sy,sz);
@@ -189,28 +203,41 @@ function roofProfile(H,r,halfD){
 function roofYAt(H,r,halfD,z){ const s=clamp(Math.abs(z)/halfD,0,1); return H + r*Math.pow(1-s,1.6); }
 
 function addRoof(parent,w,d,H,r,ox,oz,slateC,stripC,bt){
-  const halfD=d/2+oz, prof=roofProfile(H,r,halfD), t=0.3, len=w+2*ox;
-  const outer=[]; for(let i=prof.length-1;i>=0;i--) outer.push([-prof[i][0],prof[i][1]]); for(let i=1;i<prof.length;i++) outer.push([prof[i][0],prof[i][1]]);
-  const sh=new T.Shape(); sh.moveTo(outer[0][0],outer[0][1]); for(let i=1;i<outer.length;i++) sh.lineTo(outer[i][0],outer[i][1]);
-  for(let i=outer.length-1;i>=0;i--) sh.lineTo(outer[i][0],outer[i][1]-t); sh.closePath();
-  const geo=new T.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});
-  bt.roof.add(geo, parent.clone().multiply(M(-len/2,0,0,1,1,1,0,Math.PI/2,0)), slateC);
-  // 瓦垄：每段坡面铺细条
-  const segs=[]; for(let i=0;i<prof.length-1;i++){ const [z0,y0]=prof[i],[z1,y1]=prof[i+1]; segs.push({z:(z0+z1)/2,y:(y0+y1)/2+0.09,len:Math.hypot(z1-z0,y1-y0)+0.05,ang:Math.atan2(y1-y0,z1-z0)}); }
-  const n=Math.max(2,Math.round(len/1.0));
-  // 瓦垄用八边圆柱而不是方条：小青瓦是弧面的，方棱在阳光下一眼假。
-  // 圆柱的长轴在 Y，要先转 90 度躺下再按坡度倾斜，所以是 PI/2 - 坡角。
-  for(let k=0;k<=n;k++){
-    const x=-len/2+0.12+(len-0.24)*k/n;
-    for(const sg of segs){
-      bt.roof.add(G.cyl, parent.clone().multiply(M(x,sg.y, sg.z, 0.067,sg.len,0.067, Math.PI/2-sg.ang,0,0)), stripC);
-      bt.roof.add(G.cyl, parent.clone().multiply(M(x,sg.y,-sg.z, 0.067,sg.len,0.067, Math.PI/2+sg.ang,0,0)), stripC);
+  /* 坡面是一张参数网格：举折下凹、檐角起翘、筒瓦一垄一垄（0.24 米一个周期）压在顶点上；
+     底面一张粗网格，两头封山，檐口一排瓦当、一排椽子；正脊略垂，两端三段鸱吻。 */
+  const halfD=d/2+oz, len=w+2*ox, t=0.22, LIFT=MOBILE?0:0.35, PER=0.24, CORR=MOBILE?0:0.03;
+  const prof=s=>H+r*Math.pow(1-s,1.6)-0.12*s;
+  const lift=(s,tt)=>LIFT*s*s*s*Math.pow(Math.abs(2*tt-1),3);
+  const nT=Math.max(8,Math.round(len/(MOBILE?0.6:0.12))), nS=MOBILE?3:5;
+  const dark=slateC.clone().multiplyScalar(0.72);
+  const eaveAng=Math.atan2(prof(0.7)-prof(1),0.3*halfD);
+  for(const side of [-1,1]){
+    bt.roof.add(grid(nS,nT,(s,tt)=>{ const x=-len/2+tt*len, z=side*s*halfD; let y=prof(s)+lift(s,tt); y+=CORR*(0.5+0.5*Math.sin(x*TAU/PER))*smooth(0,0.1,s); return [x,y,z]; }),parent,slateC);
+    bt.roof.add(grid(2,4,(s,tt)=>{ const x=-len/2+tt*len, z=side*s*halfD; return [x,prof(s)+lift(s,tt)-t,z]; },true),parent,dark);
+    const ye=tt=>prof(1)+lift(1,tt);
+    // 檐口封板：分段跟着起翘走
+    const segs=Math.max(4,Math.round(len/1.2));
+    for(let k=0;k<segs;k++){ const t0=k/segs,t1=(k+1)/segs, x0=-len/2+t0*len, x1=-len/2+t1*len, y0=ye(t0), y1=ye(t1);
+      bt.wood.add(G.box,parent.clone().multiply(M((x0+x1)/2,(y0+y1)/2-t/2,side*(halfD-0.05), Math.hypot(x1-x0,y1-y0)+0.02,t,0.12, 0,0,Math.atan2(y1-y0,x1-x0))),C.woodDk); }
+    if(!MOBILE){
+      for(let x=-len/2+PER/2;x<len/2;x+=PER){ const tt=(x+len/2)/len; bt.roof.add(G.disc6,parent.clone().multiply(M(x,ye(tt)+CORR*0.5+0.03,side*(halfD+0.01), 0.07,0.07,0.07, 0,side>0?0:Math.PI,0)),stripC); }
+      for(let x=-len/2+0.3;x<len/2-0.2;x+=0.5){ const tt=(x+len/2)/len; bt.wood.add(G.box,parent.clone().multiply(M(x,ye(tt)-t-0.05,side*(halfD-oz/2-0.15), 0.08,0.08,oz+0.5, side*eaveAng,0,0)),C.woodDk); }
     }
   }
-  // 正脊与两端翘起的脊饰
-  box(bt.roof,C.slateDk,len+0.4,0.36,0.62, 0,H+r+0.1,0, 0,0,0,parent);
-  box(bt.roof,C.slateDk,0.5,0.78,0.34,  len/2+0.15,H+r+0.4,0, 0,0,-0.35,parent);
-  box(bt.roof,C.slateDk,0.5,0.78,0.34, -len/2-0.15,H+r+0.4,0, 0,0, 0.35,parent);
+  // 两头封山：轮廓跟着起翘后的檐口
+  const sh=new T.Shape(); const pts=[]; for(let i=0;i<=8;i++){ const s=i/8; pts.push([s*halfD, prof(s)+LIFT*s*s*s]); }
+  sh.moveTo(-pts[8][0],pts[8][1]); for(let i=7;i>=0;i--) sh.lineTo(-pts[i][0],pts[i][1]); for(let i=1;i<=8;i++) sh.lineTo(pts[i][0],pts[i][1]);
+  for(let i=8;i>=0;i--) sh.lineTo(pts[i][0],pts[i][1]-t); for(let i=1;i<=8;i++) sh.lineTo(-pts[i][0],pts[i][1]-t); sh.closePath();
+  const endGeo=new T.ShapeGeometry(sh);
+  for(const sx of [-1,1]) bt.roof.add(endGeo,parent.clone().multiply(M(sx*len/2,0,0,1,1,1,0,sx*Math.PI/2,0)),dark);
+  // 正脊：略微下垂的一根，两端三段翘起的鸱吻
+  const ridge=new T.TubeGeometry(new T.CatmullRomCurve3([new T.Vector3(-len/2-0.15,H+r+0.1,0),new T.Vector3(0,H+r+0.02,0),new T.Vector3(len/2+0.15,H+r+0.1,0)],false,'catmullrom',0.3),8,0.17,6,false);
+  bt.roof.add(ridge,parent,C.slateDk);
+  for(const sx of [-1,1]){
+    box(bt.roof,C.slateDk,0.5,0.78,0.34, sx*(len/2+0.15),H+r+0.42,0, 0,0,-sx*0.35,parent);
+    box(bt.roof,C.slateDk,0.34,0.36,0.3, sx*(len/2+0.36),H+r+0.86,0, 0,0,-sx*0.95,parent);
+    box(bt.roof,C.slateDk,0.2,0.22,0.24, sx*(len/2+0.1),H+r+1.02,0, 0,0,sx*0.4,parent);
+  }
 }
 function addBody(parent,w,d,H,r,yBase,color,bt){
   const sh=new T.Shape(), hd=d/2, halfD=hd+0.8;
@@ -218,7 +245,9 @@ function addBody(parent,w,d,H,r,yBase,color,bt){
   for(const s of [0.85,0.7,0.5,0.3,0.15,0,-0.15,-0.3,-0.5,-0.7,-0.85]) sh.lineTo(s*hd, roofYAt(H,r,halfD,s*hd)-0.26);
   sh.lineTo(-hd,H); sh.closePath();
   const geo=new T.ExtrudeGeometry(sh,{depth:w,bevelEnabled:false});
-  bt.wall.add(geo, parent.clone().multiply(M(-w/2,0,0,1,1,1,0,Math.PI/2,0)), color);
+  // 墙脚返潮：底下一段压暗、略带青，往上收干（写进顶点色，不抽随机数）
+  bt.wall.add(geo, parent.clone().multiply(M(-w/2,0,0,1,1,1,0,Math.PI/2,0)), color, null,
+    (c,lv)=>{ const k=smooth(yBase,yBase+2.6,lv.y); c.r*=lerp(0.66,1,k); c.g*=lerp(0.70,1,k); c.b*=lerp(0.66,1,k); });
 }
 /* 马头墙：山墙两端阶梯状高出屋面 */
 function addGables(parent,w,d,H,r,oz,wallC,bt){
@@ -249,8 +278,35 @@ function addFront(parent,o,H,bt,upperOnly){
     box(bt.wood,wood,1.34,0.14,0.17, x,y-0.73,zf+0.05, 0,0,0,parent);         // 窗台，厚一点、探出来
     box(bt.wood,wood,0.12,1.58,0.14, x-0.67,y,zf+0.04, 0,0,0,parent);         // 左框
     box(bt.wood,wood,0.12,1.58,0.14, x+0.67,y,zf+0.04, 0,0,0,parent);         // 右框
-    box(bt.wood,wood,0.05,1.3,0.05, x-0.2,y,zf+0.06, 0,0,0,parent); box(bt.wood,wood,0.05,1.3,0.05, x+0.2,y,zf+0.06, 0,0,0,parent);
-    box(bt.wood,wood,1.1,0.05,0.05, x,y-0.22,zf+0.06, 0,0,0,parent); box(bt.wood,wood,1.1,0.05,0.05, x,y+0.22,zf+0.06, 0,0,0,parent);
+    // 窗棂：按位置哈希在三种花样里挑（手机端只用最省的十字）
+    const kind=MOBILE?0:Math.floor(hsh(o.x+x,o.z+y,3)*3);
+    if(kind===0){
+      box(bt.wood,wood,0.05,1.3,0.05, x-0.2,y,zf+0.06, 0,0,0,parent); box(bt.wood,wood,0.05,1.3,0.05, x+0.2,y,zf+0.06, 0,0,0,parent);
+      box(bt.wood,wood,1.1,0.05,0.05, x,y-0.22,zf+0.06, 0,0,0,parent); box(bt.wood,wood,1.1,0.05,0.05, x,y+0.22,zf+0.06, 0,0,0,parent);
+    } else if(kind===1){                                                       // 步步锦：三竖四横
+      for(const dx of [-0.36,0,0.36]) box(bt.wood,wood,0.04,1.3,0.04, x+dx,y,zf+0.06, 0,0,0,parent);
+      for(const dy of [-0.45,-0.15,0.15,0.45]) box(bt.wood,wood,1.1,0.04,0.04, x,y+dy,zf+0.06, 0,0,0,parent);
+    } else {                                                                   // 万字：外圈方框套斜格
+      box(bt.wood,wood,0.8,0.04,0.04, x,y+0.4,zf+0.06, 0,0,0,parent); box(bt.wood,wood,0.8,0.04,0.04, x,y-0.4,zf+0.06, 0,0,0,parent);
+      box(bt.wood,wood,0.04,0.8,0.04, x-0.4,y,zf+0.06, 0,0,0,parent); box(bt.wood,wood,0.04,0.8,0.04, x+0.4,y,zf+0.06, 0,0,0,parent);
+      box(bt.wood,wood,0.04,1.3,0.04, x,y,zf+0.06, 0,0,0,parent); box(bt.wood,wood,1.1,0.04,0.04, x,y,zf+0.06, 0,0,0,parent);
+      for(const q of [1,-1]) box(bt.wood,wood,0.04,0.5,0.04, x+q*0.2,y+q*0.2,zf+0.06, 0,0,Math.PI/4,parent);
+    }
+  };
+  // 门：门框、门槛、两扇隔扇（上格心下裙板）、一对门环
+  const door=(x)=>{
+    box(bt.misc,0x120f0d,1.3,2.5,0.16, x,1.25,zf-0.04, 0,0,0,parent);
+    box(bt.wood,wood,1.56,0.16,0.18, x,2.58,zf+0.05, 0,0,0,parent);
+    for(const q of [-1,1]) box(bt.wood,wood,0.14,2.7,0.18, x+q*0.72,1.35,zf+0.05, 0,0,0,parent);
+    box(bt.stone,C.stoneDk,1.5,0.16,0.3, x,0.08,zf+0.1, 0,0,0,parent);
+    for(const q of [-1,1]){
+      const lx=x+q*0.32;
+      box(bt.wood,0x4a3120,0.6,2.4,0.06, lx,1.28,zf+0.02, 0,0,0,parent);
+      box(bt.misc,0x1c1712,0.48,1.1,0.03, lx,1.85,zf+0.05, 0,0,0,parent);
+      if(!MOBILE){ for(const dx of [-0.14,0,0.14]) box(bt.wood,C.woodLt,0.03,1.1,0.03, lx+dx,1.85,zf+0.07, 0,0,0,parent); for(const dy of [-0.36,-0.12,0.12,0.36]) box(bt.wood,C.woodLt,0.48,0.03,0.03, lx,1.85+dy,zf+0.07, 0,0,0,parent); }
+      box(bt.wood,C.woodLt,0.44,0.7,0.02, lx,0.62,zf+0.055, 0,0,0,parent);
+      bt.misc.add(G.torus, parent.clone().multiply(M(lx-q*0.12,1.2,zf+0.08, 0.06,0.06,0.06, Math.PI/2,0,0)), 0x8a7a3a);
+    }
   };
   if(o.floors===2){ for(const x of xs) win(x,4.9); }
   if(upperOnly){}
@@ -272,13 +328,18 @@ function addFront(parent,o,H,bt,upperOnly){
     if(o.floors===1) for(const x of xs){ if(Math.abs(x)>ow/2+0.7) win(x,1.9); }
   } else {
     const di=Math.floor(xs.length/2);
-    for(let i=0;i<xs.length;i++){ if(i===di) box(bt.wood,wood,1.3,2.5,0.12, xs[i],1.25,zf+0.03, 0,0,0,parent); else win(xs[i],1.9); }
+    for(let i=0;i<xs.length;i++){ if(i===di) door(xs[i]); else win(xs[i],1.9); }
     box(bt.stone,C.stoneDk,1.9,0.25,0.6, xs[di],0.12,zf+0.25, 0,0,0,parent);  // 门前台阶
   }
   if(o.floors===2 && o.balcony){
     const bw=w-1.6; box(bt.wood,C.woodLt,bw,0.18,1.1, 0,3.2,zf+0.5, 0,0,0,parent);
     box(bt.wood,C.woodLt,bw,0.07,0.07, 0,4.1,zf+1.02, 0,0,0,parent); box(bt.wood,C.woodLt,bw,0.05,0.05, 0,3.6,zf+1.02, 0,0,0,parent);
     for(let x=-bw/2;x<=bw/2+0.01;x+=0.9) box(bt.wood,C.woodLt,0.08,0.95,0.08, x,3.72,zf+1.02, 0,0,0,parent);
+    // 美人靠：向外微倾的靠背条 + 坐板；檐下一排挂落
+    box(bt.wood,C.woodLt,bw-0.2,0.06,0.32, 0,3.62,zf+0.84, 0,0,0,parent);
+    for(let x=-bw/2+0.25;x<bw/2-0.2;x+=0.3) box(bt.wood,C.woodLt,0.05,0.5,0.04, x,3.95,zf+1.0, 0,0.18,0,parent);
+    for(let x=-bw/2+0.2;x<bw/2;x+=0.25) box(bt.wood,wood,0.05,0.28,0.05, x,H-0.36,zf+0.62, 0,0,0,parent);
+    box(bt.wood,wood,bw,0.05,0.05, 0,H-0.5,zf+0.62, 0,0,0,parent);
   }
   // 檐下灯笼
   const p=new T.Vector3();
@@ -322,7 +383,7 @@ function buildBridge(b){
   const cx=0, cy=-1.3, rx=span, ry=Hb-0.9-cy;
   for(let i=0;i<=20;i++){ const a=Math.PI-Math.PI*i/20; sh.lineTo(cx+rx*Math.cos(a), cy+ry*Math.sin(a)); }
   sh.lineTo(span+0.6,-1.6); sh.lineTo(Lh,-1.6); sh.lineTo(Lh,0.05);
-  for(let i=20;i>=0;i--){ const z=-Lh+2*Lh*i/20; sh.lineTo(z,y(z)+0.95); }
+  for(let i=20;i>=0;i--){ const z=-Lh+2*Lh*i/20; sh.lineTo(z,y(z)+0.42); }
   sh.lineTo(-Lh,0.05); sh.closePath();
   const wallGeo=new T.ExtrudeGeometry(sh,{depth:0.4,bevelEnabled:false});
   const stoneC=tint(C.stone,0.02), stoneD=tint(C.stoneDk,0.02);
@@ -334,6 +395,25 @@ function buildBridge(b){
   const arch=flipInside(new T.CylinderGeometry(1,1,W-0.4,16,1,true,0,Math.PI));
   B.stone.add(arch, parent.clone().multiply(M(0,cy,0,ry-0.05,1,rx-0.05,0,0,Math.PI/2)), stoneD);
   box(B.stone,stoneC,W-0.6,1.2,0.6, 0,Hb-1.5,-span-0.3, 0,0,0,parent); box(B.stone,stoneC,W-0.6,1.2,0.6, 0,Hb-1.5,span+0.3, 0,0,0,parent);
+  // 栏杆：地栿之上每 1.2 米一根望柱（莲花头），柱间栏板，柱顶一根寻杖顺着桥拱走
+  const rail=[];
+  for(let z=-Lh+1.2;z<=Lh-1.19;z+=1.2){
+    for(const sx of [-1,1]){ const px=sx*(W/2-0.2), yy=y(z)+0.42;
+      box(B.stone,stoneC,0.24,0.62,0.24, px,yy+0.31,z, 0,0,0,parent); B.stone.add(G.sph,parent.clone().multiply(M(px,yy+0.72,z,0.13,0.11,0.13)),stoneD);
+      B.stone.add(G.sph,parent.clone().multiply(M(px,yy+0.66,z,0.17,0.06,0.17)),stoneC);
+      if(z+1.2<=Lh-1.19){ const zm=z+0.6, ym=y(zm)+0.42; box(B.stone,stoneC2,0.1,0.42,0.9, px,ym+0.24,zm, 0,Math.atan2(y(z+1.2)-y(z),1.2),0,parent); box(B.stone,stoneD,0.04,0.22,0.6, px+sx*0.04,ym+0.24,zm, 0,Math.atan2(y(z+1.2)-y(z),1.2),0,parent); }
+    }
+    rail.push(z);
+  }
+  for(const sx of [-1,1]){
+    const pts=[]; for(let i=0;i<=12;i++){ const z=-Lh+1.2+(2*Lh-2.4)*i/12; pts.push(new T.Vector3(sx*(W/2-0.2),y(z)+1.02,z)); }
+    B.stone.add(new T.TubeGeometry(new T.CatmullRomCurve3(pts,false,'catmullrom',0.4),16,0.09,6,false),parent,stoneC);
+    // 抱鼓石：两头各一对
+    for(const sz of [-1,1]){ B.stone.add(G.sph,parent.clone().multiply(M(sx*(W/2-0.2),y(sz*(Lh-0.4))+0.62,sz*(Lh-0.3),0.2,0.34,0.5)),stoneC); box(B.stone,stoneD,0.34,0.3,0.7, sx*(W/2-0.2),y(sz*(Lh-0.4))+0.15,sz*(Lh-0.3), 0,0,0,parent); }
+    // 拱券：桥洞一圈券石
+    for(let i=0;i<20;i++){ const a=Math.PI*i/19; const zz=cx+(rx+0.22)*Math.cos(a), yy=cy+(ry+0.22)*Math.sin(a);
+      box(B.stone,(i%2?stoneC:stoneC2),0.12,0.36,0.52, sx*(W/2-0.2)+sx*0.02,yy,zz, 0,Math.PI/2-a,0,parent); }
+  }
   // 桥头石灯柱
   const p=new T.Vector3();
   for(const sz of [-1,1]) for(const sx of [-1,1]){
@@ -352,8 +432,19 @@ function buildBanks(){
     box(B.stone,stoneC,560,0.16,0.9, 0,0.1,s*6.3);                        // 压顶
     box(B.stone,tint(stoneC,0.02),280,0.3,6, 0,-0.13,s*9);                // 石板路
     for(let x=-118;x<=124;x+=34){                                          // 河埠头：下到水面的台阶
-      for(let k=0;k<4;k++) box(B.stone,k%2?stoneC:dk,3.2,0.35,0.7, x+rr(-4,4),-0.05-k*0.32,s*(5.6-k*0.62));
+      const jit=[rr(-4,4),rr(-4,4),rr(-4,4),rr(-4,4)];                      // 四级各自的偏移，抽数次数和原来一样
+      for(let k=0;k<4;k++) box(B.stone,k%2?stoneC:dk,3.2,0.35,0.7, x+jit[k],-0.05-k*0.32,s*(5.6-k*0.62));
+      // 两侧夹墙、岸上一块平台、系船桩带缆圈、篮子和水缸
+      const x0=x+jit[0];
+      for(const q of [-1,1]) box(B.stone,dk,0.4,1.3,2.4, x0+q*2.0,-0.35,s*4.9);
+      box(B.stone,stoneC,3.8,0.22,1.4, x0,0.14,s*7.0);
+      for(const q of [-1,1]){ B.stone.add(G.cyl16,M(x0+q*1.5,0.55,s*6.0,0.12,0.95,0.12),0x4a4238); B.misc.add(G.torus,M(x0+q*1.5,0.68,s*6.0,0.2,0.2,0.2,Math.PI/2,0,0),0xa89676); }
+      B.misc.add(G.cyl16,M(x0+0.9,0.42,s*7.3,0.3,0.4,0.3),0xb08c5a); B.misc.add(G.cyl16,M(x0+0.9,0.64,s*7.3,0.32,0.04,0.32),0x8a7b5a);
+      B.misc.add(G.sph,M(x0-1.1,0.5,s*7.2,0.34,0.36,0.34),0x4a4a48); B.misc.add(G.cyl16,M(x0-1.1,0.86,s*7.2,0.18,0.08,0.18),0x3a3a38);
     }
+    // 驳岸的条石缝与水线的青苔带
+    for(let x=-140;x<=140;x+=2.2){ const row=Math.round((x+140)/2.2)%2; box(B.stone,0x5c5a50,0.05,0.62,0.06, x+row*1.1,-0.28,s*5.88); }
+    box(B.stone,0x4f6a48,282,0.34,0.05, 0,-0.62,s*5.89);
     for(let x=-124;x<=124;x+=9){                                           // 灯柱
       if(Math.abs(x-64)<7&&s===1) continue;
       box(B.wood,C.woodDk,0.16,3.4,0.16, x,1.7,s*5.55);
@@ -681,17 +772,34 @@ function buildPagoda(x,z){
   let r=3.4, yy=2.4; const tiers=5;
   for(let i=0;i<tiers;i++){
     const h=2.7;
-    B.wall.add(G.cyl,parent.clone().multiply(M(0,yy+h/2,0, r,h,r)),tint(C.wallWarm,0.02));
-    B.wood.add(G.cyl,parent.clone().multiply(M(0,yy+h*0.55,0, r*1.25,0.14,r*1.25)),C.woodDk);        // 平座
+    B.wall.add(G.cyl16,parent.clone().multiply(M(0,yy+h/2,0, r,h,r)),tint(C.wallWarm,0.02));
+    B.wood.add(G.cyl16,parent.clone().multiply(M(0,yy+h*0.55,0, r*1.25,0.14,r*1.25)),C.woodDk);        // 平座
     for(let k=0;k<8;k++){ const a=k/8*TAU+Math.PI/8; box(B.wood,C.woodDk,0.22,h,0.22, Math.cos(a)*(r-0.05),yy+h/2,Math.sin(a)*(r-0.05), -a,0,0,parent); }
-    B.roof.add(G.cone,parent.clone().multiply(M(0,yy+h+0.55,0, r*1.75,1.3,r*1.75)),tint(C.slate,0.02));
-    B.roof.add(G.cyl,parent.clone().multiply(M(0,yy+h+0.1,0, r*1.75,0.25,r*1.75)),C.slateDk);
+    // 平座栏杆：十六根小柱、八段栏板
+    for(let k=0;k<16;k++){ const a=k/16*TAU; box(B.wood,C.woodDk,0.08,0.62,0.08, Math.cos(a)*r*1.22,yy+h*0.55+0.38,Math.sin(a)*r*1.22, -a,0,0,parent); }
+    for(let k=0;k<8;k++){ const a=(k+0.5)/8*TAU, seg=2*r*1.22*Math.sin(Math.PI/8); box(B.wood,C.woodLt,seg,0.06,0.06, Math.cos(a)*r*1.22,yy+h*0.55+0.66,Math.sin(a)*r*1.22, -a+Math.PI/2,0,0,parent); box(B.wood,C.woodDk,seg*0.8,0.3,0.04, Math.cos(a)*r*1.22,yy+h*0.55+0.36,Math.sin(a)*r*1.22, -a+Math.PI/2,0,0,parent); }
+    // 斗拱：檐下每个方位一朵
+    for(let k=0;k<16;k++){ const a=k/16*TAU; box(B.wood,0x8a5a3a,0.28,0.2,0.28, Math.cos(a)*r*1.05,yy+h+0.12,Math.sin(a)*r*1.05, -a,0,0,parent); box(B.wood,0x7a4a30,0.16,0.14,0.62, Math.cos(a)*r*1.15,yy+h+0.3,Math.sin(a)*r*1.15, -a,0,0,parent); }
+    // 檐：八片弧面扇板，檐角翘起；戗脊一根根圆管；角上挂风铃
+    const slate=tint(C.slate,0.02), rb=yy+h+0.4, R0=r*0.5, R1=r*1.85, hh=1.35;
+    const yOf=(sm,tt)=>rb+hh*Math.pow(1-sm,1.5)+(MOBILE?0:0.32)*sm*sm*sm*Math.pow(Math.abs(2*tt-1),3);
+    for(let k=0;k<8;k++){
+      const a0=k/8*TAU+Math.PI/8, a1=(k+1)/8*TAU+Math.PI/8;
+      B.roof.add(grid(MOBILE?2:4,MOBILE?3:6,(sm,tt)=>{ const a=lerp(a0,a1,tt), rad=lerp(R0,R1,sm); return [Math.cos(a)*rad,yOf(sm,tt),Math.sin(a)*rad]; }),parent,slate);
+      B.roof.add(grid(1,3,(sm,tt)=>{ const a=lerp(a0,a1,tt), rad=lerp(R0,R1,sm); return [Math.cos(a)*rad,yOf(sm,tt)-0.16,Math.sin(a)*rad]; },true),parent,slate.clone().multiplyScalar(0.7));
+      const pts=[]; for(let j=0;j<=5;j++){ const sm=j/5, rad=lerp(R0,R1,sm); pts.push(new T.Vector3(Math.cos(a0)*rad,yOf(sm,0)+0.06,Math.sin(a0)*rad)); }
+      B.roof.add(new T.TubeGeometry(new T.CatmullRomCurve3(pts,false,'catmullrom',0.4),6,0.07,5,false),parent,C.slateDk);
+      if(!MOBILE){ B.sign.add(G.cone16,parent.clone().multiply(M(Math.cos(a0)*(R1+0.05),yOf(1,0)-0.22,Math.sin(a0)*(R1+0.05),0.09,0.16,0.09,Math.PI,0,0)),0xd6b25a); B.sign.add(G.sph,parent.clone().multiply(M(Math.cos(a0)*(R1+0.05),yOf(1,0)-0.36,Math.sin(a0)*(R1+0.05),0.04,0.04,0.04)),0xd6b25a); }
+    }
+    B.roof.add(G.cyl,parent.clone().multiply(M(0,rb+hh+0.05,0, R0*1.05,0.3,R0*1.05)),C.slateDk);
     const p=new T.Vector3();
     for(const k of [1,5]){ const a=k/8*TAU; p.set(Math.cos(a)*(r*1.55),yy+h-0.1,Math.sin(a)*(r*1.55)).applyMatrix4(parent); lanternSpots.push({x:p.x,y:p.y,z:p.z,water:0,light:false}); }
     yy+=h+1.0; r*=0.86;
   }
-  B.wood.add(G.cyl,parent.clone().multiply(M(0,yy+1.4,0, 0.18,3.2,0.18)),C.woodDk);
-  B.sign.add(G.sph,parent.clone().multiply(M(0,yy+3.0,0, 0.5,0.5,0.5)),0xe8c66a);
+  // 塔刹：一根杆上叠五道相轮，顶上宝珠
+  B.wood.add(G.cyl,parent.clone().multiply(M(0,yy+1.6,0, 0.18,3.6,0.18)),C.woodDk);
+  for(let k=0;k<5;k++) B.sign.add(G.torus,parent.clone().multiply(M(0,yy+0.9+k*0.5,0, 0.55-k*0.07,0.55-k*0.07,0.55-k*0.07, Math.PI/2,0,0)),0xe8c66a);
+  B.sign.add(G.sph,parent.clone().multiply(M(0,yy+3.5,0, 0.4,0.5,0.4)),0xe8c66a);
   obstacles.push({x0:x-7,x1:x+7,z0:z-7,z1:z+7});
 }
 
@@ -722,12 +830,20 @@ function buildTeahouse(){
   // 室内：方桌、条凳、柜台、茶壶
   const inside=B;
   const tables=[[17.5,15.5],[24.5,15.5],[17.5,20.5],[24.5,20.5]];
+  const teapot=new T.LatheGeometry([[0,0],[0.15,0],[0.2,0.05],[0.22,0.14],[0.19,0.22],[0.09,0.25],[0.06,0.3]].map(([r,y])=>new T.Vector2(r,y)),12);
+  const cup=new T.LatheGeometry([[0,0],[0.05,0],[0.06,0.03],[0.07,0.08]].map(([r,y])=>new T.Vector2(r,y)),8);
   for(const [tx,tz] of tables){
     box(inside.wood,C.wood,1.5,0.08,1.5, tx,0.8,tz); box(inside.wood,C.woodDk,0.14,0.76,0.14, tx,0.4,tz);
-    for(const [dx,dz] of [[0,1.15],[0,-1.15],[1.15,0],[-1.15,0]]) box(inside.wood,C.woodLt,0.9,0.06,0.3, tx+dx,0.48,tz+dz, dz===0?Math.PI/2:0);
-    inside.misc.add(G.sph,M(tx+0.2,0.98,tz-0.1,0.16,0.14,0.16),0xc9c0aa); inside.misc.add(G.cyl,M(tx-0.3,0.9,tz+0.25,0.09,0.12,0.09),0xc9c0aa);
+    for(const [dx,dz] of [[0,1.15],[0,-1.15],[1.15,0],[-1.15,0]]){ box(inside.wood,C.woodLt,0.9,0.06,0.3, tx+dx,0.48,tz+dz, dz===0?Math.PI/2:0); for(const q of [-0.35,0.35]) box(inside.wood,C.woodDk,0.06,0.42,0.22, tx+dx+(dz===0?0:q),0.24,tz+dz+(dz===0?q:0), dz===0?Math.PI/2:0); }
+    inside.misc.add(teapot,M(tx+0.2,0.84,tz-0.1),0xc9c0aa); box(inside.misc,0xc9c0aa,0.05,0.05,0.22, tx+0.38,1.0,tz-0.1, 0,0,-0.6);
+    for(const [dx,dz] of [[-0.35,0.3],[0.3,0.35],[-0.3,-0.35]]) inside.misc.add(cup,M(tx+dx,0.84,tz+dz),0xd9d0bc);
     obstacles.push({x0:tx-0.9,x1:tx+0.9,z0:tz-0.9,z1:tz+0.9,h:1.1});
   }
+  // 顶上的梁与椽，四根带础的圆柱，靠墙一架屏风
+  for(const bz of [14.5,18,21.5]) box(inside.wood,C.woodDk,13.4,0.28,0.32, 21,2.96,bz);
+  for(let jx=15;jx<=27;jx+=1.0) box(inside.wood,C.wood,0.12,0.12,11.4, jx,3.06,18);
+  for(const [px,pz] of [[17.2,14.6],[24.8,14.6],[17.2,21.6],[24.8,21.6]]){ inside.stone.add(G.cyl16,M(px,0.18,pz,0.34,0.36,0.34),C.stoneLt); inside.wood.add(G.cyl16,M(px,1.6,pz,0.17,2.9,0.17),C.woodDk); }
+  for(let k=0;k<3;k++){ const sx=15.1+k*0.08, sz=17.0+k*0.95; box(inside.wood,C.woodDk,0.08,2.1,0.95, sx,1.15,sz, k%2?0.35:-0.35); box(inside.misc,0xe9e0c8,0.03,1.6,0.72, sx+0.05,1.25,sz, k%2?0.35:-0.35); }
   box(inside.wood,C.woodDk,6,1.0,0.8, 21,0.5,23.2); box(inside.wood,C.wood,6,0.1,0.9, 21,1.02,23.2);
   box(inside.wood,C.woodDk,5,2.4,0.3, 21,2.0,23.8);
   for(let i=0;i<5;i++) inside.misc.add(G.cyl,M(18.9+i*1.05,1.65,23.65,0.2,0.28,0.2),pick([0x7a5230,0xb5ac93,0x4f6b6b]));
@@ -774,15 +890,23 @@ function buildMountains(){
     const a=i/18*TAU+rr(-0.12,0.12), dist=rr(240,320); const x=Math.cos(a)*dist, z=Math.sin(a)*dist;
     if(Math.abs(z)<60&&Math.abs(x)<200) continue;
     const col=new T.Color(0x4c6272).lerp(new T.Color(0x5e7a86),rnd());
-    for(let k=0;k<3;k++){ const h=rr(40,90)*(k?0.7:1), w=rr(60,120); B.foliage.add(G.cone6,M(x+rr(-40,40),h/2-6,z+rr(-30,30),w,h,w*rr(0.7,1),0,rr(0,TAU),0),col); }
+    // 远山改成一层层带锯齿轮廓的山脊片，面朝镇子，越远越往雾色里退。随机数和原来一样是 6 个一组
+    for(let k=0;k<3;k++){ const h=rr(40,90)*(k?0.7:1), w=rr(60,120); const px=x+rr(-40,40), pz=z+rr(-30,30), sq=rr(0.7,1); rr(0,TAU);
+      const sh=new T.Shape(); const n=9, ww=w*1.7; sh.moveTo(-ww/2,0);
+      for(let j=0;j<=n;j++){ const t=j/n, jag=hsh(i,k,j); sh.lineTo(-ww/2+t*ww, h*sq*(0.35+0.65*Math.sin(t*Math.PI)*(0.55+jag*0.45))); }
+      sh.lineTo(ww/2,0); sh.closePath();
+      const c=col.clone().lerp(new T.Color(0xc4d3d8),0.28+k*0.22+clamp((dist-240)/80,0,1)*0.25);
+      B.foliage.add(new T.ShapeGeometry(sh),M(px,-6,pz,1,1,1,0,Math.atan2(-px,-pz),0),c); }
   }
 }
 function buildFields(){
   for(let i=0;i<6;i++){
     const x=120+rr(-8,8)+(i%3)*18, z=40+Math.floor(i/3)*16+rr(-2,2);
-    box(B.foliage,tint(0x6f9a4e,0.05),15,0.3,13, x,0.05,z);
-    for(let k=-5;k<=5;k++) box(B.foliage,0x4f7a38,15,0.12,0.25, x,0.26,z+k*1.2);
-    box(B.foliage,C.soil,15.6,0.36,0.5, x,0.05,z-6.75); box(B.foliage,C.soil,15.6,0.36,0.5, x,0.05,z+6.75);
+    const gc=tint(0x6f9a4e,0.05);
+    box(B.misc,0x7f97a0,15,0.26,13, x,0.02,z);                                       // 水田：一汪映天的浅水
+    for(let k=-5;k<=5;k++) for(let j=-6;j<=6;j++) box(B.foliage,(j+k)%2?gc:0x4f7a38,0.5,0.34,0.32, x+j*1.15,0.3,z+k*1.2, hsh(j,k)*0.6);   // 一丛丛稻秧
+    box(B.foliage,C.soil,15.6,0.4,0.55, x,0.1,z-6.75); box(B.foliage,C.soil,15.6,0.4,0.55, x,0.1,z+6.75);
+    box(B.foliage,C.soil,0.55,0.4,14.0, x-7.75,0.1,z); box(B.foliage,C.soil,0.55,0.4,14.0, x+7.75,0.1,z);
   }
 }
 
@@ -864,6 +988,21 @@ function buildStreaks(){
   const m=b.build(streakMat); m.frustumCulled=false; scene.add(m);
 }
 
+/* ---------- 低雾：水面和田上贴着一层缓缓流动的薄雾（噪声着色器，不抽随机数） ---------- */
+const mistU={ uTime:{value:0}, uAlpha:{value:0}, uCol:{value:new T.Color(0xc9d4d8)} };
+const mistMat=new T.ShaderMaterial({ uniforms:mistU, transparent:true, depthWrite:false, fog:false,
+  vertexShader:`varying vec2 vUv; varying vec3 vW; void main(){ vUv=uv; vec4 wp=modelMatrix*vec4(position,1.0); vW=wp.xyz; gl_Position=projectionMatrix*viewMatrix*wp; }`,
+  fragmentShader:`uniform float uTime,uAlpha; uniform vec3 uCol; varying vec2 vUv; varying vec3 vW;
+  float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+  float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+  void main(){ vec2 p=vW.xz*0.07+vec2(uTime*0.03,uTime*0.011); float v=n(p)*0.55+n(p*2.3+vec2(uTime*0.02,0.0))*0.3+n(p*5.1)*0.15;
+    float edge=smoothstep(0.0,0.3,vUv.y)*smoothstep(1.0,0.7,vUv.y)*smoothstep(0.0,0.03,vUv.x)*smoothstep(1.0,0.97,vUv.x);
+    float a=smoothstep(0.38,0.8,v)*edge*uAlpha; gl_FragColor=vec4(uCol,a); }` });
+function buildMist(){
+  const quads=[[560,16,0,0.3,0],[9,86,64,0.3,49]]; if(!MOBILE) quads.push([62,36,138,0.4,48]);
+  for(const [w,d,x,y,z] of quads){ const g=new T.PlaneGeometry(w,d); g.rotateX(-Math.PI/2); const m=new T.Mesh(g,mistMat); m.position.set(x,y,z); m.renderOrder=2; scene.add(m); }
+}
+
 /* ---------- 雨 ---------- */
 const RAIN_N=1000;
 const rainGeo=new T.BufferGeometry(); const rainPos=new Float32Array(RAIN_N*6); rainGeo.setAttribute('position',new T.BufferAttribute(rainPos,3));
@@ -943,6 +1082,7 @@ function updateEnv(dt, focus){
   if(glowMat) glowMat.emissiveIntensity=0.9*S.night;
   if(thGlow) thGlow.emissiveIntensity=0.9*S.night;
   streakU.uNight.value=S.night*0.9; streakU.uTime.value=S.t;
+  mistU.uTime.value=S.t; mistU.uAlpha.value=clamp(0.22+0.3*S.night+(S.rain?0.3:0)+0.25*smooth(0.35,0.02,e),0,0.75); mistU.uCol.value.copy(scene.fog.color).lerp(_ca.set(0xffffff),0.25);
   for(const pl of pointLights) pl.intensity=pl.userData.base*S.night;
 }
 
@@ -1034,10 +1174,11 @@ function commitBatches(){
   TH.upperMats=[];
   for(const k of BATCH_KEYS){ const b=TH.batches[k]; if(!b||b.empty) continue; const mat=MAT[k].clone(); mat.transparent=true; if(k==='glow') thGlow=mat; const m=b.build(mat); m.castShadow=true; m.receiveShadow=true; scene.add(m); TH.upperMats.push(mat); }
   // 灯笼
-  const lg=new T.SphereGeometry(0.28,10,8); lg.scale(1,1.22,1);
+  // 灯笼：旋转剖面，十二棱就是竹篾骨；上下各一道口，底下一撮红穗
+  const lg=new T.LatheGeometry([[0,-0.36],[0.15,-0.34],[0.25,-0.26],[0.3,-0.12],[0.31,0],[0.3,0.12],[0.25,0.26],[0.15,0.34],[0,0.36]].map(([r,y])=>new T.Vector2(r,y)),12);
   const inst=new T.InstancedMesh(lg,MAT.lantern,lanternSpots.length);
   const capB=new Batch();
-  lanternSpots.forEach((s,i)=>{ inst.setMatrixAt(i,M(s.x,s.y,s.z)); capB.add(G.cyl,M(s.x,s.y+0.36,s.z,0.14,0.08,0.14),C.woodDk); capB.add(G.cyl,M(s.x,s.y-0.36,s.z,0.12,0.08,0.12),C.woodDk); capB.add(G.cyl,M(s.x,s.y-0.55,s.z,0.05,0.3,0.05),0xe0b040);
+  lanternSpots.forEach((s,i)=>{ inst.setMatrixAt(i,M(s.x,s.y,s.z)); capB.add(G.cyl,M(s.x,s.y+0.36,s.z,0.14,0.08,0.14),C.woodDk); capB.add(G.cyl,M(s.x,s.y-0.36,s.z,0.12,0.08,0.12),C.woodDk); capB.add(G.cyl,M(s.x,s.y-0.5,s.z,0.05,0.2,0.05),0xe0b040); capB.add(G.cyl,M(s.x,s.y-0.74,s.z,0.06,0.3,0.06),0xb03a2e);
     if(s.light&&pointLights.length<9){ const pl=new T.PointLight(0xff9a4a,0,15,1.6); pl.position.set(s.x,s.y-0.2,s.z); pl.userData.base=1.0; scene.add(pl); pointLights.push(pl); } });
   inst.instanceMatrix.needsUpdate=true; inst.frustumCulled=false; scene.add(inst);
   const cm=capB.build(MAT.wood); cm.frustumCulled=false; scene.add(cm);
@@ -1172,6 +1313,7 @@ function updateBoats(dt){
     else { o.z+=o.dir*o.speed*dt; if(o.z>84||o.z<14) o.dir*=-1; placeBoat(o.b,o.x,o.z,o.dir>0?-Math.PI/2:Math.PI/2); }
     o.b.oar.rotation.y=Math.sin(S.t*1.6+o.b.bob)*0.4; animPerson(o.b.man,0,dt);
   }
+  for(const m of moored){ m.g.position.y=-1.25+Math.sin(S.t*1.1+m.bob)*0.04; m.g.rotation.z=Math.sin(S.t*0.8+m.bob)*0.015; }
 }
 
 /* ---------- 玩家 ---------- */
@@ -1182,6 +1324,16 @@ function spawnPlayer(){
   player=makePerson({robe:0x3f5a6e,skin:0xf0c9a8,hat:'straw',pants:0x2a2d33});
   player.g.position.set(P.x,0,P.z); scene.add(player.g);
   pboat=makeBoat({lantern:true,hull:0x4a3320}); scene.add(pboat.g); placeBoat(pboat,BOAT.x,BOAT.z,0);
+}
+/* 泊在埠头边的空船：直接克隆乌篷船模型，排在 spawnPlayer 之后、不抽随机数。
+   避开玩家的船 (-40,2.8) 和两条航道 z=±2.6，靠在驳岸下 z=±4.9。只有 Node 测试里没有模型。 */
+const moored=[];
+function spawnMoored(){
+  if(!(VEHICLES&&VEHICLES['wupeng.glb'])) return;
+  for(const [x,z,ry] of [[-100,4.9,0.08],[30,-4.9,Math.PI-0.06],[110,4.9,-0.1],[-72+6,-4.9,Math.PI+0.05]]){
+    const m=VEHICLES['wupeng.glb'].clone(true); m.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true; } });
+    m.position.set(x,-1.25,z); m.rotation.y=ry; scene.add(m); moored.push({g:m,bob:x*0.37});
+  }
 }
 const input={x:0,y:0,keys:{}};
 function moveWithCollision(o,dx,dz){
@@ -1451,8 +1603,8 @@ function makeRenderer(){
 }
 function resize(){ if(IS_NODE) return; camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); }
 function init(){
-  buildAtlas(); makeMaterials(); layoutTown(); buildWater(); buildStreaks(); scene.add(buildGround()); commitBatches(); plantTrees();
-  spawnNPCs(); spawnBoats(); spawnPlayer();
+  buildAtlas(); makeMaterials(); layoutTown(); buildWater(); buildStreaks(); buildMist(); scene.add(buildGround()); commitBatches(); plantTrees();
+  spawnNPCs(); spawnBoats(); spawnPlayer(); spawnMoored();
   renderer=makeRenderer();
   camera.aspect=IS_NODE?NODE_ENV.aspect:window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
   setupInput(); UI.init(); if(!IS_NODE) window.addEventListener('resize',resize);
@@ -1472,6 +1624,8 @@ function frame(now){
 }
 init();
 return {scene,camera,S,P,cam,BOAT,TH,input,player,pboat,npcs,obstacles,treeSpots,groundY,isWater,inWaterRaw,blocked,board,land,nearDock,canLand,nearestNPC,inTeahouse,LINES,sunDir,skyGroup,
-updatePlayer,updateNPCs,updateBoats,updateEnv,updateRain,updateTeahouse,updateCamera,placeBoat};
+updatePlayer,updateNPCs,updateBoats,updateEnv,updateRain,updateTeahouse,updateCamera,placeBoat,
+// 风：宿主（regions.js）每帧推一下，柳条竹叶才会摆 —— 以前托管模式下从来没人调 FOL.tick
+tickWind:t=>{ if(FOL) FOL.tick(t); }};
 
 };

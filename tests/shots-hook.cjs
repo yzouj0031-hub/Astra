@@ -1,0 +1,114 @@
+/**
+ * 六地验收截图：拍 dist 单文件版，全部机位走 window.__astra 调试钩子（主世界）或导览按钮（旅行地区）。
+ *
+ *   npm run package:game
+ *   node tests/shots-hook.cjs <输出目录> [只拍这些名字,逗号分隔]
+ *
+ * 环境变量：ROOT=仓库根（默认 /home/user/Astra，worktree 里要指自己）、DIST=dist 里的文件名、
+ *           CHROME=浏览器可执行文件（默认 /opt/pw-browsers/chromium）。
+ * 地址带 ?quality=lock：软件渲染帧率低，不锁的话游戏会自动关阴影关泛光，拍出来不是真机的样子。
+ * 每张图后面打印 renderer.info 的绘制次数和三角形数（主世界；旅行地区读的是各自的渲染）。
+ */
+const fs = require('fs'), path = require('path');
+const { chromium } = (() => { try { return require('playwright'); } catch { return require(path.join('/home/user/Astra', 'node_modules', 'playwright')); } })();
+const ROOT = process.env.ROOT || '/home/user/Astra';
+const GAME = 'file:///' + path.join(ROOT, 'dist', process.env.DIST || '星屿-六地旅行版.html') + '?quality=lock';
+const OUT = process.argv[2] || path.join(ROOT, 'renders', 'game', 'out');
+const only = process.argv[3] ? new Set(process.argv[3].split(',')) : null;
+
+const SHOTS = [
+  // 主世界：用 window.__astra 调试钩子定机位（真游戏、真渲染，只是省去点菜单）
+  { name: 'harbor-walk',   url: GAME, wait: 4000, run: '__astra.harbor()', after: 2500 },
+  { name: 'harbor-view',   url: GAME, wait: 4000, run: '__astra.view("harbor")', after: 4000 },
+  { name: 'harbor-night',  url: GAME, wait: 4000, run: '__astra.period(2);__astra.harbor()', after: 4000 },
+  { name: 'harbor-street', url: GAME, wait: 4000, run: '__astra.walkTo(700,-60,2.2)', after: 2500 },
+  { name: 'harbor-facade', url: GAME, wait: 4000, run: '__astra.walkTo(618,-152,0)', after: 2500 },
+  { name: 'harbor-shops',  url: GAME, wait: 4000, run: '__astra.walkTo(600,-262,0)', after: 2500 },
+  { name: 'harbor-arcade', url: GAME, wait: 4000, run: '__astra.walkTo(722,-332,0)', after: 2500 },
+  { name: 'harbor-clock',  url: GAME, wait: 4000, run: '__astra.orbit(921,42,-130,95,.9,1.25)', after: 3000 },
+  { name: 'harbor-facade-night', url: GAME, wait: 4000, run: '__astra.period(2);__astra.walkTo(618,-152,0)', after: 4000 },
+  { name: 'island-view',   url: GAME, wait: 4000, run: '__astra.view("island")', after: 4000 },
+  { name: 'island-dock',   url: GAME, wait: 4000, run: '__astra.walkMode()', after: 2500 },
+  { name: 'island-camp',   url: GAME, wait: 4000, run: '__astra.walkTo(-40,40,-2.3)', after: 2500 },
+  { name: 'island-light',  url: GAME, wait: 4000, run: '__astra.walkTo(-2,-8,0.9)', after: 2500 },
+  { name: 'island-sunset', url: GAME, wait: 4000, run: '__astra.period(1);__astra.walkTo(30,60,2.6)', after: 4000 },
+  // 静屿近景（岩石 / 码头 / 营地 / 沙滩），轨道相机直接对准目标
+  { name: 'island-dockclose', url: GAME, wait: 4000, run: '__astra.orbit(89.5,3,-55,24,2.4,1.25)', after: 3000 },
+  { name: 'island-campclose', url: GAME, wait: 4000, run: '__astra.orbit(83,2.5,1,24,1.25,1.2)', after: 3000 },
+  { name: 'island-beach',     url: GAME, wait: 4000, run: '__astra.orbit(82,1,62,22,4.2,1.3)', after: 3000 },
+  { name: 'island-rocks',     url: GAME, wait: 4000, run: '__astra.orbit(30,12,-26,42,5.2,1.15)', after: 3000 },
+  { name: 'island-lightclose',url: GAME, wait: 4000, run: '__astra.orbit(-22,17,-30,30,4.1,1.3)', after: 3000 },
+  { name: 'island-lightbase', url: GAME, wait: 4000, run: '__astra.walkTo(-10,-40,2.27,0.15)', after: 3000 },
+  { name: 'park-view',     url: GAME, wait: 4000, run: '__astra.view("park")', after: 4000 },
+  { name: 'park-gate',     url: GAME, wait: 4000, run: '__astra.park()', after: 2500 },
+  { name: 'park-plaza',    url: GAME, wait: 4000, run: '__astra.walkTo(0,-505,0)', after: 2500 },
+  { name: 'park-night',    url: GAME, wait: 4000, run: '__astra.period(2);__astra.walkTo(0,-470,0)', after: 4000 },
+  // 乐园近景：全景轨道机位（focusRegion 的渐变在软件渲染下追不上，直接给终值）、过山车、摩天轮、摊位、长椅路灯
+  { name: 'park-overview', url: GAME, wait: 4000, run: '__astra.orbit(0,8,-528,190,.45,1.12)', after: 4000 },
+  { name: 'park-coaster',  url: GAME, wait: 4000, run: '__astra.walkTo(-26,-490.5,0.885,0.08)', after: 2500 },
+  { name: 'park-ferris',   url: GAME, wait: 4000, run: '__astra.orbit(2,18,-560.7,72,-.55,1.22)', after: 3000 },
+  { name: 'park-stall',    url: GAME, wait: 4000, run: '__astra.walkTo(-15.6,-486.6,0.54,0.02)', after: 2500 },
+  { name: 'park-bench',    url: GAME, wait: 4000, run: '__astra.walkTo(7.8,-508.7,-2.27,0)', after: 2500 },
+  { name: 'park-gate-sign', url: GAME, wait: 4000, run: '__astra.walkTo(0,-426,0,0.42)', after: 2500 },
+  { name: 'park-ship',     url: GAME, wait: 4000, run: '__astra.orbit(46.8,11,-495.7,42,.9,1.25)', after: 3000 },
+  { name: 'park-bumper',   url: GAME, wait: 4000, run: '__astra.orbit(65,7,-617.9,46,-.7,1.25)', after: 3000 },
+  { name: 'watertown-dusk', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown' },
+  { name: 'watertown-noon', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3 },
+  { name: 'watertown-hill', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3, stop: 2 },
+  { name: 'rainport',       url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport' },
+  { name: 'rainport-stop1', url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', stop: 1 },
+  { name: 'temple',         url: GAME + '&journey=temple', wait: 11000, journey: 'temple' },
+  { name: 'temple-stop1',   url: GAME + '&journey=temple', wait: 11000, journey: 'temple', stop: 1 },
+  // 旅行地区的近景：通过 window.__astraJourney() 把玩家放到指定点、转到指定朝向（相机在玩家身后）
+  { name: 'rainport-market',  url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',24,8]);r.yaw=-Math.PI/2;r.pitch=.2;" },
+  { name: 'rainport-shelter', url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',-15.5,17]);r.yaw=Math.PI/2+.5;r.pitch=.18;" },
+  { name: 'rainport-facade',  url: GAME + '&journey=rainport', wait: 11000, journey: 'rainport', jrun: "const r=__astraJourney();r.place(['x','x',-28,-22]);r.yaw=Math.PI/2-.6;r.pitch=.12;" },
+  { name: 'temple-hall',      url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',1.6,-9]);r.yaw=0;r.pitch=.22;" },
+  { name: 'temple-gate',      url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',0,5]);r.yaw=Math.PI;r.pitch=.2;" },
+  { name: 'temple-lantern',   url: GAME + '&journey=temple', wait: 11000, journey: 'temple', jrun: "const r=__astraJourney();r.place(['x','x',-8,-3]);r.yaw=Math.PI/2;r.pitch=.15;" },
+  { name: 'watertown-bridge', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', jrun: "const r=__astraJourney();r.place(['x','x',8,9]);r.yaw=Math.PI/2+.35;r.pitch=.12;" },
+  { name: 'watertown-roofs',  url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', jrun: "const r=__astraJourney();r.place(['x','x',-30,9]);r.yaw=.4;r.pitch=.3;" },
+  { name: 'watertown-pagoda', url: GAME + '&journey=watertown', wait: 11000, journey: 'watertown', times: 3, jrun: "const r=__astraJourney();r.place(['x','x',-96,58]);r.yaw=Math.PI+.9;r.pitch=.05;" },
+];
+
+async function openMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(!o) await page.click('#journey-menu-toggle', { timeout: 120000 }); }
+async function closeMenu(page){ const o = await page.evaluate(()=>{const m=document.getElementById('journey-menu');return m&&m.open;}); if(o) await page.click('#journey-menu-toggle', { timeout: 120000 }); await page.waitForTimeout(300); }
+
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || '/opt/pw-browsers/chromium',
+    args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-gpu-sandbox','--no-sandbox'] });
+  const problems = [];
+  for (const shot of SHOTS.filter(s => !only || only.has(s.name))) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    try {
+    page.on('pageerror', e => problems.push(`${shot.name} pageerror: ${e.message}`));
+    page.on('console', m => { if (m.type() === 'error') problems.push(`${shot.name} console: ${m.text().slice(0,300)}`); });
+    const t0 = Date.now();
+    await page.goto(shot.url, { waitUntil: 'load', timeout: 240000 });
+    await page.waitForFunction(() => document.body.dataset.mode, null, { timeout: 90000 });
+    if (shot.journey) await page.waitForFunction(j => document.body.dataset.journey === j, shot.journey, { timeout: 90000 });
+    // 开场遮罩要等它真的淡出（软件渲染下 1 秒的定时器可能拖到好几秒），否则整张图蒙着一层蓝
+    await page.waitForFunction(() => document.getElementById('boot').classList.contains('gone'), null, { timeout: 90000 }).catch(() => {});
+    // 两台软件渲染并跑时一帧要好几秒，定时器和 CSS 渐隐都跟着慢：真等到遮罩透明度归零，再等两帧真正画出来
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('boot')).opacity === '0', null, { timeout: 240000, polling: 1000 }).catch(() => {});
+    const twoFrames = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    await page.waitForTimeout(1200);
+    await page.waitForTimeout(shot.wait);
+    for (const sel of (shot.click||[])) { await page.click(sel, { timeout: 120000 }); await page.waitForTimeout(600); }
+    if (shot.run) { await page.evaluate(shot.run); }
+    if (shot.click || shot.run) { await page.waitForTimeout(shot.after || 3000); await twoFrames(); }
+    for (let i = 0; i < (shot.times || 0); i++) { await openMenu(page); await page.click('#journey-day', { timeout: 120000 }); await page.waitForTimeout(300); }
+    if (shot.stop !== undefined) { await openMenu(page); const stops = await page.$$('#journey-stops button'); if (stops[shot.stop]) await stops[shot.stop].click({ timeout: 120000 }); await page.waitForTimeout(2500); }
+    if (shot.journey) await closeMenu(page);
+    if (shot.jrun) { await page.evaluate(shot.jrun); await page.waitForTimeout(2500); await twoFrames(); }
+    const info = await page.evaluate(j => j ? (window.__astraJourneyInfo || null) : ((window.__astra && window.__astra.info) ? window.__astra.info() : null), !!shot.journey);
+    const file = path.join(OUT, shot.name + '.png');
+    await page.screenshot({ path: file, timeout: 180000 });   // 软件渲染下一帧可能要一分多钟，别按默认 30 秒放弃
+    console.log('拍了', file, ((Date.now()-t0)/1000).toFixed(0)+'s', info ? JSON.stringify(info) : '');
+    } catch (e) { console.log('失败', shot.name, String(e.message||e).split('\n')[0]); }
+    await page.close();
+  }
+  await browser.close();
+  if (problems.length) { console.log('\n页面报错:'); [...new Set(problems)].slice(0, 12).forEach(p => console.log(' ', p)); } else console.log('\n没有页面报错');
+})().catch(e => { console.error(e); process.exitCode = 1; });

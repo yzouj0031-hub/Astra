@@ -4,30 +4,65 @@ const C=root.AstraJourneyCore;
 root.AstraRegionFactories=root.AstraRegionFactories||{};
 function rect(x,z,w,d,height=12){return {minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,height};}
 /* 表面细节：区域把材质起好名，这里统一套上主场景那套程序化贴图。
-   名字 -> [贴图种类, 一张铺多少米, 明暗, 起伏, 粗糙度]。
+   名字 -> [贴图种类, 一张铺多少米, 明暗, 起伏, 粗糙度, 地面高度, 只铺朝上的面, 叠层, 偏色]。
    没起名的材质不动 —— 水面、天空、灯笼这些自带着色器的不该被贴图。 */
-// 数值比海岛那边保守：水乡不走色调映射（NoToneMapping），
-// ACES 那条压缩曲线不在，同样的 amt 反差会直接顶出来 ——
-// 第一版照抄海岛的 .85，路面立刻成了棋盘格。
 const SURFACES={
- wall:  ['plaster',2.6,.42,.55,.4 ],
- roof:  ['tile',   1.2,.55,.85,.5 ],
- wood:  ['timber', 1.6,.5, .7, .5 ],
- stone: ['slab',   1.1,.45,.75,.5 ],
- ground:['grass',  2.6,.4, .6, .55],
- misc:  ['plaster',2.0,.35,.4, .45],
+ // 烟雨渡不走色调映射（NoToneMapping）、用的是 Phong：ACES 那条压缩曲线不在，
+ // 同样的 amt 反差会直接顶出来 —— 第一版照抄海岛的 .85，路面立刻成了棋盘格。
+ // 所以明暗减半、偏色也压到一半。粉墙是淡淡的旧砖透出来，黛瓦、木板正常铺。
+ watertown:{
+  wall:  ['brick',    2.0,.3, .55,.4, 0,false,null,.4],
+  roof:  ['rooftile', 1.6,.5, .8, .5, 0,true, null,.5],
+  wood:  ['plank',    1.8,.5, .7, .5, 0,false,null,.5],
+  stone: ['flagstone',1.7,.36,.7, .5, 0,false,null,.5],
+  ground:['grass',    2.6,.4, .6, .55,0,false,null,.5],
+  misc:  ['plaster',  2.0,.35,.4, .45,0,false,null,.5],
+ },
+ // 雨港、静山寺和海岛一样走 ACES + sRGB，用海岛那档强度
+ rainport:{
+  wall:  ['brick',    2.0,.8, 1.0,.5 ],
+  wood:  ['plank',    2.0,.8, .9, .5 ],
+  stone: ['ashlar',   2.4,.8, .9, .5 ],
+  ground:['flagstone',1.6,.8, 1.0,.5 ],
+  road:  ['slab',     2.4,.55,.7, .5 ],
+ },
+ temple:{
+  stone: ['ashlar',   2.2,.8, .9, .5 ],
+  wall:  ['plaster',  2.4,.8, .8, .45],
+  roof:  ['rooftile', 1.6,.8, 1.0,.55,0,true],
+  wood:  ['plank',    1.8,.7, .8, .5 ],
+  floor: ['rock',     1.6,.6, .8, .5 ],
+  ground:['grass',    2.8,.6, .7, .5 ],
+ },
 };
-function dressRegion(scene,surface){
- if(!surface)return 0;
+function dressRegion(scene,surface,table){
+ if(!surface||!table)return 0;
  let n=0;const seen=new Set();
  scene.traverse(o=>{
   for(const m of o.material?(Array.isArray(o.material)?o.material:[o.material]):[]){
-   const plan=SURFACES[m.name];
+   const plan=table[m.name];
    if(!plan||seen.has(m))continue;
    seen.add(m);surface(m,...plan);n++;
   }
  });
  return n;
+}
+/* 雨港的夜景环境贴图：六张小画布拼的立方体图。天顶带一抹月光，四面从深蓝落到
+   地平线的一圈暖光（东西两岸是店铺的琥珀和粉，南北是电车站的青），底面近黑（湿地面）。
+   湿路面、水洼、窗玻璃有了它才有东西可以映；渲染器在这儿拿不到，所以不烤 PMREM。 */
+function nightEnvironment(T){
+ const face=(top,mid,bot,smear)=>{const c=document.createElement('canvas');c.width=32;c.height=32;
+  try{const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,32);gr.addColorStop(0,top);gr.addColorStop(.55,mid);gr.addColorStop(1,bot);g.fillStyle=gr;g.fillRect(0,0,32,32);
+   if(smear){const r=g.createRadialGradient(smear[0],smear[1],0,smear[0],smear[1],smear[2]);r.addColorStop(0,smear[3]);r.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=r;g.fillRect(0,0,32,32);}}catch(e){}
+  return c;};
+ const tex=new T.CubeTexture([
+  face('#0b1a26','#132a3a','#5a3a2a',[16,26,14,'rgba(255,170,90,.55)']),   // +x 东岸店铺
+  face('#0b1a26','#132a3a','#4a2f36',[16,26,14,'rgba(255,140,150,.5)']),   // -x 西岸
+  face('#08141e','#0c1d2b','#0c1d2b',[8,10,12,'rgba(220,230,240,.6)']),    // +y 天顶与月
+  face('#05080b','#05080b','#070b0f'),                                    // -y 湿地面
+  face('#0b1a26','#122636','#3a3040',[16,27,12,'rgba(200,150,170,.4)']),   // +z
+  face('#0b1a26','#122636','#2a3540',[16,27,12,'rgba(130,220,210,.35)'])]);
+ tex.encoding=T.sRGBEncoding;tex.needsUpdate=true;return tex;
 }
 function createRegion(T,id,services){
  const {mobile,notify,stamp,progress,travel,surface,trees,vehicles}=services;
@@ -38,13 +73,20 @@ function createRegion(T,id,services){
  if(id==='rainport'){
   const api=factory(T);scene=new T.Scene();scene.background=new T.Color('#102d3e');scene.fog=new T.Fog('#102d3e',65,215);
   camera=new T.PerspectiveCamera(57,1,.1,380);
-  const hemi=new T.HemisphereLight('#b9d4db','#2b3440',.35);scene.add(hemi);
-  const sun=new T.DirectionalLight('#c8deec',.15);sun.position.set(-35,60,20);scene.add(sun);
+  // 月光投影：以前只有环境光，整座城没有一道影子，楼、灯、人都浮在地上。
+  // 月亮是唯一的投影光，跟着玩家走（正交阴影相机 ±75 米盖住脚下这一段岸）
+  const hemi=new T.HemisphereLight('#b9d4db','#2b3440',.22);scene.add(hemi);
+  const sun=new T.DirectionalLight('#c8deec',.36);sun.position.set(-35,60,20);sun.castShadow=true;
+  sun.shadow.mapSize.set(mobile?1024:2048,mobile?1024:2048);Object.assign(sun.shadow.camera,{left:-75,right:75,top:75,bottom:-75,near:1,far:220});
+  sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;scene.add(sun);scene.add(sun.target);
   world=api.createWorld(scene,{mobile,trees,vehicles});solids=world.colliders;land=api.isLand;ground=()=>.17;
   world.player.visible=false;
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.g.position.set(p.x,.17,p.z);}}
   world.setRain(true);
-  world.lightCycle=()=>{hemi.intensity=.35+day*.5;sun.intensity=.15+day*.65;scene.background.set(day?'#58757d':'#102d3e').convertSRGBToLinear();scene.fog.color.copy(scene.background);};
+  dressRegion(scene,surface,SURFACES.rainport);
+  try{scene.environment=nightEnvironment(T);}catch(e){console.warn('[Astra rainport] environment map',e);}
+  world.followSun=(x,z)=>{sun.position.set(x-35,60,z+20);sun.target.position.set(x,0,z);};
+  world.lightCycle=()=>{hemi.intensity=.22+day*.55;sun.intensity=.36+day*.6;scene.background.set(day?'#58757d':'#102d3e').convertSRGBToLinear();scene.fog.color.copy(scene.background);};
  }else if(id==='watertown'){
   // trees 是宿主加载好的 glTF 树（journeys/assets.js）。浏览器里 runtime.js 会先 await
   // 成功才走到这儿；拿不到只会发生在 npm test 的 Node 环境，那边退回旧的球体树。
@@ -52,17 +94,21 @@ function createRegion(T,id,services){
   solids=world.obstacles.map(o=>({minX:o.x0,maxX:o.x1,minZ:o.z0,maxZ:o.z1,height:o.h||9.5}));
   land=(x,z)=>Math.abs(x)<175&&z>-95&&z<145&&!world.isWater(x,z);
   ground=world.groundY;world.player.g.visible=false;
-  dressRegion(scene,surface);
+  dressRegion(scene,surface,SURFACES.watertown);
   // Start every walker on a legal surface, including the foot of the bridges.
   for(const n of world.npcs){const p=C.safeSpot(n.x,n.z,solids,land,.28);if(p){n.x=p.x;n.z=p.z;n.per.g.position.set(p.x,ground(p.x,p.z),p.z);}}
  }else{
   world=factory(T,{mobile,trees});scene=world.scene;camera=world.camera;
   world.hero.root.visible=false;
+  dressRegion(scene,surface,SURFACES.temple);
   // Floor height follows the actual temple plinth and the front steps.
   ground=(x,z)=>Math.abs(x)<9.1&&z>=-25.2&&z<=-16.6?1.2:Math.abs(x)<3.6&&z>-16.6&&z<-14.4?C.clamp((-z-14.4)/2.2,0,1)*1.2:0;
   land=(x,z)=>(Math.hypot(x,z)<15.8)||(Math.abs(x)<3.55&&z<=-13&&z>=-17)||(Math.abs(x)<8.85&&z>=-25.1&&z<=-16.6);
   solids=[rect(0,-24.35,16,.4,6),rect(0,-25.4,18,.3,6)];
-  for(const x of [-7,-3.5,0,3.5,7])for(const z of [-23.7,-18.3])solids.push(rect(x,z,.6,.6,6));
+  // 四根一排的柱子（正中一间是门），两侧间的格扇，殿前的香炉
+  for(const x of [-7.6,-2.9,2.9,7.6])for(const z of [-23.7,-18.3])solids.push(rect(x,z,.6,.6,6));
+  for(const x of [-5.25,5.25])solids.push(rect(x,-18.4,4.4,.3,5));
+  solids.push(rect(0,-17.4,1.1,1.1,2.2));
   for(const x of [-11,11])for(const z of [-11,-3,6,13])solids.push(rect(x,z,1,1,2.5));
   world.game=root.AstraCombat.createGame();world.fighting=false;world.completed=progress.stamps.includes('warden');
   // A small, walkable exhibition behind the guardian gives the victory a destination.
@@ -89,11 +135,13 @@ function createRegion(T,id,services){
   },
   restore(p){if(C.validPosition(p)&&C.canStand(p.x,p.z,solids,land)){Object.assign(pos,{x:p.x,z:p.z});pos.y=ground(p.x,p.z);}},
   setRain(){rain=!rain;if(id==='rainport')world.setRain(rain);if(id==='watertown')world.S.rain=rain;notify(rain?'雨落下来了。':'雨停了。');},
-  setDay(){day=1-day;if(id==='watertown')world.S.dayT=day?.5:.95;if(id==='rainport')world.lightCycle();if(id==='temple'){scene.background.set(day?'#a8b7a0':'#7e9389');scene.fog.color.copy(scene.background);}notify(day?'日光漫游':'灯火时分');},
+  setDay(){day=1-day;if(id==='watertown')world.S.dayT=day?.5:.95;if(id==='rainport')world.lightCycle();if(id==='temple'){scene.background.set(day?'#a8b7a0':'#7e9389');scene.fog.color.copy(scene.background);world.setSky?.(day);}notify(day?'日光漫游':'灯火时分');},
   people(){return id==='rainport'?world.npcs.map(n=>({x:n.g.position.x,z:n.g.position.z})):id==='watertown'?world.npcs.map(n=>({x:n.x,z:n.z})):(!world.fighting?[{x:world.game.boss.x,z:world.game.boss.z,radius:1.1}]:[]);},
   update(dt,input){
    if(!active)return;clock+=dt;phase+=dt;
    world.foliage?.tick(clock);   // 山寺的林子跟着风摆
+   if(id==='temple')world.tick?.(clock);   // 雾片漂移
+   if(id==='watertown')world.tickWind?.(clock);   // 烟雨渡的柳条竹叶
    const old={x:pos.x,z:pos.z};
    const ix=input.x,iz=input.z,mag=Math.min(1,Math.hypot(ix,iz));
    const dx=Math.cos(region.yaw)*ix+Math.sin(region.yaw)*iz,dz=-Math.sin(region.yaw)*ix+Math.cos(region.yaw)*iz;
@@ -130,6 +178,7 @@ function createRegion(T,id,services){
    pos.speed=Math.hypot(pos.x-old.x,pos.z-old.z)/Math.max(.001,dt);
    if(id==='rainport'){
     const previous=world.npcs.map(n=>({x:n.g.position.x,z:n.g.position.z}));
+    world.followSun(pos.x,pos.z);
     world.update(clock,dt,{rainOn:rain,day,camera,focus:new T.Vector3(pos.x,pos.y,pos.z)});
     world.npcs.forEach((n,i)=>{const p=previous[i],wanted={x:n.g.position.x,z:n.g.position.z};C.move(p,wanted.x-p.x,wanted.z-p.z,solids,land,.28,transport?[]:[pos]);if(Math.hypot(p.x-wanted.x,p.z-wanted.z)>.001)n.dir*=-1;n.x=p.x;n.z=p.z;n.g.position.set(p.x,.17,p.z);});
     world.player.visible=false;
