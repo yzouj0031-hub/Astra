@@ -284,7 +284,8 @@ const otherTemple=tower(22,-8,-Math.PI*.39,'drum');
 
 /* ---------- 山门：南沿正中，四柱三间、小歇山顶、敞着门，石阶往雾里落下去 ---------- */
 {
-  const P=M4(0,0,16.6);const t=group(scene,0,0,16.6);
+  // 出生点 (0,10) 的跟随相机在身后 7.5 米、正好落在门扇之间：山门再往南挪 4 米，相机站在门外看进去
+  const P=M4(0,0,20.6);const t=group(scene,0,0,20.6);
   bbox(BT.stone,0x626e61,11.5,.5,3.2,0,-.28,0,P);bbox(BT.stone,0x7a8470,11.8,.12,3.4,0,-.05,0,P);
   const xs=[-4.6,-1.7,1.7,4.6],hs=[4.3,5.1,5.1,4.3];
   xs.forEach((px,i)=>{bgeo(BT.stone,0x7a8470,G.cyl16,px,.24,0,.4,.36,.4,P);bgeo(BT.lacquer,0x7a3a2c,G.cyl16,px,hs[i]/2+.3,0,.24,hs[i],.24,P);bgeo(BT.gold,0xbc934c,G.cyl16,px,hs[i]+.34,0,.28,.12,.28,P);});
@@ -302,7 +303,7 @@ const otherTemple=tower(22,-8,-Math.PI*.39,'drum');
   for(let i=0;i<11;i++){const top=-.1-.3*(i+1),zc=1.9+.55*i;bbox(BT.stone,i>6?0x55635a:0x626e61,6.2,.3,.56,0,top-.15,zc,P);bbox(BT.stone,0x8a927f,6.2,.03,.05,0,top-.015,zc-.26,P);}
   bbox(BT.stone,0x55635a,6.6,.6,1.6,0,-3.7,8.1,P);
   for(const s of [-1,1]){bbox(BT.stone,0x7a8470,.42,.28,6.9,s*3.3,-1.62,4.65,P,.503);bgeo(BT.stone,0x7a8470,lathe([[.2,0],[.2,1.05],[.14,1.1],[.24,1.25],[.2,1.45],[.1,1.55],[.02,1.62]],12),s*3.3,-.1,1.5,1,1,1,P);bgeo(BT.stone,0x7a8470,G.sphere,s*3.3,-3.55,8.2,.36,.26,.3,P);}
-  for(const [rx,rz,s] of [[-4.4,4.5,.7],[4.6,6,.9],[-4.9,8,1.1],[4.4,9.5,.6]])bgeo(BT.stone,0x55655d,ROCKS[(rx*5|0)&5],rx,groundH(rx,rz+16.6)+s*.3,rz,s,s*.7,s,P,0,rx,0,shade(.7));
+  for(const [rx,rz,s] of [[-4.4,4.5,.7],[4.6,6,.9],[-4.9,8,1.1],[4.4,9.5,.6]])bgeo(BT.stone,0x55655d,ROCKS[(rx*5|0)&5],rx,groundH(rx,rz+20.6)+s*.3,rz,s,s*.7,s,P,0,rx,0,shade(.7));
 }
 
 /* ---------- 石灯笼：旋转剖面的柱身，六角火袋，翘角小顶 ---------- */
