@@ -41,7 +41,7 @@ async function boot() {
   renderer.outputColorSpace = T.SRGBColorSpace;
 
   const scene = new T.Scene();
-  const sky = createSky(scene, renderer);
+  const sky = createSky(scene, renderer); if (low) sky.sun.shadow.mapSize.set(1024, 1024);
   const terrain = buildTerrain({ segments: low ? 200 : 300 }); scene.add(terrain);
   const water = buildWater(); scene.add(water);
   const colliders = createColliders();
@@ -65,9 +65,11 @@ async function boot() {
   const boat = createBoat(scene, assets, world); world.boat = boat;
   const hud = createHUD(world); world.hud = hud; world.sky = sky;
   const { cam, s: camS, update: camUpdate } = createCamera(innerWidth / innerHeight);
+  const fitFov = () => { cam.fov = innerWidth < innerHeight ? 72 : 55; cam.updateProjectionMatrix(); }; fitFov();
+  if (navigator.maxTouchPoints > 0 && mobile) document.body.classList.add('touch');
   const input = createInput(canvas, { stick: $('stick'), knob: $('knob'), touchLayer: $('touch'), btnSprint: $('b-sprint'), btnJump: $('b-jump'), btnAttack: $('b-attack'), btnInteract: $('b-interact'), btnDodge: $('b-dodge') });
   // 灯笼里的点光：只给离玩家最近的几盏
-  const lanternLights = []; for (let i = 0; i < (low ? 3 : 6); i++) { const l = new T.PointLight(0xff8a3a, 0, 14, 1.8); scene.add(l); lanternLights.push(l); }
+  const lanternLights = []; for (let i = 0; i < (low ? 3 : 6); i++) { const l = new T.PointLight(0xff9a4a, 0, 20, 1.6); scene.add(l); lanternLights.push(l); }
 
   // ---- 存档 ----
   const spawn = { x: -70, z: 56 };
@@ -87,7 +89,7 @@ async function boot() {
   }
   function reset() { try { localStorage.removeItem(SAVE_KEY); } catch {} location.reload(); }
   world.save = save; world.reset = reset;
-  function lightBeacon(announce = true) { world.beaconLit = true; const f = built.beacon.userData.fire; f.light.intensity = 6; f.flame.visible = true; if (announce) hud.toast('烽火燃起，整条溪谷都看得见。'); }
+  function lightBeacon(announce = true) { world.beaconLit = true; const f = built.beacon.userData.fire; f.light.intensity = 400; f.flame.visible = true; if (announce) hud.toast('烽火燃起，整条溪谷都看得见。'); }
 
   const hadSave = load();
   if (params.get('t')) sky.state.hour = parseFloat(params.get('t'));
@@ -147,10 +149,10 @@ async function boot() {
     // 夜里：灯笼、窗纸、寨火
     const night = sky.state.night;
     built.windowMat.emissiveIntensity = night * 1.4;
-    for (const f of built.fires) { if (f === built.beacon.userData.fire) continue; f.light.intensity = 1.8 + Math.sin(t * 9) * 0.4 + Math.sin(t * 23) * 0.2; f.flame.scale.y = 0.9 + Math.sin(t * 11) * 0.12; }
-    if (world.beaconLit) { built.beacon.userData.fire.light.intensity = 5 + Math.sin(t * 7); }
+    for (const f of built.fires) { if (f === built.beacon.userData.fire) continue; f.light.intensity = 40 + Math.sin(t * 9) * 8 + Math.sin(t * 23) * 4; f.flame.scale.y = 0.9 + Math.sin(t * 11) * 0.12; }
+    if (world.beaconLit) { built.beacon.userData.fire.light.intensity = 400 + Math.sin(t * 7) * 60; }
     const near = built.lanterns.map(l => { l.getWorldPosition(_tmp); return { l, d: _tmp.distanceToSquared(player.pos), x: _tmp.x, y: _tmp.y, z: _tmp.z }; }).sort((a, b) => a.d - b.d);
-    lanternLights.forEach((pl, i) => { const n = near[i]; if (!n) { pl.intensity = 0; return; } pl.position.set(n.x, n.y - 0.2, n.z); pl.intensity = night * 2.2; });
+    lanternLights.forEach((pl, i) => { const n = near[i]; if (!n) { pl.intensity = 0; return; } pl.position.set(n.x, n.y - 0.2, n.z); pl.intensity = night * 45; });
     for (const l of built.lanterns) { const m = l.children[0].material; m.emissiveIntensity = 0.2 + night * 1.8; }
     water.material.uniforms.uTime.value = t; water.material.uniforms.uSun.value.copy(sky.state.sunDir); water.material.uniforms.uFogColor.value.copy(scene.fog.color); water.material.uniforms.uFogNear.value = scene.fog.near; water.material.uniforms.uFogFar.value = scene.fog.far;
     water.material.uniforms.uSky.value.copy(sky.uniforms.uHorizon.value);
@@ -162,7 +164,7 @@ async function boot() {
     input.endFrame();
   }
   const _tmp = new T.Vector3();
-  window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+  window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; fitFov(); });
   window.addEventListener('beforeunload', save);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   window.__game = { world, player, sky, renderer, scene, cam, camS, quests, npcs, built, planted };

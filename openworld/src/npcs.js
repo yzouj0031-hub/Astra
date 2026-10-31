@@ -38,7 +38,7 @@ export function createNPCs(scene, assets, colliders, world) {
     const c = PLACES[id];
     for (let i = 0; i < count; i++) {
       const a = rnd() * 6.28, r = 3 + rnd() * 8, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
-      const fig = makeFigure(assets.crowd[i % 2 === 0 ? 2 : 0], assets.player.animations, 1.8 + rnd() * 0.1, 0x8a6a5a);
+      const fig = makeFigure(assets.crowd[i % 2 === 0 ? 2 : 0], assets.player.animations, 1.8 + rnd() * 0.1, 0xd8b8a0);
       fig.root.position.set(x, heightAt(x, z), z); scene.add(fig.root);
       // 刀
       const blade = new T.Mesh(new T.BoxGeometry(0.04, 0.7, 0.015), new T.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.8, roughness: 0.4 })); blade.position.y = 0.4;

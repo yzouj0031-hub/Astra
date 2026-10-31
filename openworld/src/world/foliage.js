@@ -14,7 +14,7 @@ export function M(px, py, pz, s = 1, ry = 0, lean = 0) {
   return new T.Matrix4().compose(_p, _q, _s);
 }
 
-export const LOD = { value: 190 };   // 树在这个距离以内画真模型，以外画烘好的卡片
+export const LOD = { value: 160 };   // 树在这个距离以内画真模型，以外画烘好的卡片
 const mats = new Map();
 function windMat(base, kind, tint) {
   const key = base.uuid + kind + (tint || '');
@@ -47,7 +47,7 @@ function shareGeometry(src) {
 
 /* 实例按 120 米的格子分批：每批自己的包围球、开视锥裁剪，再按到玩家的距离整批隐藏。
    不分批的话全图两千多棵树每帧都画，实测 730 万三角形。 */
-const CHUNK = 120;
+const CHUNK = 200;
 export const chunks = [];   // {mesh, cx, cz, far}
 function instance(scene, geo, mat, items, shadow, far = 420) {
   const cells = new Map();
@@ -233,7 +233,7 @@ export function plantWorld(scene, assets, opts = {}) {
   for (const [name, items] of Object.entries(groups)) {
     const part = parts[name];
     for (const { geometry, matName } of part.meshes) {
-      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 160 : LOD.value + 90);
+      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 40);
       triangles += (geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3) * items.length;
     }
   }

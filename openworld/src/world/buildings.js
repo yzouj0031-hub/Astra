@@ -199,7 +199,7 @@ export function beaconTower() {
   for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; g.add(box(0.5, 0.9, 0.5, m.stone, Math.cos(a) * 3.3, 10.4, Math.sin(a) * 3.3)); }
   // 柴堆与火盆
   const bowl = new T.Mesh(new T.CylinderGeometry(1.2, 0.8, 0.8, 10), m.iron); bowl.position.y = 10.4; g.add(bowl);
-  const fire = new T.PointLight(0xff7a2a, 0, 40, 1.6); fire.position.y = 11.6; g.add(fire);
+  const fire = new T.PointLight(0xff7a2a, 0, 70, 1.5); fire.position.y = 11.6; g.add(fire);
   const flame = new T.Mesh(new T.ConeGeometry(0.8, 2.2, 8), new T.MeshBasicMaterial({ color: 0xff9a3a, transparent: true, opacity: 0.85 })); flame.position.y = 11.8; flame.visible = false; g.add(flame);
   // 台阶（绕一圈的斜坡：用一串小块）
   for (let i = 0; i < 20; i++) { const a = i * 0.32, r = 4.6; const s = box(1.2, 0.3, 1.0, m.stone, Math.cos(a) * r, 0.2 + i * 0.5, Math.sin(a) * r); s.rotation.y = -a; g.add(s); }
@@ -239,7 +239,7 @@ export function campfire() {
   for (let i = 0; i < 7; i++) { const a = i / 7 * 6.28; const s = new T.Mesh(new T.DodecahedronGeometry(0.28, 0), m.stone); s.position.set(Math.cos(a) * 0.8, 0.15, Math.sin(a) * 0.8); g.add(s); }
   for (let i = 0; i < 3; i++) { const l = box(1.2, 0.14, 0.14, m.wood, 0, 0.2, 0); l.rotation.y = i * 1.05; g.add(l); }
   const flame = new T.Mesh(new T.ConeGeometry(0.35, 1.0, 7), new T.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9 })); flame.position.y = 0.7; g.add(flame);
-  const light = new T.PointLight(0xff8a3a, 2.5, 14, 1.8); light.position.y = 1.0; g.add(light);
+  const light = new T.PointLight(0xff8a3a, 40, 18, 1.6); light.position.y = 1.0; g.add(light);
   g.userData.fire = { light, flame }; g.userData.collider = { r: 0.9 }; return g;
 }
 export function crate(size = 0.9) { const c = box(size, size, size, mats().woodLight, 0, size / 2, 0); c.userData.collider = { r: size * 0.7 }; return c; }

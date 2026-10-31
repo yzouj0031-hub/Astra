@@ -26,8 +26,8 @@ const SHOTS = [
   { name: 'night', q: 'at=-120,50&yaw=0&cam=3.2,0.2,7&t=22' },
   { name: 'camp', q: 'at=320,340&yaw=0.6&cam=3.6,0.25,8&t=14' },
   { name: 'mountain', q: 'at=360,-330&yaw=0.5&cam=3.5,0.35,10&t=8' },
-  { name: 'overview', q: 'at=-60,60&yaw=0&cam=3.0,1.1,14&t=12' },
-  { name: 'mobile', q: 'at=-100,70&yaw=2.6&cam=0.9,0.22,7&t=9.5', mobile: true },
+  { name: 'overview', q: 'at=-60,60&yaw=0&cam=2.6,0.55,42&t=12' },
+  { name: 'mobile', q: 'at=-100,70&yaw=2.6&cam=0.9,0.3,9&t=9.5', mobile: true },
 ];
 
 (async () => {

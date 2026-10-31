@@ -9,7 +9,7 @@ export function createCamera(aspect) {
   const want = new T.Vector3(), off = new T.Vector3();
   function update(dt, anchor, input) {
     s.yaw -= input.look.dx * 0.0045; s.pitch = clamp(s.pitch + input.look.dy * 0.0035, -0.35, 1.2);
-    if (input.zoom) s.dist = clamp(s.dist + input.zoom * 0.8, 2.6, 14);
+    if (input.zoom) s.dist = clamp(s.dist + input.zoom * 0.8, 2.6, 16);
     s.target.lerp(anchor, 1 - Math.exp(-dt * 12));
     s.target.y = lerp(s.target.y, anchor.y, 1 - Math.exp(-dt * 8));
     const d = s.dist;

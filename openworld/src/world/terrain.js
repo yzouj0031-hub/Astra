@@ -63,7 +63,7 @@ function vertexColor(x, z, y, out) {
   }
   // 岩：坡陡和高处发灰
   const rock = smoothstep(0.30, 0.55, slope) + smoothstep(85, 115, y) * 0.7;
-  tmp.setHSL(0.09, 0.08, 0.38 + varia * 0.08 + hash2(x * 3, z * 3, 5) * 0.06);
+  tmp.setHSL(0.16, 0.1, 0.3 + varia * 0.06 + hash2(x * 3, z * 3, 5) * 0.05);
   out.lerp(tmp, clamp(rock, 0, 1));
   // 河滩 / 湖岸：湿沙
   if (rv < 8 || y < WORLD.water + 1.2) {

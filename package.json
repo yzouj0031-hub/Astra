@@ -12,7 +12,10 @@
     "package:game": "node scripts/package-game.mjs",
     "test": "node tests/online.cjs && node tests/smoke.cjs && node tests/journeys.cjs && node tests/journey-lifecycle.cjs",
     "test:online-browser": "node tests/online-browser.cjs",
-    "test:online-live": "node tests/online-live.cjs"
+    "test:online-live": "node tests/online-live.cjs",
+    "openworld": "node openworld/serve.mjs",
+    "test:openworld": "node openworld/tests/logic.cjs",
+    "shots:openworld": "node openworld/tests/shots.cjs renders/openworld"
   },
   "devDependencies": {
     "@supabase/supabase-js": "2.95.0",
