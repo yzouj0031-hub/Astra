@@ -65,7 +65,7 @@ async function boot() {
   const boat = createBoat(scene, assets, world); world.boat = boat;
   const hud = createHUD(world); world.hud = hud; world.sky = sky;
   const { cam, s: camS, update: camUpdate } = createCamera(innerWidth / innerHeight);
-  const fitFov = () => { cam.fov = innerWidth < innerHeight ? 72 : 55; cam.updateProjectionMatrix(); }; fitFov();
+  const fitFov = () => { cam.fov = innerWidth < innerHeight ? 72 : 55; cam.updateProjectionMatrix(); }; fitFov(); if (innerWidth < innerHeight) { camS.pitch = 0.16; camS.dist = 7.5; }
   if (navigator.maxTouchPoints > 0 && mobile) document.body.classList.add('touch');
   const input = createInput(canvas, { stick: $('stick'), knob: $('knob'), touchLayer: $('touch'), btnSprint: $('b-sprint'), btnJump: $('b-jump'), btnAttack: $('b-attack'), btnInteract: $('b-interact'), btnDodge: $('b-dodge') });
   // 灯笼里的点光：只给离玩家最近的几盏
@@ -153,7 +153,7 @@ async function boot() {
     if (world.beaconLit) { built.beacon.userData.fire.light.intensity = 400 + Math.sin(t * 7) * 60; }
     const near = built.lanterns.map(l => { l.getWorldPosition(_tmp); return { l, d: _tmp.distanceToSquared(player.pos), x: _tmp.x, y: _tmp.y, z: _tmp.z }; }).sort((a, b) => a.d - b.d);
     lanternLights.forEach((pl, i) => { const n = near[i]; if (!n) { pl.intensity = 0; return; } pl.position.set(n.x, n.y - 0.2, n.z); pl.intensity = night * 45; });
-    for (const l of built.lanterns) { const m = l.children[0].material; m.emissiveIntensity = 0.2 + night * 1.8; }
+    built.lanternMat.emissiveIntensity = 0.2 + night * 1.8;
     water.material.uniforms.uTime.value = t; water.material.uniforms.uSun.value.copy(sky.state.sunDir); water.material.uniforms.uFogColor.value.copy(scene.fog.color); water.material.uniforms.uFogNear.value = scene.fog.near; water.material.uniforms.uFogFar.value = scene.fog.far;
     water.material.uniforms.uSky.value.copy(sky.uniforms.uHorizon.value);
     IMPOSTOR_LIGHT.sun.copy(sky.state.sunDir); IMPOSTOR_LIGHT.sunColor.copy(sky.sun.color).multiplyScalar(sky.sun.intensity / 2.4); IMPOSTOR_LIGHT.ambient.copy(sky.hemi.color).multiplyScalar(sky.hemi.intensity * 0.55);

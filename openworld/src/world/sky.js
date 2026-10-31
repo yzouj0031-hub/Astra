@@ -35,13 +35,13 @@ function keyAt(t, i) {
 export function createSky(scene, renderer) {
   const uniforms = {
     uZenith: { value: C(0x5f97d8) }, uHorizon: { value: C(0xd6e5ee) }, uSun: { value: new T.Vector3(0, 1, 0) },
-    uSunColor: { value: C(0xffffff) }, uNight: { value: 0 }, uMoon: { value: new T.Vector3(0, -1, 0) },
+    uSunColor: { value: C(0xffffff) }, uNight: { value: 0 }, uMoon: { value: new T.Vector3(0, -1, 0) }, uFog: { value: C(0xd4e0e8) },
   };
   const sky = new T.Mesh(new T.SphereGeometry(900, 32, 16), new T.ShaderMaterial({
     uniforms, side: T.BackSide, depthWrite: false, fog: false,
     vertexShader: `varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position.z=gl_Position.w; }`,
     fragmentShader: `
-      uniform vec3 uZenith,uHorizon,uSun,uSunColor,uMoon; uniform float uNight; varying vec3 vD;
+      uniform vec3 uZenith,uHorizon,uSun,uSunColor,uMoon,uFog; uniform float uNight; varying vec3 vD;
       float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
       void main(){
         float t=clamp(vD.y,0.0,1.0);
@@ -55,6 +55,8 @@ export function createSky(scene, renderer) {
         float md=max(dot(vD,uMoon),0.0); col+=vec3(0.9,0.92,1.0)*pow(md,1400.0)*1.2*uNight;
         // 星：按方向哈希，夜里才有
         vec3 g=floor(vD*220.0); float s=step(0.9965,h(g)); col+=vec3(s)*uNight*(0.5+0.5*h(g+1.0))*smoothstep(0.02,0.25,vD.y);
+        // 地平线附近并进雾色：远处的地面是被雾吃掉的，天和地才接得上
+        col=mix(col,uFog,smoothstep(0.14,-0.02,vD.y));
         gl_FragColor=vec4(col,1.0);
       }`,
   }));
@@ -81,7 +83,7 @@ export function createSky(scene, renderer) {
     uniforms.uZenith.value.copy(keyAt(t, 0)); uniforms.uHorizon.value.copy(keyAt(t, 1));
     uniforms.uSunColor.value.copy(keyAt(t, 2)); uniforms.uSun.value.copy(sd); uniforms.uNight.value = night;
     uniforms.uMoon.value.set(-sd.x, -sd.y * 0.8 + 0.1, sd.z * 0.6).normalize();
-    scene.fog.color.copy(keyAt(t, 3)); hemi.color.copy(keyAt(t, 1)); hemi.groundColor.copy(keyAt(t, 4));
+    scene.fog.color.copy(keyAt(t, 3)); uniforms.uFog.value.copy(scene.fog.color); hemi.color.copy(keyAt(t, 1)); hemi.groundColor.copy(keyAt(t, 4));
     hemi.intensity = lerp(0.95, 0.42, night);
     sun.color.copy(keyAt(t, 2)); sun.intensity = lerp(2.4, 0, night) * clamp(elev * 3 + 0.4, 0.2, 1);
     moon.intensity = 0.7 * night;

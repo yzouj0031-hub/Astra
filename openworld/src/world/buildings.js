@@ -5,6 +5,7 @@ import { WORLD, RIVER, PLACES } from './layout.js';
 import { heightAt } from './terrain.js';
 import { mulberry32 } from '../util/rng.js';
 import * as TX from './textures.js';
+import { mergeGeometries } from '../../vendor/addons/BufferGeometryUtils.js';
 
 const S = {};   // 共享材质
 function mats() {
@@ -255,10 +256,11 @@ export function palisade(points) {
 /* 摆进世界：返回碰撞体、灯笼、可互动点、发光窗材质。 */
 export function buildWorld(scene) {
   const rnd = mulberry32(WORLD.seed * 77 + 5);
+  const roots = []; const addRoot = o => { scene.add(o); roots.push(o); return o; };
   const m = mats();
   const colliders = [], lanterns = [], fires = [], interact = [];
   const placeAt = (obj, x, z, ry = 0, yOff = 0) => {
-    obj.position.set(x, heightAt(x, z) + yOff, z); obj.rotation.y = ry; scene.add(obj);
+    obj.position.set(x, heightAt(x, z) + yOff, z); obj.rotation.y = ry; addRoot(obj);
     const c = obj.userData.collider;
     if (c) colliders.push({ x, z, rot: ry, ...c });
     if (obj.userData.lanterns) for (const l of obj.userData.lanterns) lanterns.push(l);
@@ -284,19 +286,19 @@ export function buildWorld(scene) {
   placeAt(gate('渡头村'), -60, 46, Math.PI / 2 + 0.05);
   placeAt(gate('渡头村'), -205, 128, Math.PI / 2 - 0.6);
   // 篱笆围出几片菜畦
-  scene.add(fenceLine([[-150, 100], [-120, 112], [-92, 100]]));
-  scene.add(fenceLine([[-212, 60], [-214, 90], [-196, 104]]));
+  addRoot(fenceLine([[-150, 100], [-120, 112], [-92, 100]]));
+  addRoot(fenceLine([[-212, 60], [-214, 90], [-196, 104]]));
 
   // ---- 桥、埠头 ----
   const bz = PLACES.bridge.z, bx = RIVER.x(bz);
-  const br = bridge(RIVER.halfWidth * 2 + 6); br.position.set(bx, heightAt(bx - 20, bz) + 0.3, bz); br.rotation.y = -Math.atan2(RIVER.x(bz + 5) - RIVER.x(bz - 5), 10); scene.add(br);
-  const dk = dock(); const dx = PLACES.dock.x, dz = PLACES.dock.z; dk.position.set(dx, WORLD.water + 0.5, dz); dk.rotation.y = -Math.PI / 2; scene.add(dk);
+  const br = bridge(RIVER.halfWidth * 2 + 6); br.position.set(bx, heightAt(bx - 20, bz) + 0.3, bz); br.rotation.y = -Math.atan2(RIVER.x(bz + 5) - RIVER.x(bz - 5), 10); addRoot(br);
+  const dk = dock(); const dx = PLACES.dock.x, dz = PLACES.dock.z; dk.position.set(dx, WORLD.water + 0.5, dz); dk.rotation.y = -Math.PI / 2; addRoot(dk);
   interact.push({ id: 'dock', x: dx + 2, z: dz, r: 3, label: '登船 · 划乌篷', kind: 'boat' });
 
   // ---- 东畈：三户农家 + 田埂篱笆 ----
   const p = PLACES.paddies;
   [[p.x - 60, p.z - 90, 0.3], [p.x - 30, p.z - 108, -0.2], [p.x + 70, p.z - 80, 0.6]].forEach(([x, z, ry]) => placeAt(house(6.5, 5.5, 2.9, { dark: true }), x, z, ry));
-  scene.add(fenceLine([[p.x - 110, p.z - 60], [p.x - 110, p.z + 60], [p.x + 110, p.z + 60], [p.x + 110, p.z - 60], [p.x - 110, p.z - 60]], 2.5));
+  addRoot(fenceLine([[p.x - 110, p.z - 60], [p.x - 110, p.z + 60], [p.x + 110, p.z + 60], [p.x + 110, p.z - 60], [p.x - 110, p.z - 60]], 2.5));
 
   // ---- 山神祠、烽台 ----
   placeAt(shrine(), PLACES.shrine.x, PLACES.shrine.z, Math.PI * 0.95);
@@ -311,7 +313,7 @@ export function buildWorld(scene) {
     placeAt(tent(0.4), c.x - 7, c.z + 3, 0.4); placeAt(tent(2.6), c.x + 6, c.z + 5, 2.6); placeAt(tent(-1.5), c.x + 2, c.z - 8, -1.5);
     placeAt(crate(), c.x + 3, c.z + 1); placeAt(crate(0.7), c.x + 3.9, c.z + 1.2); placeAt(crate(0.8), c.x - 4, c.z - 3);
     const pts = []; for (let i = 0; i <= 9; i++) { const a = -0.9 + i * 0.34; pts.push([c.x + Math.cos(a) * 15, c.z + Math.sin(a) * 15]); }
-    scene.add(palisade(pts));
+    addRoot(palisade(pts));
   }
 
   // ---- 路牌 ----
@@ -326,5 +328,32 @@ export function buildWorld(scene) {
     const pole = box(0.12, 3.4, 0.12, m.wood, 0, 1.7, 0); const l = lantern(); l.position.set(0.35, 3.2, 0); const g = new T.Group(); g.add(pole, l); g.userData.lanterns = [l]; g.userData.collider = { r: 0.2 }; placeAt(g, x, z, rnd() * 6.28);
   }
 
-  return { colliders, lanterns, fires, interact, windowMat: m.lattice, beacon: bt };
+  const merged = mergeStatics(scene, roots);
+  return { colliders, lanterns, fires, interact, windowMat: m.lattice, lanternMat: m.lantern, beacon: bt, merged };
+}
+
+/* 几百个小方块各画一次太费：按材质把所有静态网格合成一个。火苗（MeshBasic）和牌匾（多材质）留着不合。 */
+function mergeStatics(scene, roots) {
+  const buckets = new Map();
+  for (const r of roots) {
+    r.updateMatrixWorld(true);
+    const doomed = [];
+    r.traverse(o => {
+      if (!o.isMesh || Array.isArray(o.material) || o.material.isMeshBasicMaterial || o.isInstancedMesh) return;
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      g.applyMatrix4(o.matrixWorld);
+      for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+      if (!g.attributes.uv) return;
+      (buckets.get(o.material) || buckets.set(o.material, []).get(o.material)).push(g);
+      doomed.push(o);
+    });
+    for (const o of doomed) o.parent.remove(o);
+  }
+  const out = [];
+  for (const [mat, geos] of buckets) {
+    const merged = mergeGeometries(geos, false); if (!merged) continue;
+    const mesh = new T.Mesh(merged, mat); mesh.castShadow = true; mesh.receiveShadow = true; mesh.name = 'static:' + (mat.name || mat.uuid.slice(0, 4));
+    scene.add(mesh); out.push(mesh);
+  }
+  return out;
 }

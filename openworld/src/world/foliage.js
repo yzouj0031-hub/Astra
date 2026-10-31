@@ -29,6 +29,7 @@ function windMat(base, kind, tint) {
     if (kind === 'card') sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvMapUv.x=(vMapUv.x+aCol)*0.25;');
     const local = kind === 'frond' ? 'max(0.0,-transformed.y)*0.075' : kind === 'leaf' ? 'max(0.0,transformed.y-1.4)*0.016'
       : kind === 'culm' ? 'max(0.0,transformed.y-0.3)*0.055' : kind === 'grass' ? 'max(0.0,transformed.y)*0.22' : '0.0';
+    if (kind === 'grass') sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed.y*=1.0-smoothstep(uLod*0.22,uLod*0.29,distance(instanceMatrix[3].xyz,cameraPosition));');
     sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
       `#include <begin_vertex>\n\tfloat amp=${local}+aSway;\n\tfloat sw=uWind+aPhase;\n\ttransformed.x+=sin(sw*1.30+transformed.y*0.32)*amp;\n\ttransformed.z+=cos(sw*1.07+transformed.y*0.26)*amp*0.7;`);
   };
@@ -47,7 +48,7 @@ function shareGeometry(src) {
 
 /* 实例按 120 米的格子分批：每批自己的包围球、开视锥裁剪，再按到玩家的距离整批隐藏。
    不分批的话全图两千多棵树每帧都画，实测 730 万三角形。 */
-const CHUNK = 200;
+const CHUNK = 120;
 export const chunks = [];   // {mesh, cx, cz, far}
 function instance(scene, geo, mat, items, shadow, far = 420) {
   const cells = new Map();
@@ -233,7 +234,7 @@ export function plantWorld(scene, assets, opts = {}) {
   for (const [name, items] of Object.entries(groups)) {
     const part = parts[name];
     for (const { geometry, matName } of part.meshes) {
-      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 40);
+      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 30);
       triangles += (geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3) * items.length;
     }
   }
@@ -266,7 +267,7 @@ export function bakeImpostors(renderer, assets, names) {
   const sun = new T.DirectionalLight(0xffffff, 1.4); sun.position.set(0.5, 1, 1.2); scene.add(sun);
   const cam = new T.OrthographicCamera(-1, 1, 1, -1, 0.1, 60);
   const slots = {};
-  const oldTM = renderer.toneMapping, oldTarget = renderer.getRenderTarget(), oldClear = renderer.getClearAlpha();
+  const oldTM = renderer.toneMapping, oldTarget = renderer.getRenderTarget(), oldClear = new T.Color(); renderer.getClearColor(oldClear); const oldAlpha = renderer.getClearAlpha();
   renderer.toneMapping = T.NoToneMapping; renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();
   names.forEach((name, i) => {
     const part = parts[name]; const group = new T.Group();
@@ -280,7 +281,7 @@ export function bakeImpostors(renderer, assets, names) {
     scene.remove(group);
     slots[name] = { u: col / COLS, v: row / ROWS, w, h };
   });
-  renderer.setScissorTest(false); renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTM; renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);
+  renderer.setScissorTest(false); renderer.setRenderTarget(oldTarget); renderer.toneMapping = oldTM; renderer.setClearColor(oldClear, oldAlpha); renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);
   return { texture: rt.texture, slots, cols: COLS, rows: ROWS };
 }
 
