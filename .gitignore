@@ -19,3 +19,4 @@ assets/_src/
 refs/
 # 代理并行实施时的临时 git 工作树
 .claude/worktrees/
+renders/openworld/

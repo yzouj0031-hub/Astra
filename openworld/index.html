@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>云水行</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;600;700&display=swap">
+<style>
+/* 界面像盖在宣纸上的朱印与题签：深墨、朱砂、米纸 */
+:root{
+  --paper:#f2e9d3;--paper2:#e4d6b4;--ink:#22231f;--ink2:#5a5b53;--red:#b2382c;--red2:#8e2a21;--jade:#3f8a6f;--gold:#c9a24c;--veil:rgba(18,20,18,.55);
+  --fb:"Ma Shan Zheng","STKaiti","KaiTi","Kaiti SC",serif;--ff:"Noto Serif SC","Songti SC","STSong","SimSun",serif;
+  --gl:max(14px,env(safe-area-inset-left));--gr:max(14px,env(safe-area-inset-right));--gt:max(10px,env(safe-area-inset-top));--gb:max(12px,env(safe-area-inset-bottom));
+}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;overflow:hidden;background:#141a19;color:var(--paper);font:14px/1.5 var(--ff);-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#touch{position:fixed;inset:0;touch-action:none}
+button{font-family:inherit;color:inherit;cursor:pointer}
+.hide{display:none!important}
+
+/* ---- HUD ---- */
+#hud{position:fixed;inset:0;pointer-events:none}
+#hud>*{pointer-events:auto}
+#topleft{position:absolute;left:var(--gl);top:var(--gt);display:flex;gap:12px;align-items:flex-start}
+#minimap{width:118px;height:118px;border-radius:50%;border:3px solid var(--paper2);box-shadow:0 2px 10px rgba(0,0,0,.4),inset 0 0 0 2px rgba(0,0,0,.25);background:#9fb08a}
+#mm-wrap{position:relative}
+#mm-n{position:absolute;left:50%;top:-8px;transform:translateX(-50%);background:var(--red);color:var(--paper);font-family:var(--fb);font-size:13px;line-height:1;padding:3px 6px;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+#place{font-family:var(--fb);font-size:30px;line-height:1.05;text-shadow:0 1px 3px rgba(0,0,0,.6);letter-spacing:2px;color:#fff6e4}
+#clock{font-size:13px;color:#f3e7cc;text-shadow:0 1px 2px rgba(0,0,0,.6);margin-top:4px;opacity:.92}
+#topright{position:absolute;right:var(--gr);top:var(--gt);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.seals{display:flex;gap:8px}
+.seal{width:44px;height:44px;border:0;border-radius:6px;background:linear-gradient(180deg,#c4463a,#982f25);color:#fff5e1;font-family:var(--fb);font-size:26px;line-height:1;box-shadow:0 2px 6px rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,235,210,.45);padding:0}
+.seal:active{transform:translateY(1px)}
+#coins{background:var(--veil);border-radius:20px;padding:4px 12px 4px 8px;display:flex;align-items:center;gap:6px;font-size:16px;color:#f7e6b5}
+#coins i{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2b2622 0 22%,#d9b55c 24% 100%);display:inline-block;box-shadow:inset 0 0 0 1px #8a6a2a}
+#bars{position:absolute;left:var(--gl);top:calc(var(--gt) + 138px);width:min(300px,55vw)}
+.bar{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.bar b{width:30px;height:30px;border-radius:5px;background:linear-gradient(180deg,#c4463a,#982f25);color:#fff5e1;font-family:var(--fb);font-weight:400;font-size:20px;display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.bar .track{flex:1;height:13px;border-radius:7px;background:rgba(0,0,0,.45);border:1.5px solid rgba(255,240,215,.55);overflow:hidden}
+.bar .fill{height:100%;background:linear-gradient(180deg,#d8503f,#a32a1f);width:100%;transition:width .15s}
+.bar.st .fill{background:linear-gradient(180deg,#e2c15e,#b48a22)}
+.bar.st b{background:linear-gradient(180deg,#b9962f,#7e6316)}
+.bar span{font-size:13px;min-width:56px;color:#f3e7cc;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+#tracker{position:absolute;left:var(--gl);top:calc(var(--gt) + 222px);max-width:min(320px,60vw);text-shadow:0 1px 2px rgba(0,0,0,.7)}
+#tracker .t{font-family:var(--fb);font-size:19px;color:#f1c66a;display:flex;align-items:center;gap:8px}
+#tracker .t:before{content:"";width:12px;height:12px;background:var(--red);transform:rotate(45deg);box-shadow:0 0 0 2px rgba(255,240,215,.6)}
+#tracker .d{font-size:13px;color:#efe3c6;margin-left:20px}
+#wp{position:absolute;left:0;top:0;transform:translate(-50%,-100%);text-align:center;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+#wp i{display:block;width:16px;height:16px;margin:0 auto 4px;background:var(--red);transform:rotate(45deg);box-shadow:0 0 0 2px rgba(255,240,215,.75),0 2px 6px rgba(0,0,0,.5)}
+#wp span{font-size:13px;color:#fff3dc}
+#prompt{position:absolute;left:50%;bottom:calc(var(--gb) + 150px);transform:translateX(-50%);background:var(--veil);border:1px solid rgba(255,240,215,.4);border-radius:8px;padding:8px 16px;font-size:15px;color:#fff3dc;display:flex;align-items:center;gap:10px}
+#prompt kbd{background:var(--red);border-radius:4px;padding:1px 7px;font-family:var(--fb);font-size:16px}
+#toasts{position:absolute;left:50%;top:calc(var(--gt) + 150px);transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none}
+.toast{background:rgba(242,233,211,.94);color:var(--ink);padding:7px 16px;border-radius:6px;font-size:14px;border-left:4px solid var(--red);box-shadow:0 2px 8px rgba(0,0,0,.4);animation:toast 3.2s forwards}
+@keyframes toast{0%{opacity:0;transform:translateY(-6px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+#hint{position:absolute;left:var(--gl);bottom:calc(var(--gb) + 10px);font-size:12px;color:rgba(243,231,204,.7);text-shadow:0 1px 2px rgba(0,0,0,.6)}
+#dmg{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(170,20,10,.55));opacity:0;transition:opacity .12s}
+
+/* ---- 触屏 ---- */
+#stick{position:fixed;width:120px;height:120px;border-radius:50%;border:2px solid rgba(255,240,215,.5);background:rgba(0,0,0,.18);display:none;pointer-events:none}
+#stick.on{display:block}
+#knob{position:absolute;left:35px;top:35px;width:50px;height:50px;border-radius:50%;background:rgba(242,233,211,.85);box-shadow:0 2px 6px rgba(0,0,0,.4)}
+#tbtns{position:fixed;right:var(--gr);bottom:var(--gb);width:220px;height:220px;display:none}
+body.touch #tbtns{display:block}body.touch #hint{display:none}
+.tb{position:absolute;border-radius:50%;border:2px solid rgba(255,240,215,.55);background:rgba(50,80,55,.72);color:#fff3dc;font-family:var(--fb);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.4)}
+.tb small{font-family:var(--ff);font-size:11px;margin-top:3px;opacity:.85}
+#b-attack{right:0;bottom:10px;width:112px;height:112px;font-size:40px}
+#b-jump{right:118px;bottom:0;width:78px;height:78px;font-size:30px}
+#b-sprint{right:122px;bottom:118px;width:78px;height:78px;font-size:30px}
+#b-dodge{right:0;bottom:134px;width:62px;height:62px;font-size:24px}
+#b-interact{right:70px;bottom:190px;width:62px;height:62px;font-size:24px;background:rgba(140,60,40,.8)}
+
+/* ---- 面板 ---- */
+.panel{position:fixed;inset:0;background:rgba(10,12,12,.55);display:grid;place-items:center;z-index:20}
+.sheet{width:min(560px,94vw);max-height:88vh;overflow:auto;background:var(--paper);color:var(--ink);border-radius:10px;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.6);border:1px solid #c9b88f}
+.sheet h2{margin:0 0 10px;font-family:var(--fb);font-weight:400;font-size:28px;color:var(--red);display:flex;justify-content:space-between;align-items:center}
+.sheet h2 button{border:0;background:var(--red);color:var(--paper);border-radius:6px;font-size:14px;padding:5px 12px}
+.sheet .row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px dashed #cdbf9d;gap:12px}
+.sheet .row small{display:block;color:var(--ink2)}
+.sheet .row button{border:1px solid var(--red);background:transparent;color:var(--red);border-radius:5px;padding:3px 10px}
+.sheet .row button.on{background:var(--red);color:var(--paper)}
+.sheet .row.done{opacity:.55}
+.sheet .big{display:block;width:100%;margin:8px 0;padding:10px;border:0;border-radius:6px;background:var(--red);color:var(--paper);font-size:16px;font-family:var(--fb)}
+#bigmap{width:100%;aspect-ratio:1;border:2px solid #b9a67c;border-radius:6px;background:#c9d6b0}
+.kv{font-size:13px;color:var(--ink2);line-height:1.8}
+#dialog{position:fixed;left:50%;bottom:calc(var(--gb) + 20px);transform:translateX(-50%);width:min(620px,94vw);background:rgba(242,233,211,.96);color:var(--ink);border-radius:10px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.5);border:1px solid #c9b88f;z-index:15}
+#dialog .n{font-family:var(--fb);font-size:22px;color:var(--red)}
+#dialog .q{font-size:12px;color:var(--jade);margin-left:8px}
+#dialog .t{margin:6px 0 10px;font-size:15px}
+#dialog button{border:0;background:var(--red);color:var(--paper);border-radius:6px;padding:6px 16px;font-size:14px}
+#dialog .acts{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---- 加载 / 死亡 ---- */
+#loading{position:fixed;inset:0;background:#1b2320 url() ;display:grid;place-items:center;z-index:50;color:var(--paper);text-align:center}
+#loading h1{font-family:var(--fb);font-weight:400;font-size:64px;margin:0 0 6px;letter-spacing:8px;color:#f3e4c2}
+#loading .sub{opacity:.75;margin-bottom:22px}
+#loading .track{width:260px;height:6px;border-radius:3px;background:rgba(255,255,255,.15);margin:0 auto 10px;overflow:hidden}
+#loading .fill{height:100%;background:var(--red);width:0%}
+#loading .err{color:#f0a090;max-width:420px;white-space:pre-wrap;margin-top:14px}
+#loading button{margin-top:16px;border:0;background:var(--red);color:var(--paper);font-family:var(--fb);font-size:24px;padding:8px 34px;border-radius:8px;letter-spacing:4px}
+#dead{position:fixed;inset:0;background:rgba(40,8,6,.7);display:grid;place-items:center;z-index:30;color:#f3e4c2;font-family:var(--fb);font-size:48px;letter-spacing:6px}
+#dead small{display:block;font-family:var(--ff);font-size:15px;letter-spacing:0;opacity:.8;margin-top:8px}
+@media (max-width:520px){#place{font-size:24px}#minimap{width:96px;height:96px}#bars{top:calc(var(--gt) + 116px);width:52vw}#tracker{top:calc(var(--gt) + 196px)}.seal{width:38px;height:38px;font-size:22px}}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="touch"></div>
+
+<div id="hud" class="hide">
+  <div id="topleft">
+    <div id="mm-wrap"><canvas id="minimap" width="236" height="236"></canvas><div id="mm-n">北</div></div>
+    <div><div id="place">渡头村</div><div id="clock">巳时初 · 第一日</div></div>
+  </div>
+  <div id="topright">
+    <div class="seals"><button class="seal" id="s-map" title="地图 M">图</button><button class="seal" id="s-bag" title="背包 I">囊</button><button class="seal" id="s-quest" title="任务 Q">务</button><button class="seal" id="s-pause" title="停 Esc">停</button></div>
+    <div id="coins"><i></i><span id="coin-n">0</span></div>
+  </div>
+  <div id="bars">
+    <div class="bar hp"><b>血</b><div class="track"><div class="fill" id="hp-fill"></div></div><span id="hp-t">100/100</span></div>
+    <div class="bar st"><b>气</b><div class="track"><div class="fill" id="st-fill"></div></div><span id="st-t"></span></div>
+  </div>
+  <div id="tracker"><div class="t" id="tr-name"></div><div class="d" id="tr-desc"></div></div>
+  <div id="wp" class="hide"><i></i><span id="wp-d"></span></div>
+  <div id="prompt" class="hide"><kbd>E</kbd><span id="prompt-t"></span></div>
+  <div id="toasts"></div>
+  <div id="hint">WASD 移动 · Shift 跑 · 空格 跳 · J 轻击 K 重击 L 翻滚 · E 互动 · M 地图 I 背包 Q 任务 · 拖动鼠标环顾 · 滚轮缩放</div>
+  <div id="dmg"></div>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="tbtns">
+  <button class="tb" id="b-attack">攻<small>攻击</small></button>
+  <button class="tb" id="b-jump">跃<small>跳跃</small></button>
+  <button class="tb" id="b-sprint">疾<small>按住疾跑</small></button>
+  <button class="tb" id="b-dodge">闪<small>翻滚</small></button>
+  <button class="tb" id="b-interact">互<small>互动</small></button>
+</div>
+
+<div id="dialog" class="hide"><div><span class="n" id="dg-name"></span><span class="q" id="dg-quest"></span></div><div class="t" id="dg-text"></div><div class="acts" id="dg-acts"><button id="dg-ok">好</button></div></div>
+
+<div id="p-map" class="panel hide"><div class="sheet"><h2>舆图<button data-close>收起</button></h2><canvas id="bigmap" width="640" height="640"></canvas><div class="kv" id="map-legend">◆ 任务目标 · ▲ 你 · 点地图上的任务名可切换追踪</div></div></div>
+<div id="p-bag" class="panel hide"><div class="sheet"><h2>行囊<button data-close>收起</button></h2><div id="bag-list"></div></div></div>
+<div id="p-quest" class="panel hide"><div class="sheet"><h2>事务<button data-close>收起</button></h2><div id="quest-list"></div></div></div>
+<div id="p-shop" class="panel hide"><div class="sheet"><h2>听松茶舍<button data-close>离开</button></h2><div id="shop-list"></div></div></div>
+<div id="p-pause" class="panel hide"><div class="sheet"><h2>云水行<button data-close>继续</button></h2>
+  <div class="kv" id="pause-info"></div>
+  <button class="big" id="btn-save">存档</button>
+  <button class="big" id="btn-time">跳到下一个时辰</button>
+  <button class="big" id="btn-reset" style="background:#5a5b53">重新开始（清空存档）</button>
+</div></div>
+<div id="dead" class="hide">力竭<small>片刻后在村口醒来</small></div>
+
+<div id="loading"><div><h1>云水行</h1><div class="sub">溪山一程 · 开放世界</div><div class="track"><div class="fill" id="ld-fill"></div></div><div id="ld-text">正在准备…</div><div class="err hide" id="ld-err"></div><button id="ld-start" class="hide">入 山</button></div></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

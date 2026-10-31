@@ -1,0 +1,56 @@
+{
+ "materials": {
+  "NormalTree_Bark": {
+   "map": "normaltree_bark.jpg",
+   "normalMap": "normaltree_bark_normal.jpg",
+   "alpha": false
+  },
+  "NormalTree_Leaves": {
+   "map": "normaltree_leaves.png",
+   "alpha": true
+  },
+  "MapleTree_Bark": {
+   "map": "mapletree_bark.jpg",
+   "normalMap": "mapletree_bark_normal.jpg",
+   "alpha": false
+  },
+  "MapleTree_Leaves": {
+   "map": "mapletree_leaves.png",
+   "alpha": true
+  },
+  "BirchTree_Bark": {
+   "map": "birchtree_bark.jpg",
+   "normalMap": "birchtree_bark_normal.jpg",
+   "alpha": false
+  },
+  "BirchTree_Leaves": {
+   "map": "birchtree_leaves.png",
+   "alpha": true
+  },
+  "Bush_Leaves": {
+   "map": "normaltree_leaves.png",
+   "alpha": true
+  },
+  "Atlas": {
+   "map": "atlas.jpg",
+   "alpha": false
+  },
+  "PalmTree_Trunk": {
+   "map": "palmtree_trunk.jpg",
+   "alpha": false
+  },
+  "PalmTree_Leaves": {
+   "map": "palmtree_leaves.png",
+   "alpha": true
+  },
+  "PineTree_Bark": {
+   "map": "pinetree_bark.jpg",
+   "normalMap": "pinetree_bark_normal.jpg",
+   "alpha": false
+  },
+  "PineTree_Leaves": {
+   "map": "pinetree_leaves.png",
+   "alpha": true
+  }
+ }
+}
