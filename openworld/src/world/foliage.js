@@ -251,14 +251,14 @@ export function plantWorld(scene, assets, opts = {}) {
 
   // 东畈：稻秧按行列插满整片田，静态合批（不是玩家周围现算的草）
   const reeds = [], p = PLACES.paddies;
-  for (let z = p.z - p.r; z <= p.z + p.r; z += 1.1) for (let x = p.x - p.r; x <= p.x + p.r; x += 1.1) {
+  for (let z = p.z - p.r; z <= p.z + p.r; z += 0.8) for (let x = p.x - p.r; x <= p.x + p.r; x += 0.8) {
     if (Math.hypot(x - p.x, z - p.z) > p.r - 14) continue;
     if (Math.abs(Math.sin(z * 0.9)) < 0.18 || Math.abs(Math.sin(x * 0.11)) < 0.05) continue;   // 田埂
     if (roadDist(x, z) < 4) continue;
     const jx = x + (hash2(x * 7, z, 3) - 0.5) * 0.3, jz = z + (hash2(x, z * 7, 4) - 0.5) * 0.3;
     reeds.push({ m: M(jx, heightAt(jx, jz) + 0.05, jz, 1.0 + hash2(x, z, 5) * 0.4, hash2(z, x, 6) * 6.28), phase: hash2(x, z, 8) * 6.28 });
   }
-  if (reeds.length) instance(scene, crossCard(0.5, 0.6).translate(0, 0.3, 0), windMat(new T.MeshStandardMaterial({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1, color: 0xcfe0a0 }), 'reed'), reeds, false, 260);
+  if (reeds.length) instance(scene, crossCard(0.6, 0.9).translate(0, 0.45, 0), windMat(new T.MeshStandardMaterial({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1, color: 0xcfe0a0 }), 'reed'), reeds, false, 260);
 
   // 远树：烘好的卡片，一棵两三角形
   let impostorMesh = null;

@@ -140,7 +140,7 @@ export function buildWater() {
   const mesh = new T.Mesh(geo, mat); mesh.position.y = WORLD.water; mesh.name = 'water'; mesh.renderOrder = 2;
   // 东畈的田水：同一份材质，一张圆盘，比田面高 15 厘米、比路低
   const p = PLACES.paddies;
-  const pm = mat.clone(); pm.uniforms.uAlpha.value = 0.38; pm.uniforms.uShallow.value.set(0x7a8a5a); pm.uniforms.uDeep.value.set(0x55603a);
+  const pm = mat.clone(); pm.uniforms.uAlpha.value = 0.3; pm.uniforms.uShallow.value.set(0x7a8a5a); pm.uniforms.uDeep.value.set(0x55603a);
   const paddy = new T.Mesh(new T.CircleGeometry(p.r - 12, 48).rotateX(-Math.PI / 2), pm); paddy.position.set(p.x, p.y - 0.15, p.z); paddy.renderOrder = 2; paddy.name = 'paddywater';
   mesh.add(paddy); paddy.position.y -= WORLD.water; mesh.userData.paddy = pm;
   return mesh;
