@@ -28,7 +28,7 @@ function windMat(base, kind, tint) {
       '\tif (distance(instanceMatrix[3].xyz, cameraPosition) > uLod) transformed = vec3(0.0);\n#include <project_vertex>');
     if (kind === 'card') sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvMapUv.x=(vMapUv.x+aCol)*0.25;');
     const local = kind === 'frond' ? 'max(0.0,-transformed.y)*0.075' : kind === 'leaf' ? 'max(0.0,transformed.y-1.4)*0.016'
-      : kind === 'culm' ? 'max(0.0,transformed.y-0.3)*0.055' : kind === 'grass' ? 'max(0.0,transformed.y)*0.22' : '0.0';
+      : kind === 'culm' ? 'max(0.0,transformed.y-0.3)*0.055' : kind === 'grass' ? 'max(0.0,transformed.y)*0.22' : kind === 'reed' ? 'max(0.0,transformed.y)*0.12' : '0.0';
     if (kind === 'grass') sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed.y*=1.0-smoothstep(uLod*0.22,uLod*0.29,distance(instanceMatrix[3].xyz,cameraPosition));');
     sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
       `#include <begin_vertex>\n\tfloat amp=${local}+aSway;\n\tfloat sw=uWind+aPhase;\n\ttransformed.x+=sin(sw*1.30+transformed.y*0.32)*amp;\n\ttransformed.z+=cos(sw*1.07+transformed.y*0.26)*amp*0.7;`);
@@ -249,6 +249,17 @@ export function plantWorld(scene, assets, opts = {}) {
   if (leaves.length) instance(scene, crossCard(1.2, 1.0), cardMat('bamboo', 'card'), leaves, false, 260);
   if (pads.length) instance(scene, pinePad(), cardMat('pine', 'card'), pads, false, 300);
 
+  // 东畈：稻秧按行列插满整片田，静态合批（不是玩家周围现算的草）
+  const reeds = [], p = PLACES.paddies;
+  for (let z = p.z - p.r; z <= p.z + p.r; z += 1.1) for (let x = p.x - p.r; x <= p.x + p.r; x += 1.1) {
+    if (Math.hypot(x - p.x, z - p.z) > p.r - 14) continue;
+    if (Math.abs(Math.sin(z * 0.9)) < 0.18 || Math.abs(Math.sin(x * 0.11)) < 0.05) continue;   // 田埂
+    if (roadDist(x, z) < 4) continue;
+    const jx = x + (hash2(x * 7, z, 3) - 0.5) * 0.3, jz = z + (hash2(x, z * 7, 4) - 0.5) * 0.3;
+    reeds.push({ m: M(jx, heightAt(jx, jz) + 0.05, jz, 1.0 + hash2(x, z, 5) * 0.4, hash2(z, x, 6) * 6.28), phase: hash2(x, z, 8) * 6.28 });
+  }
+  if (reeds.length) instance(scene, crossCard(0.5, 0.6).translate(0, 0.3, 0), windMat(new T.MeshStandardMaterial({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1, color: 0xcfe0a0 }), 'reed'), reeds, false, 260);
+
   // 远树：烘好的卡片，一棵两三角形
   let impostorMesh = null;
   if (opts.impostor && impostors.length) impostorMesh = buildImpostors(scene, opts.impostor, impostors);
@@ -339,30 +350,15 @@ export function createGrass(scene, opts = {}) {
   geo.setAttribute('aPhase', new T.InstancedBufferAttribute(phase, 1)); geo.setAttribute('aSway', new T.InstancedBufferAttribute(sway, 1)); geo.setAttribute('aCol', new T.InstancedBufferAttribute(col, 1));
   inst.frustumCulled = false; inst.receiveShadow = true; inst.castShadow = false; inst.count = 0; inst.name = 'grass';
   scene.add(inst);
-  // 稻秧：东畈水田里竖直的一簇簇
-  const reed = new T.InstancedMesh(crossCard(0.5, 0.55).translate(0, 0.27, 0), windMat(new T.MeshStandardMaterial({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1 }), 'grass'), MAX);
-  reed.geometry.setAttribute('aPhase', new T.InstancedBufferAttribute(new Float32Array(MAX), 1)); reed.geometry.setAttribute('aSway', new T.InstancedBufferAttribute(new Float32Array(MAX), 1)); reed.geometry.setAttribute('aCol', new T.InstancedBufferAttribute(new Float32Array(MAX), 1));
-  reed.frustumCulled = false; reed.count = 0; scene.add(reed);
-
   let cx = 1e9, cz = 1e9;
   const mat4 = new T.Matrix4();
   function rebuild(px, pz) {
-    let n = 0, r = 0;
-    const rp = reed.geometry.attributes.aPhase.array;
+    let n = 0;
     for (let j = -RANGE; j <= RANGE; j++) for (let i = -RANGE; i <= RANGE; i++) {
       const gx = cx + i, gz = cz + j;
       for (let k = 0; k < PER; k++) {
         const x = (gx + hash2(gx * 7 + k, gz, 1)) * CELL, z = (gz + hash2(gx, gz * 5 + k, 2)) * CELL;
         const kind = groundKind(x, z);
-        if (kind === 'paddy') {
-          if (r >= MAX) continue;
-          // 田里按行种
-          const rx = Math.round(x / 1.1) * 1.1, rz = Math.round(z / 1.1) * 1.1;
-          if (Math.abs(Math.sin(rz * 0.9)) < 0.18) continue;
-          mat4.compose(_p.set(rx, heightAt(rx, rz) + 0.08, rz), _q.setFromEuler(_e.set(0, hash2(k, gx, 3) * 6.28, 0)), _s.set(1.1, 1.0 + hash2(k, gz, 4) * 0.4, 1.1));
-          reed.setMatrixAt(r, mat4); rp[r] = hash2(gx, k, 8) * 6.28; r++;
-          continue;
-        }
         if (kind !== 'grass' && kind !== 'bank') continue;
         if (n >= MAX) continue;
         const density = 0.55 + 0.45 * fbm(x / 30, z / 30, 2, 77);
@@ -373,7 +369,6 @@ export function createGrass(scene, opts = {}) {
       }
     }
     inst.count = n; inst.instanceMatrix.needsUpdate = true; geo.attributes.aPhase.needsUpdate = true;
-    reed.count = r; reed.instanceMatrix.needsUpdate = true; reed.geometry.attributes.aPhase.needsUpdate = true;
   }
   return {
     mesh: inst,

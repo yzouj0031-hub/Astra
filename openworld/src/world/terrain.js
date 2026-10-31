@@ -74,11 +74,11 @@ function vertexColor(x, z, y, out) {
   // 土路：中间踩实的土，边上渐变
   if (rd < 5.5) {
     tmp.setHSL(0.08, 0.32, 0.44 + patch * 0.04);
-    out.lerp(tmp, smoothstep(5.5, 2.4, rd) * 0.92);
+    out.lerp(tmp, smoothstep(4.6, 2.2, rd) * 0.9);
   }
   // 村里台地：踩得秃一些
   const v = PLACES.village, dv = Math.hypot(x - v.x, z - v.z);
-  if (dv < v.r * 0.6) { tmp.setHSL(0.13, 0.3, 0.42); out.lerp(tmp, smoothstep(v.r * 0.6, v.r * 0.2, dv) * 0.16 * (0.5 + patch)); }
+  if (dv < v.r * 0.5) { tmp.setHSL(0.13, 0.3, 0.42); out.lerp(tmp, smoothstep(v.r * 0.5, v.r * 0.15, dv) * 0.1 * (0.5 + patch)); }
   return out;
 }
 
@@ -113,11 +113,11 @@ export function buildWater() {
     uniforms: {
       uTime: { value: 0 }, uSun: { value: new T.Vector3(0.3, 0.8, 0.2) },
       uShallow: { value: new T.Color(0x5f9a8a) }, uDeep: { value: new T.Color(0x24515a) },
-      uSky: { value: new T.Color(0xbcd3e6) }, uFogColor: { value: new T.Color(0xd8dfe3) }, uFogNear: { value: 80 }, uFogFar: { value: 600 },
+      uSky: { value: new T.Color(0xbcd3e6) }, uFogColor: { value: new T.Color(0xd8dfe3) }, uFogNear: { value: 80 }, uFogFar: { value: 600 }, uAlpha: { value: 0.78 },
     },
     vertexShader: `varying vec3 vW; void main(){ vec4 w=modelMatrix*vec4(position,1.0); vW=w.xyz; gl_Position=projectionMatrix*viewMatrix*w; }`,
     fragmentShader: `
-      uniform float uTime; uniform vec3 uSun, uShallow, uDeep, uSky, uFogColor; uniform float uFogNear, uFogFar; varying vec3 vW;
+      uniform float uTime; uniform vec3 uSun, uShallow, uDeep, uSky, uFogColor; uniform float uFogNear, uFogFar, uAlpha; varying vec3 vW;
       float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
       float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
         return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
@@ -134,14 +134,15 @@ export function buildWater() {
         col+=vec3(spec)*0.9;
         float d=length(cameraPosition-vW); float fog=smoothstep(uFogNear,uFogFar,d);
         col=mix(col,uFogColor,fog);
-        gl_FragColor=vec4(col, 0.78+fres*0.2);
+        gl_FragColor=vec4(col, uAlpha+fres*0.2);
       }`,
   });
   const mesh = new T.Mesh(geo, mat); mesh.position.y = WORLD.water; mesh.name = 'water'; mesh.renderOrder = 2;
   // 东畈的田水：同一份材质，一张圆盘，比田面高 15 厘米、比路低
   const p = PLACES.paddies;
-  const paddy = new T.Mesh(new T.CircleGeometry(p.r - 12, 48).rotateX(-Math.PI / 2), mat); paddy.position.set(p.x, p.y - 0.15, p.z); paddy.renderOrder = 2; paddy.name = 'paddywater';
-  mesh.add(paddy); paddy.position.y -= WORLD.water;
+  const pm = mat.clone(); pm.uniforms.uAlpha.value = 0.38; pm.uniforms.uShallow.value.set(0x7a8a5a); pm.uniforms.uDeep.value.set(0x55603a);
+  const paddy = new T.Mesh(new T.CircleGeometry(p.r - 12, 48).rotateX(-Math.PI / 2), pm); paddy.position.set(p.x, p.y - 0.15, p.z); paddy.renderOrder = 2; paddy.name = 'paddywater';
+  mesh.add(paddy); paddy.position.y -= WORLD.water; mesh.userData.paddy = pm;
   return mesh;
 }
 

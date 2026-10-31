@@ -80,7 +80,7 @@ export function house(w, d, h, opts = {}) {
   r.position.y = stone + h; g.add(r);
   // 灯笼：门两边
   const lan = [];
-  for (const sx of [-1, 1]) { const l = lantern(); l.position.set((opts.doorX || 0) + sx * 1.2, stone + h - 0.55, front + 0.55); g.add(l); lan.push(l); }
+  for (const sx of [-1, 1]) { const l = lantern(); l.position.set((opts.doorX || 0) + sx * Math.max(1.2, w * 0.2), stone + h - 0.55, front + 0.55); g.add(l); lan.push(l); }
   g.userData.lanterns = lan;
   g.userData.collider = { hw: w / 2 + 0.3, hd: d / 2 + 0.3 };
   return g;

@@ -156,6 +156,7 @@ async function boot() {
     built.lanternMat.emissiveIntensity = 0.2 + night * 1.8;
     water.material.uniforms.uTime.value = t; water.material.uniforms.uSun.value.copy(sky.state.sunDir); water.material.uniforms.uFogColor.value.copy(scene.fog.color); water.material.uniforms.uFogNear.value = scene.fog.near; water.material.uniforms.uFogFar.value = scene.fog.far;
     water.material.uniforms.uSky.value.copy(sky.uniforms.uHorizon.value);
+    { const u = water.userData.paddy.uniforms, w = water.material.uniforms; u.uTime.value = t; u.uSun.value.copy(w.uSun.value); u.uFogColor.value.copy(w.uFogColor.value); u.uFogNear.value = w.uFogNear.value; u.uFogFar.value = w.uFogFar.value; u.uSky.value.copy(w.uSky.value); }
     IMPOSTOR_LIGHT.sun.copy(sky.state.sunDir); IMPOSTOR_LIGHT.sunColor.copy(sky.sun.color).multiplyScalar(sky.sun.intensity / 2.4); IMPOSTOR_LIGHT.ambient.copy(sky.hemi.color).multiplyScalar(sky.hemi.intensity * 0.55);
     world.hurtFlash = Math.max(0, world.hurtFlash - dt * 1.5);
     hud.update(dt, player, cam, sky, quests.current());
