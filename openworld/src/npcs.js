@@ -42,11 +42,8 @@ export function createNPCs(scene, assets, colliders, world) {
     for (let i = 0; i < count; i++) {
       const a = rnd() * 6.28, r = 3 + rnd() * 8, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
       const fig = makeFigure(assets.player.scene, assets.player.animations, 1.8 + rnd() * 0.1);
-      dressFigure(fig, i % 2 === 0 ? 'bandit' : 'bandit2');
+      dressFigure(fig, i % 2 === 0 ? 'bandit' : 'bandit2', { weapon: 'spear' });
       fig.root.position.set(x, heightAt(x, z), z); scene.add(fig.root);
-      // 刀
-      const blade = new T.Mesh(new T.BoxGeometry(0.04, 0.7, 0.015), toon({ color: 0xb0b6bc })); blade.position.y = 0.4;
-      if (fig.hand) { fig.hand.add(blade); blade.scale.setScalar(1 / fig.model.scale.x); blade.rotation.set(Math.PI / 2, 0, 0); }
       const b = { fig, pos: fig.root.position, vel: new T.Vector3(), yaw: a, camp: c, campId: id, hp: 60, maxHp: 60, state: 'patrol', goal: null, wait: rnd() * 3, atkT: 0, hitDone: false, onGround: true, kind: 'bandit', dead: false, respawnT: 0, bar: makeBar() };
       b.bar.position.y = 2.1; fig.root.add(b.bar);
       bandits.push(b);

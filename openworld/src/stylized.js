@@ -38,11 +38,11 @@ function faceTexture(look) {
   ctx.fillStyle = 'rgba(240,140,140,0.28)'; for (const x of [78, 178]) { ctx.beginPath(); ctx.ellipse(x, 158, 22, 12, 0, 0, 6.28); ctx.fill(); }
   // 眼睛：大而竖长，上睫毛粗
   const eye = (cx) => {
-    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(cx, 132, 17, 22, 0, 0, 6.28); ctx.fill();
-    ctx.fillStyle = look.brows === 'angry' ? '#4a2a1a' : '#2c3e6a'; ctx.beginPath(); ctx.ellipse(cx, 136, 11, 17, 0, 0, 6.28); ctx.fill();
-    ctx.fillStyle = '#10121c'; ctx.beginPath(); ctx.ellipse(cx, 139, 7, 11, 0, 0, 6.28); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(cx - 4, 126, 4, 5, 0, 0, 6.28); ctx.fill();
-    ctx.strokeStyle = '#1a1420'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - 19, 118); ctx.quadraticCurveTo(cx, 104, cx + 19, 116); ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(cx, 138, 15, 20, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = look.brows === 'angry' ? '#4a2a1a' : '#2c3e6a'; ctx.beginPath(); ctx.ellipse(cx, 142, 10, 15, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = '#10121c'; ctx.beginPath(); ctx.ellipse(cx, 145, 6, 10, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(cx - 4, 132, 4, 5, 0, 0, 6.28); ctx.fill();
+    ctx.strokeStyle = '#1a1420'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - 17, 126); ctx.quadraticCurveTo(cx, 112, cx + 17, 124); ctx.stroke();
   };
   eye(94); eye(162);
   // 眉
@@ -142,57 +142,74 @@ function weightSleeve(geo, boneIndex, side) {
   geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new T.Float32BufferAttribute(sw, 4));
 }
 
-/* ---------- 头 ---------- */
+/* ---------- 头：瓜子脸，不是球 ---------- */
 function headGeometry(scaleX = 1) {
-  const g = new T.SphereGeometry(0.128, 28, 22);
+  const R = 0.122;
+  const g = new T.SphereGeometry(R, 32, 24);
   const p = g.attributes.position, uv = g.attributes.uv;
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    // 下半收成下巴，脸略扁
-    if (y < 0) { const t = -y / 0.128; const k = 1 - 0.32 * t * t; x *= k; z = z * (1 - 0.12 * t); }
-    z *= 0.94; x *= scaleX;
+    if (y < 0) {
+      // 下半：往下巴收成尖，脸颊在 -0.02 处最宽，下巴略前伸
+      const t = -y / R;
+      x *= 1 - 0.62 * Math.pow(t, 1.6); z *= 1 - 0.28 * t; z += 0.015 * t; y *= 1.08;
+    } else { x *= 1.02; z *= 0.98; }
+    z *= 0.96; x *= scaleX;
     p.setXYZ(i, x, y, z);
-    // 正面平面投影：脸画在贴图中央，背面指向贴图角上的纯肤色
-    if (z > 0.01) uv.setXY(i, 0.5 + x / 0.3, 0.46 + y / 0.3); else uv.setXY(i, 0.02, 0.98);
+    if (z > 0.005) uv.setXY(i, 0.5 + x / 0.3, 0.47 + y / 0.3); else uv.setXY(i, 0.02, 0.98);
   }
   g.computeVertexNormals();
   return g;
 }
 
-/* ---------- 发型 ---------- */
+/* ---------- 发型：有发量、有刘海、有鬓发 ---------- */
+function strand(mat, len, w, thick) {
+  // 一绺头发：上粗下尖的扁楔
+  // ConeGeometry 尖朝上：先翻成尖朝下，再把宽的根端挪到原点
+  const g = new T.ConeGeometry(w, len, 5, 1); g.rotateX(Math.PI); g.translate(0, -len / 2, 0); g.scale(1, 1, thick / w);
+  const m = new T.Mesh(g, mat); addOutline(m, 0.004); return m;
+}
 function hair(look, mat, head) {
   const g = new T.Group();
-  const cap = new T.SphereGeometry(0.146, 24, 18);
+  const cap = new T.SphereGeometry(0.15, 28, 20);
   const p = cap.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    // 前额留刘海：正面低于一条锯齿线的点折回线上
-    const fringe = 0.05 + 0.035 * Math.abs(Math.sin(x * 55));
     let ny = y;
-    if (z > 0.02 && y < fringe) ny = fringe; else if (z <= 0.02 && y < -0.05) ny = -0.05;   // 后脑勺到颈
-    p.setXYZ(i, x * 1.02, ny, z * 0.98);
+    const fringe = 0.055 + 0.02 * Math.abs(Math.sin(x * 40));
+    if (z > 0.03 && y < fringe) ny = fringe;            // 前额：刘海另做
+    else if (z <= 0.03 && y < -0.04) ny = -0.04;        // 后脑勺到颈
+    p.setXYZ(i, x * 1.08, ny * 1.02 + 0.015, z * 1.1 - 0.02);
   }
   cap.computeVertexNormals();
-  const capMesh = new T.Mesh(cap, mat); capMesh.position.set(0, 0.012, -0.012); g.add(capMesh); addOutline(capMesh, 0.006);
+  const capMesh = new T.Mesh(cap, mat); g.add(capMesh); addOutline(capMesh, 0.005);
+  // 刘海：一排楔形绺，中间短两边长，微微外撇
+  const bangs = look.brows === 'angry' ? [[-0.9, 0.085], [-0.55, 0.07], [-0.2, 0.055], [0.15, 0.06], [0.5, 0.075], [0.85, 0.09]] : [[-0.85, 0.08], [-0.5, 0.065], [-0.15, 0.055], [0.2, 0.06], [0.55, 0.07], [0.85, 0.085]];
+  for (const [a, len] of bangs) {
+    const sx = Math.sin(a) * 0.135, sz = Math.cos(a) * 0.135;
+    const st = strand(mat, len, 0.028, 0.02); st.position.set(sx, 0.085, sz + 0.005); st.rotation.set(0.32, a, -a * 0.25); g.add(st);
+  }
+  // 鬓发：耳前两绺长的
+  for (const sx of [-1, 1]) { const st = strand(mat, look.female ? 0.26 : 0.17, 0.03, 0.024); st.position.set(sx * 0.145, 0.03, 0.03); st.rotation.set(0.05, 0, -sx * 0.12); g.add(st); }
   const ribbon = toon({ color: look.ribbon });
   if (look.hairStyle === 'topknot' || look.hairStyle === 'bun') {
-    const bun = new T.Mesh(new T.SphereGeometry(0.052, 14, 12), mat); bun.position.set(0, 0.155, -0.03); bun.scale.set(1, 0.85, 1); g.add(bun); addOutline(bun, 0.005);
-    const band = new T.Mesh(new T.TorusGeometry(0.046, 0.012, 8, 20), ribbon); band.position.set(0, 0.125, -0.03); band.rotation.x = Math.PI / 2; g.add(band);
-    if (look.hairStyle === 'topknot') { const stick = new T.Mesh(new T.CylinderGeometry(0.006, 0.006, 0.22, 6), toon({ color: '#c9a24c' })); stick.position.set(0, 0.155, -0.03); stick.rotation.z = Math.PI / 2; g.add(stick); }
+    const bun = new T.Mesh(new T.SphereGeometry(0.055, 14, 12), mat); bun.position.set(0, 0.165, -0.04); bun.scale.set(1.1, 0.8, 1); g.add(bun); addOutline(bun, 0.005);
+    const band = new T.Mesh(new T.TorusGeometry(0.05, 0.013, 8, 20), ribbon); band.position.set(0, 0.135, -0.04); band.rotation.x = Math.PI / 2; g.add(band);
+    if (look.hairStyle === 'topknot') { const stick = new T.Mesh(new T.CylinderGeometry(0.005, 0.005, 0.15, 6), toon({ color: '#c9a24c' })); stick.position.set(0.02, 0.165, -0.04); stick.rotation.z = Math.PI / 2; g.add(stick); }
   }
   if (look.hairStyle === 'headband') {
-    const band = new T.Mesh(new T.TorusGeometry(0.146, 0.016, 8, 28), ribbon); band.position.set(0, 0.04, -0.012); band.rotation.x = Math.PI / 2; band.scale.z = 0.98; g.add(band);
-    const tail = new T.Mesh(new T.PlaneGeometry(0.05, 0.3), toon({ color: look.ribbon, side: T.DoubleSide })); tail.position.set(0.04, -0.1, -0.15); tail.rotation.y = 0.3; g.add(tail);
+    const band = new T.Mesh(new T.TorusGeometry(0.158, 0.016, 8, 28), ribbon); band.position.set(0, 0.05, -0.02); band.rotation.x = Math.PI / 2; band.scale.z = 1.02; g.add(band);
+    for (const k of [-1, 1]) { const tail = new T.Mesh(new T.PlaneGeometry(0.04, 0.32), toon({ color: look.ribbon, side: T.DoubleSide })); tail.position.set(k * 0.03, -0.1, -0.17); tail.rotation.set(0.1, k * 0.3, k * 0.15); g.add(tail); }
+    const knot = new T.Mesh(new T.SphereGeometry(0.1, 12, 10), mat); knot.position.set(0, 0.11, -0.06); knot.scale.set(1, 0.7, 1); g.add(knot); addOutline(knot, 0.005);
   }
   if (look.hairStyle === 'buns') {
-    for (const sx of [-1, 1]) { const bun = new T.Mesh(new T.SphereGeometry(0.05, 14, 12), mat); bun.position.set(sx * 0.12, 0.1, -0.02); g.add(bun); addOutline(bun, 0.005);
-      const band = new T.Mesh(new T.TorusGeometry(0.04, 0.01, 8, 18), ribbon); band.position.set(sx * 0.12, 0.09, -0.02); band.rotation.z = Math.PI / 2; g.add(band); }
+    for (const sx of [-1, 1]) { const bun = new T.Mesh(new T.SphereGeometry(0.055, 14, 12), mat); bun.position.set(sx * 0.13, 0.11, -0.02); g.add(bun); addOutline(bun, 0.005);
+      const band = new T.Mesh(new T.TorusGeometry(0.045, 0.01, 8, 18), ribbon); band.position.set(sx * 0.13, 0.1, -0.02); band.rotation.z = Math.PI / 2; g.add(band); }
   }
   if (look.hairStyle === 'long' || look.female) {
-    // 披到背后的长发：一片放样
-    const rings = []; for (let k = 0; k <= 6; k++) { const t = k / 6; rings.push({ c: new T.Vector3(0, 0.02 - t * 0.62, -0.09 - t * 0.04), rx: 0.11 - t * 0.03, rz: 0.045 - t * 0.02 }); }
+    const rings = []; for (let k = 0; k <= 6; k++) { const t = k / 6; rings.push({ c: new T.Vector3(0, 0.03 - t * 0.64, -0.1 - t * 0.04), rx: 0.12 - t * 0.035, rz: 0.05 - t * 0.02 }); }
     const back = new T.Mesh(loft(rings, 12, 'y'), mat); g.add(back); addOutline(back, 0.005);
-    const tie = new T.Mesh(new T.TorusGeometry(0.05, 0.012, 8, 16), ribbon); tie.position.set(0, -0.2, -0.11); tie.rotation.x = Math.PI / 2; g.add(tie);
+    const tie = new T.Mesh(new T.TorusGeometry(0.055, 0.012, 8, 16), ribbon); tie.position.set(0, -0.2, -0.12); tie.rotation.x = Math.PI / 2; g.add(tie);
   }
   head.add(g);
 }
@@ -200,7 +217,7 @@ function hair(look, mat, head) {
 /* ---------- 整个人 ---------- */
 /**
  * fig: makeFigure() 的结果（骨架 + 动画），原来的 Quaternius 网格会被藏掉。
- * lookId: LOOKS 的键。返回 {parts, dispose}。
+ * lookId: LOOKS 的键；opts.weapon = 'spear' 给右手一杆枪。
  */
 export function dressFigure(fig, lookId = 'player', opts = {}) {
   const look = LOOKS[lookId] || LOOKS.player;
@@ -212,54 +229,69 @@ export function dressFigure(fig, lookId = 'player', opts = {}) {
   const boneIndex = new Map(skeleton.bones.map((b, i) => [b.name, i]));
   const bone = name => skeleton.bones[boneIndex.get(name)];
   const inverse = name => skeleton.boneInverses[boneIndex.get(name)];
-  const small = look.small ? 0.78 : 1, female = look.female ? 0.9 : 1;
+  const small = look.small ? 0.78 : 1, female = look.female ? 0.88 : 1;
 
   const skinMat = toon({ color: look.skin });
   const robeMat = toon({ map: robeTexture(look) });
   const sleeveMat = toon({ map: sleeveTexture(look), side: T.DoubleSide });
+  const trimMat = toon({ color: look.trim, side: T.DoubleSide });
+  const sashMat = toon({ color: look.sash, side: T.DoubleSide });
   const hairMat = toon({ color: look.hair });
   const faceMat = toon({ map: faceTexture(look) });
   const bootMat = toon({ color: '#2a2622' });
 
   const parts = [];
-  /** 刚性挂件：子组局部矩阵 = boneInverse，几何按网格空间坐标写。 */
   const rigid = (boneName) => { const g = new T.Group(); g.matrix.copy(inverse(boneName)); g.matrix.decompose(g.position, g.quaternion, g.scale); bone(boneName).add(g); return g; };
-  /** 蒙皮件：和原来的蒙皮网格同一个父节点、同一副骨架。 */
-  const skinned = (geo, mat) => { const m = new T.SkinnedMesh(geo, mat); armature.add(m); m.bind(skeleton, ref.bindMatrix); m.castShadow = true; m.frustumCulled = false; parts.push(m); addOutline(m, 0.007); return m; };
+  const skinned = (geo, mat) => { const m = new T.SkinnedMesh(geo, mat); armature.add(m); m.bind(skeleton, ref.bindMatrix); m.castShadow = true; m.frustumCulled = false; parts.push(m); addOutline(m, 0.006); return m; };
 
-  // 长袍
-  const robeRings = [];
-  const flare = look.female ? 1 : 0.84;
-  const prof = [[1.50, 0.185, 0.115], [1.42, 0.2, 0.125], [1.32, 0.19, 0.125], [1.2, 0.17, 0.115], [1.1, 0.155, 0.105], [1.02, 0.165, 0.115], [0.95, 0.19, 0.13], [0.8, 0.205 * flare, 0.15], [0.62, 0.23 * flare, 0.17], [0.45, 0.26 * flare, 0.19], [0.28, 0.29 * flare, 0.21], [0.1, 0.32 * flare, 0.235]];
-  for (const [y, rx, rz] of prof) robeRings.push({ c: new T.Vector3(0, y, y > 1.0 ? 0.0 : -0.01), rx: rx * 0.92 * female * small, rz: rz * 0.95 * small, ry: 0 });
+  // 长袍：肩宽约是头宽的 1.6 倍，腰收，下摆直落
+  const flare = look.female ? 1 : 0.8;
+  const prof = [[1.52, 0.2, 0.11], [1.46, 0.215, 0.125], [1.36, 0.205, 0.125], [1.24, 0.18, 0.115], [1.12, 0.155, 0.105], [1.03, 0.16, 0.11], [0.95, 0.18, 0.125], [0.8, 0.2 * flare, 0.145], [0.62, 0.22 * flare, 0.16], [0.45, 0.245 * flare, 0.18], [0.28, 0.27 * flare, 0.2], [0.1, 0.3 * flare, 0.22]];
+  const robeRings = prof.map(([y, rx, rz]) => ({ c: new T.Vector3(0, y, y > 1.0 ? 0.0 : -0.01), rx: rx * female * small, rz: rz * small }));
   const robeGeo = loft(robeRings, 28, 'y', 0.5); weightRobe(robeGeo, boneIndex);
-  const robe = skinned(robeGeo, robeMat); robe.name = 'robe';
-  // 领口与脖子：一截肤色圆柱 + 衣领外翻
-  const neck = rigid('neck_01'); const nk = new T.Mesh(new T.CylinderGeometry(0.04, 0.05, 0.16, 12), skinMat); nk.position.set(0, 1.56, -0.015); neck.add(nk);
+  skinned(robeGeo, robeMat).name = 'robe';
+  // 交领：两片真正的叠片，从肩头斜到胸口交叉，右衽压左
+  const chest = rigid('spine_03');
+  for (const [sx, order] of [[1, 0], [-1, 1]]) {
+    const lap = new T.Mesh(new T.PlaneGeometry(0.075, 0.34), trimMat);
+    lap.position.set(sx * 0.06, 1.37, 0.128 + order * 0.006); lap.rotation.set(-0.12, 0, sx * 0.5); chest.add(lap);
+    const inner = new T.Mesh(new T.PlaneGeometry(0.05, 0.3), toon({ color: '#fff8ea', side: T.DoubleSide }));
+    inner.position.set(sx * 0.09, 1.39, 0.122); inner.rotation.set(-0.12, 0, sx * 0.5); chest.add(inner);
+  }
+  // 脖子
+  const neck = rigid('neck_01'); const nk = new T.Mesh(new T.CylinderGeometry(0.038, 0.05, 0.16, 12), skinMat); nk.position.set(0, 1.57, -0.012); neck.add(nk);
+  // 腰带：一圈宽带 + 结 + 两条飘带
+  const waist = rigid('spine_01');
+  const belt = new T.Mesh(new T.TorusGeometry(0.15, 0.028, 6, 26), sashMat); belt.position.set(0, 1.09, 0); belt.rotation.x = Math.PI / 2; belt.scale.set(1.08 * female, 0.78, 1); waist.add(belt); addOutline(belt, 0.004);
+  const knot = new T.Mesh(new T.SphereGeometry(0.035, 10, 8), sashMat); knot.position.set(0.03, 1.08, 0.125); knot.scale.set(1.3, 0.8, 0.7); waist.add(knot);
+  for (const k of [-1, 1]) { const rb = new T.Mesh(new T.PlaneGeometry(0.04, 0.42), sashMat); rb.position.set(0.03 + k * 0.025, 0.86, 0.13); rb.rotation.set(0.08, 0, k * 0.06); waist.add(rb); }
+  const jade = new T.Mesh(new T.SphereGeometry(0.018, 10, 8), toon({ color: '#5fae8a' })); jade.position.set(-0.09, 0.98, 0.12); waist.add(jade);
 
-  // 广袖
+  // 广袖：肩头饱满，到腕口张开下垂
   for (const side of ['l', 'r']) {
     const s = side === 'l' ? 1 : -1, rings = [];
-    const sp = [[0.19, 0.075, 0.07, 0], [0.3, 0.085, 0.075, 0], [0.42, 0.1, 0.085, -0.01], [0.52, 0.13, 0.095, -0.03], [0.62, 0.17, 0.1, -0.06], [0.72, 0.19, 0.1, -0.08]];
+    const sp = [[0.17, 0.1, 0.09, 0.01], [0.27, 0.088, 0.08, 0], [0.4, 0.095, 0.085, -0.01], [0.52, 0.125, 0.095, -0.03], [0.62, 0.165, 0.1, -0.06], [0.72, 0.19, 0.1, -0.085]];
     for (const [x, ry, rz, dy] of sp) rings.push({ c: new T.Vector3(s * x, 1.455 + dy, -0.065), ry: ry * small, rz: rz * small });
     const g = loft(rings, 16, 'x', 0); weightSleeve(g, boneIndex, side);
     skinned(g, sleeveMat).name = 'sleeve_' + side;
-    // 手
-    const h = rigid('hand_' + side); const hand = new T.Mesh(new T.SphereGeometry(0.042 * small, 12, 10), skinMat); hand.position.set(s * 0.76, 1.452, -0.055); hand.scale.set(1.4, 0.8, 1); h.add(hand); addOutline(hand, 0.004);
+    // 手：扁的手掌加拇指
+    const h = rigid('hand_' + side);
+    const palm = new T.Mesh(new T.SphereGeometry(0.034 * small, 12, 10), skinMat); palm.position.set(s * 0.765, 1.452, -0.055); palm.scale.set(1.5, 0.5, 0.95); h.add(palm); addOutline(palm, 0.004);
+    const thumb = new T.Mesh(new T.SphereGeometry(0.013 * small, 8, 6), skinMat); thumb.position.set(s * 0.745, 1.447, -0.02); thumb.scale.set(1.5, 1, 1); h.add(thumb);
     // 靴
-    const f = rigid('foot_' + side); const boot = new T.Mesh(new T.SphereGeometry(0.07, 14, 10), bootMat); boot.position.set(s * 0.114, 0.05, 0.02); boot.scale.set(0.9, 0.75, 1.7); f.add(boot); addOutline(boot, 0.005);
+    const f = rigid('foot_' + side); const boot = new T.Mesh(new T.SphereGeometry(0.07, 14, 10), bootMat); boot.position.set(s * 0.114, 0.05, 0.02); boot.scale.set(0.85, 0.7, 1.6); f.add(boot); addOutline(boot, 0.005);
+    if (opts.weapon === 'spear' && side === 'r') {
+      const shaft = new T.Mesh(new T.CylinderGeometry(0.012, 0.014, 2.1, 8), toon({ color: '#6b4a2e' })); shaft.position.set(-0.78, 1.45, -0.05); h.add(shaft); addOutline(shaft, 0.003);
+      const blade = new T.Mesh(new T.ConeGeometry(0.03, 0.26, 6), toon({ color: '#cfd6dc' })); blade.position.set(-0.78, 2.62, -0.05); blade.scale.set(1, 1, 0.4); h.add(blade); addOutline(blade, 0.003);
+      const tassel = new T.Mesh(new T.ConeGeometry(0.035, 0.14, 8), toon({ color: '#c0392b' })); tassel.position.set(-0.78, 2.42, -0.05); tassel.rotation.x = Math.PI; h.add(tassel);
+    }
   }
 
-  // 头：二次元比例，比真人头大一圈
+  // 头：和真人比例接近，靠头发撑出轮廓
   const hd = rigid('Head');
-  const head = new T.Mesh(headGeometry(female === 1 ? 1 : 0.97), faceMat); head.position.set(0, 1.735 * (small === 1 ? 1 : 0.985), 0.0); head.scale.setScalar(small === 1 ? 1.18 : 1.08); hd.add(head); addOutline(head, 0.006);
+  const head = new T.Mesh(headGeometry(female === 1 ? 1 : 0.96), faceMat); head.position.set(0, 1.735, 0.0); head.scale.setScalar(small === 1 ? 1.0 : 1.08); hd.add(head); addOutline(head, 0.005);
   head.traverse(o => { o.castShadow = true; });
   hair(look, hairMat, head);
-
-  // 腰间：飘带和玉佩
-  const waist = rigid('pelvis');
-  const ribbon = new T.Mesh(new T.PlaneGeometry(0.05, 0.36), toon({ color: look.sash, side: T.DoubleSide })); ribbon.position.set(0.09, 0.84, 0.17); ribbon.rotation.y = 0.1; waist.add(ribbon);
-  const jade = new T.Mesh(new T.SphereGeometry(0.02, 10, 8), toon({ color: '#5fae8a' })); jade.position.set(0.09, 0.64, 0.17); waist.add(jade);
 
   parts.forEach(m => { m.receiveShadow = false; });
   fig.hand = bone('hand_r');
