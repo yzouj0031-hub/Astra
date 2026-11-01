@@ -115,7 +115,8 @@ function weightRobe(geo, boneIndex) {
   for (let i = 0; i < n; i++) {
     const x = p.getX(i), y = p.getY(i); let w = [];
     const seg = (a, b, ya, yb) => { const t = Math.max(0, Math.min(1, (y - ya) / (yb - ya))); w = [[a, 1 - t], [b, t]]; };
-    if (y >= 1.42) w = [[id('spine_03'), 1]];
+    if (y >= 1.54) { const t = Math.min(1, (y - 1.54) / 0.08); w = [[id('spine_03'), 1 - t * 0.6], [id('neck_01'), t * 0.6]]; }
+    else if (y >= 1.42) w = [[id('spine_03'), 1]];
     else if (y >= 1.30) seg(id('spine_03'), id('spine_03'), 1.30, 1.42);
     else if (y >= 1.18) seg(id('spine_02'), id('spine_03'), 1.18, 1.30);
     else if (y >= 1.07) seg(id('spine_01'), id('spine_02'), 1.07, 1.18);
@@ -246,20 +247,20 @@ export function dressFigure(fig, lookId = 'player', opts = {}) {
 
   // 长袍：肩宽约是头宽的 1.6 倍，腰收，下摆直落
   const flare = look.female ? 1 : 0.8;
-  const prof = [[1.52, 0.2, 0.11], [1.46, 0.215, 0.125], [1.36, 0.205, 0.125], [1.24, 0.18, 0.115], [1.12, 0.155, 0.105], [1.03, 0.16, 0.11], [0.95, 0.18, 0.125], [0.8, 0.2 * flare, 0.145], [0.62, 0.22 * flare, 0.16], [0.45, 0.245 * flare, 0.18], [0.28, 0.27 * flare, 0.2], [0.1, 0.3 * flare, 0.22]];
+  const prof = [[1.615, 0.066, 0.06], [1.585, 0.085, 0.075], [1.55, 0.14, 0.095], [1.515, 0.2, 0.11], [1.46, 0.215, 0.125], [1.36, 0.205, 0.125], [1.24, 0.18, 0.115], [1.12, 0.155, 0.105], [1.03, 0.16, 0.11], [0.95, 0.18, 0.125], [0.8, 0.2 * flare, 0.145], [0.62, 0.22 * flare, 0.16], [0.45, 0.245 * flare, 0.18], [0.28, 0.27 * flare, 0.2], [0.1, 0.3 * flare, 0.22]];
   const robeRings = prof.map(([y, rx, rz]) => ({ c: new T.Vector3(0, y, y > 1.0 ? 0.0 : -0.01), rx: rx * female * small, rz: rz * small }));
   const robeGeo = loft(robeRings, 28, 'y', 0.5); weightRobe(robeGeo, boneIndex);
   skinned(robeGeo, robeMat).name = 'robe';
   // 交领：两片真正的叠片，从肩头斜到胸口交叉，右衽压左
   const chest = rigid('spine_03');
   for (const [sx, order] of [[1, 0], [-1, 1]]) {
-    const lap = new T.Mesh(new T.PlaneGeometry(0.075, 0.34), trimMat);
-    lap.position.set(sx * 0.06, 1.37, 0.128 + order * 0.006); lap.rotation.set(-0.12, 0, sx * 0.5); chest.add(lap);
-    const inner = new T.Mesh(new T.PlaneGeometry(0.05, 0.3), toon({ color: '#fff8ea', side: T.DoubleSide }));
-    inner.position.set(sx * 0.09, 1.39, 0.122); inner.rotation.set(-0.12, 0, sx * 0.5); chest.add(inner);
+    const lap = new T.Mesh(new T.PlaneGeometry(0.07, 0.42), trimMat);
+    lap.position.set(sx * 0.05, 1.43, 0.118 + order * 0.006); lap.rotation.set(-0.1, 0, sx * 0.38); chest.add(lap);
+    const inner = new T.Mesh(new T.PlaneGeometry(0.05, 0.38), toon({ color: '#fff8ea', side: T.DoubleSide }));
+    inner.position.set(sx * 0.082, 1.45, 0.112); inner.rotation.set(-0.1, 0, sx * 0.38); chest.add(inner);
   }
   // 脖子
-  const neck = rigid('neck_01'); const nk = new T.Mesh(new T.CylinderGeometry(0.038, 0.05, 0.16, 12), skinMat); nk.position.set(0, 1.57, -0.012); neck.add(nk);
+  const neck = rigid('neck_01'); const nk = new T.Mesh(new T.CylinderGeometry(0.05, 0.055, 0.12, 12), skinMat); nk.position.set(0, 1.6, -0.01); neck.add(nk);
   // 腰带：一圈宽带 + 结 + 两条飘带
   const waist = rigid('spine_01');
   const belt = new T.Mesh(new T.TorusGeometry(0.15, 0.028, 6, 26), sashMat); belt.position.set(0, 1.09, 0); belt.rotation.x = Math.PI / 2; belt.scale.set(1.08 * female, 0.78, 1); waist.add(belt); addOutline(belt, 0.004);
@@ -289,7 +290,7 @@ export function dressFigure(fig, lookId = 'player', opts = {}) {
 
   // 头：和真人比例接近，靠头发撑出轮廓
   const hd = rigid('Head');
-  const head = new T.Mesh(headGeometry(female === 1 ? 1 : 0.96), faceMat); head.position.set(0, 1.735, 0.0); head.scale.setScalar(small === 1 ? 1.0 : 1.08); hd.add(head); addOutline(head, 0.005);
+  const head = new T.Mesh(headGeometry(female === 1 ? 1 : 0.96), faceMat); head.position.set(0, 1.715, 0.005); head.scale.setScalar(small === 1 ? 1.0 : 1.08); hd.add(head); addOutline(head, 0.005);
   head.traverse(o => { o.castShadow = true; });
   hair(look, hairMat, head);
 
