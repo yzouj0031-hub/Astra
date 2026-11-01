@@ -2,20 +2,22 @@
    山贼：在寨子里巡逻，玩家进圈就追、近身就砍，有血条，死后掉铜钱、隔一阵复活。 */
 import * as T from 'three';
 import { makeFigure, stepBody } from './characters.js';
+import { dressFigure } from './stylized.js';
+import { toon } from './toon.js';
 import { heightAt } from './world/terrain.js';
 import { PLACES } from './world/layout.js';
 import { mulberry32, clamp, lerp } from './util/rng.js';
 
 const VILLAGERS = [
-  { name: '渡头阿婆', variant: 1, home: [-118, 36], lines: ['后生，刚来渡头村吧？村口往东过桥就是东畈。', '夜里山上有狼嚎，听得人心慌。'], quest: 'herbs' },
-  { name: '船夫老周', variant: 2, home: [PLACES.dock.x - 6, PLACES.dock.z - 2], lines: ['这船吃水浅，顺着溪往南划，能到松坡脚下。', '你要去对岸？走桥，或者自己划。'], quest: 'ferry' },
-  { name: '里正', variant: 0, home: [-96, 30], lines: ['黑石寨那帮山贼又下来抢粮了，县里的兵一时半会到不了。', '烽台要是点起来，县城看见了才会派人。'], quest: 'bandits' },
-  { name: '茶博士', variant: 2, home: [PLACES.teahouse.x + 3, PLACES.teahouse.z + 6.5], lines: ['一碗茶三文，伤药二十文，不二价。', '坐啊，听松风。'], shop: true },
-  { name: '采药的阿满', variant: 3, home: [-168, -30], lines: ['竹坞里的七叶草最好，山神祠后头也有。', '一株换五文，去茶舍找茶博士，他收。'] },
-  { name: '田头的顺子', variant: 2, home: [PLACES.paddies.x - 40, PLACES.paddies.z - 70], lines: ['今年水够，稻秧长得旺。', '昨儿见山贼在寨子那边操练，怕是要出事。'] },
-  { name: '守祠的老道', variant: 0, home: [PLACES.shrine.x + 4, PLACES.shrine.z + 6], lines: ['山神祠香火断了三年，你若肯上一炷香，山神会记得。', '枫叶红了，秋就深了。'], quest: 'pray' },
-  { name: '小石头', variant: 3, home: [-140, 60], lines: ['我爹说烽台上能看见整条溪！', '你有刀！你是侠客吗？'] },
-  { name: '浣衣的秀姑', variant: 1, home: [-78, 86], lines: ['溪水凉，衣裳洗得干净。', '桥头那棵柳是我阿公种的。'] },
+  { name: '渡头阿婆', variant: 1, look: 'elder', home: [-118, 36], lines: ['后生，刚来渡头村吧？村口往东过桥就是东畈。', '夜里山上有狼嚎，听得人心慌。'], quest: 'herbs' },
+  { name: '船夫老周', variant: 2, look: 'man2', home: [PLACES.dock.x - 6, PLACES.dock.z - 2], lines: ['这船吃水浅，顺着溪往南划，能到松坡脚下。', '你要去对岸？走桥，或者自己划。'], quest: 'ferry' },
+  { name: '里正', variant: 0, look: 'man1', home: [-96, 30], lines: ['黑石寨那帮山贼又下来抢粮了，县里的兵一时半会到不了。', '烽台要是点起来，县城看见了才会派人。'], quest: 'bandits' },
+  { name: '茶博士', variant: 2, look: 'man2', home: [PLACES.teahouse.x + 3, PLACES.teahouse.z + 6.5], lines: ['一碗茶三文，伤药二十文，不二价。', '坐啊，听松风。'], shop: true },
+  { name: '采药的阿满', variant: 3, look: 'woman2', home: [-168, -30], lines: ['竹坞里的七叶草最好，山神祠后头也有。', '一株换五文，去茶舍找茶博士，他收。'] },
+  { name: '田头的顺子', variant: 2, look: 'man2', home: [PLACES.paddies.x - 40, PLACES.paddies.z - 70], lines: ['今年水够，稻秧长得旺。', '昨儿见山贼在寨子那边操练，怕是要出事。'] },
+  { name: '守祠的老道', variant: 0, look: 'elder', home: [PLACES.shrine.x + 4, PLACES.shrine.z + 6], lines: ['山神祠香火断了三年，你若肯上一炷香，山神会记得。', '枫叶红了，秋就深了。'], quest: 'pray' },
+  { name: '小石头', variant: 3, look: 'child', home: [-140, 60], lines: ['我爹说烽台上能看见整条溪！', '你有刀！你是侠客吗？'] },
+  { name: '浣衣的秀姑', variant: 1, look: 'woman1', home: [-78, 86], lines: ['溪水凉，衣裳洗得干净。', '桥头那棵柳是我阿公种的。'] },
 ];
 
 export function createNPCs(scene, assets, colliders, world) {
@@ -25,7 +27,8 @@ export function createNPCs(scene, assets, colliders, world) {
 
   // ---- 村民 ----
   for (const def of VILLAGERS) {
-    const fig = makeFigure(assets.crowd[def.variant], assets.player.animations, 1.68 + rnd() * 0.16);
+    const fig = makeFigure(assets.player.scene, assets.player.animations, def.look === 'child' ? 1.3 : 1.68 + rnd() * 0.14);
+    dressFigure(fig, def.look);
     const [hx, hz] = def.home;
     fig.root.position.set(hx, heightAt(hx, hz), hz); scene.add(fig.root);
     const n = { def, fig, pos: fig.root.position, vel: new T.Vector3(), yaw: rnd() * 6.28, home: { x: hx, z: hz }, goal: null, wait: rnd() * 4, onGround: true, kind: 'villager', talkT: 0 };
@@ -38,10 +41,11 @@ export function createNPCs(scene, assets, colliders, world) {
     const c = PLACES[id];
     for (let i = 0; i < count; i++) {
       const a = rnd() * 6.28, r = 3 + rnd() * 8, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
-      const fig = makeFigure(assets.crowd[i % 2 === 0 ? 2 : 0], assets.player.animations, 1.8 + rnd() * 0.1, 0xd8b8a0);
+      const fig = makeFigure(assets.player.scene, assets.player.animations, 1.8 + rnd() * 0.1);
+      dressFigure(fig, i % 2 === 0 ? 'bandit' : 'bandit2');
       fig.root.position.set(x, heightAt(x, z), z); scene.add(fig.root);
       // 刀
-      const blade = new T.Mesh(new T.BoxGeometry(0.04, 0.7, 0.015), new T.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.8, roughness: 0.4 })); blade.position.y = 0.4;
+      const blade = new T.Mesh(new T.BoxGeometry(0.04, 0.7, 0.015), toon({ color: 0xb0b6bc })); blade.position.y = 0.4;
       if (fig.hand) { fig.hand.add(blade); blade.scale.setScalar(1 / fig.model.scale.x); blade.rotation.set(Math.PI / 2, 0, 0); }
       const b = { fig, pos: fig.root.position, vel: new T.Vector3(), yaw: a, camp: c, campId: id, hp: 60, maxHp: 60, state: 'patrol', goal: null, wait: rnd() * 3, atkT: 0, hitDone: false, onGround: true, kind: 'bandit', dead: false, respawnT: 0, bar: makeBar() };
       b.bar.position.y = 2.1; fig.root.add(b.bar);

@@ -87,6 +87,9 @@ export function rawHeight(x, z) {
   // 镜湖：挖一个碗
   const l = PLACES.lake, dl = Math.hypot(x - l.x, z - l.z);
   y = lerp(y, -5, smoothstep(l.r + 45, l.r - 15, dl));
+  // 四周一圈远山：地图边缘抬成山脊，雾里是青灰的剪影，走不到
+  const edge = Math.max(Math.abs(x), Math.abs(z));
+  y += 170 * smoothstep(540, 690, edge) * (0.55 + 0.45 * fbm(x / 140, z / 140, 3, s + 120));
   // 河谷：岸边先抬到水面以上，再向河心挖下去
   const d = RIVER.dist(x, z), hw = RIVER.halfWidth;
   const bank = smoothstep(hw + 70, hw + 6, d);

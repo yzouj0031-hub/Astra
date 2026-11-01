@@ -37,7 +37,7 @@ async function boot() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1.5 : 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
-  renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
+  renderer.toneMapping = T.NeutralToneMapping; renderer.toneMappingExposure = 1.05;
   renderer.outputColorSpace = T.SRGBColorSpace;
 
   const scene = new T.Scene();
@@ -54,7 +54,7 @@ async function boot() {
   };
   const built = buildWorld(scene); colliders.addMany(built.colliders);
   LOD.value = low ? 120 : 190;
-  const treeNames = Object.keys(assets.trees.parts).filter(n => /^(NormalTree|MapleTree|BirchTree|PineTree)_/.test(n));
+  const treeNames = Object.keys(assets.trees.parts).filter(n => /^(NormalTree|MapleTree|BirchTree|PineTree)_/.test(n)).concat([1, 2, 3, 4, 5].map(i => 'Cherry_' + i));
   const atlas = bakeImpostors(renderer, assets, treeNames);
   const planted = plantWorld(scene, assets, { density: low ? 0.55 : 1, impostor: atlas }); colliders.addMany(planted.colliders);
   const grass = createGrass(scene, { range: low ? 4 : 6, perCell: low ? 26 : 44 });
@@ -95,8 +95,9 @@ async function boot() {
   if (params.get('t')) sky.state.hour = parseFloat(params.get('t'));
   if (params.get('at')) { const [x, z] = params.get('at').split(',').map(Number); player.pos.set(x, heightAt(x, z), z); }
   if (params.get('yaw')) player.yaw = parseFloat(params.get('yaw'));
+  camS.target.copy(player.pos); camS.yaw = player.yaw + Math.PI;
   if (params.get('cam')) { const [yaw, pitch, dist] = params.get('cam').split(',').map(Number); camS.yaw = yaw; camS.pitch = pitch; camS.dist = dist; }
-  camS.target.copy(player.pos); camS.yaw = player.yaw + Math.PI; camS.pos.copy(player.pos).add(new T.Vector3(Math.sin(camS.yaw) * 6, 2.5, Math.cos(camS.yaw) * 6));
+  camS.pos.copy(player.pos).add(new T.Vector3(Math.sin(camS.yaw) * camS.dist, 1.5 + camS.dist * camS.pitch, Math.cos(camS.yaw) * camS.dist));
 
   // ---- 互动 ----
   function interactables() {

@@ -6,22 +6,23 @@ import { heightAt } from './terrain.js';
 import { mulberry32 } from '../util/rng.js';
 import * as TX from './textures.js';
 import { mergeGeometries } from '../../vendor/addons/BufferGeometryUtils.js';
+import { toon } from '../toon.js';
 
 const S = {};   // 共享材质
 function mats() {
   if (S.ready) return S;
-  S.tile = new T.MeshStandardMaterial({ map: TX.roofTiles(), roughness: 0.9 });
-  S.wall = new T.MeshStandardMaterial({ map: TX.plasterWall(), roughness: 1 });
-  S.wallDark = new T.MeshStandardMaterial({ map: TX.plasterWall('#cdbfa4'), roughness: 1 });
-  S.wood = new T.MeshStandardMaterial({ map: TX.wood(24, 30), roughness: 0.85 });
-  S.woodRed = new T.MeshStandardMaterial({ map: TX.wood(8, 28), color: 0xb04a35, roughness: 0.8 });
-  S.woodLight = new T.MeshStandardMaterial({ map: TX.wood(30, 48), roughness: 0.9 });
-  S.stone = new T.MeshStandardMaterial({ map: TX.stone(), roughness: 1 });
-  S.lattice = new T.MeshStandardMaterial({ map: TX.lattice(), emissive: 0xffd58a, emissiveMap: TX.lattice(), emissiveIntensity: 0, roughness: 1 });
-  S.door = new T.MeshStandardMaterial({ map: TX.wood(20, 22), roughness: 0.9 });
-  S.lantern = new T.MeshStandardMaterial({ map: TX.lanternPaper(), emissive: 0xff5a2a, emissiveIntensity: 0.25, roughness: 0.8 });
-  S.canvas = new T.MeshStandardMaterial({ color: 0xa89a7a, roughness: 1, side: T.DoubleSide });
-  S.iron = new T.MeshStandardMaterial({ color: 0x3a3a3c, roughness: 0.6, metalness: 0.5 });
+  S.tile = toon({ map: TX.roofTiles() });
+  S.wall = toon({ map: TX.plasterWall() });
+  S.wallDark = toon({ map: TX.plasterWall('#cdbfa4') });
+  S.wood = toon({ map: TX.wood(24, 30) });
+  S.woodRed = toon({ map: TX.wood(8, 28), color: 0xc0523a });
+  S.woodLight = toon({ map: TX.wood(30, 48) });
+  S.stone = toon({ map: TX.stone() });
+  S.lattice = toon({ map: TX.lattice(), emissive: 0xffd58a, emissiveMap: TX.lattice(), emissiveIntensity: 0 });
+  S.door = toon({ map: TX.wood(20, 22) });
+  S.lantern = toon({ map: TX.lanternPaper(), emissive: 0xff5a2a, emissiveIntensity: 0.25 });
+  S.canvas = toon({ color: 0xb8a888, side: T.DoubleSide });
+  S.iron = toon({ color: 0x3a3a3c });
   S.ready = true;
   return S;
 }
@@ -124,7 +125,7 @@ export function sign(text, w = 2, h = 0.6, { color = '#f1e4c6', bg = '#3a2415', 
   if (vertical) [...text].forEach((ch, i) => ctx.fillText(ch, 64, 64 + i * (384 / Math.max(1, text.length - 1) || 0)));
   else ctx.fillText(text, 256, 68);
   const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
-  const mesh = new T.Mesh(new T.BoxGeometry(w, h, 0.08), [mats().wood, mats().wood, mats().wood, mats().wood, new T.MeshStandardMaterial({ map: t }), mats().wood]);
+  const mesh = new T.Mesh(new T.BoxGeometry(w, h, 0.08), [mats().wood, mats().wood, mats().wood, mats().wood, toon({ map: t }), mats().wood]);
   mesh.castShadow = true; return mesh;
 }
 

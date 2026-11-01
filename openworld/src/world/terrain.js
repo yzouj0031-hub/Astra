@@ -4,6 +4,7 @@ import * as T from 'three';
 import { WORLD, RIVER, PLACES, ROADS, rawHeight, roadDist } from './layout.js';
 import { fbm, hash2, smoothstep, lerp, clamp } from '../util/rng.js';
 import { groundDetail } from './textures.js';
+import { toon } from '../toon.js';
 
 const STEP = 2;                                   // 高度格子间距（米）
 const N = Math.floor(WORLD.size / STEP) + 1;
@@ -53,7 +54,7 @@ function vertexColor(x, z, y, out) {
   const rd = roadDist(x, z), rv = RIVER.dist(x, z) - RIVER.halfWidth;
   const varia = fbm(x / 45, z / 45, 3, s + 3), patch = fbm(x / 9, z / 9, 2, s + 4);
   // 草：带黄绿到青绿的斑块
-  out.setHSL(0.25 + varia * 0.035 + patch * 0.015, 0.45 + varia * 0.12, 0.30 + varia * 0.06 + patch * 0.04);
+  out.setHSL(0.24 + varia * 0.03 + patch * 0.015, 0.55 + varia * 0.1, 0.40 + varia * 0.05 + patch * 0.04);
   // 水田：更亮更黄，带一行行的田埂
   const p = PLACES.paddies, dp = Math.hypot(x - p.x, z - p.z);
   if (dp < p.r + 20) {
@@ -63,7 +64,7 @@ function vertexColor(x, z, y, out) {
   }
   // 岩：坡陡和高处发灰
   const rock = smoothstep(0.30, 0.55, slope) + smoothstep(85, 115, y) * 0.7;
-  tmp.setHSL(0.16, 0.1, 0.3 + varia * 0.06 + hash2(x * 3, z * 3, 5) * 0.05);
+  tmp.setHSL(0.58, 0.12, 0.42 + varia * 0.06 + hash2(x * 3, z * 3, 5) * 0.05);
   out.lerp(tmp, clamp(rock, 0, 1));
   // 河滩 / 湖岸：湿沙
   if (rv < 8 || y < WORLD.water + 1.2) {
@@ -99,7 +100,7 @@ export function buildTerrain(opts = {}) {
   }
   geo.setAttribute('color', new T.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const mat = new T.MeshStandardMaterial({ vertexColors: true, map: groundDetail(), roughness: 1, metalness: 0 });
+  const mat = toon({ vertexColors: true, map: groundDetail() });
   const mesh = new T.Mesh(geo, mat);
   mesh.receiveShadow = true; mesh.castShadow = false; mesh.name = 'terrain';
   return mesh;

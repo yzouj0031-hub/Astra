@@ -27,6 +27,8 @@ const SHOTS = [
   { name: 'camp', q: 'at=320,340&yaw=0.6&cam=3.6,0.25,8&t=14' },
   { name: 'mountain', q: 'at=360,-330&yaw=0.5&cam=3.5,0.35,10&t=8' },
   { name: 'overview', q: 'at=-60,60&yaw=0&cam=2.6,0.55,42&t=12' },
+  { name: 'portrait', q: 'at=-94,30&yaw=0&cam=3.0,0.08,2.6&t=10' },
+  { name: 'villagers', q: 'at=-100,22&yaw=2.4&cam=5.4,0.1,3.4&t=10' },
   { name: 'mobile', q: 'at=-100,70&yaw=2.6&cam=0.9,0.3,9&t=9.5', mobile: true },
 ];
 

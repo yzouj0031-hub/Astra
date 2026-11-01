@@ -84,8 +84,8 @@ export function createSky(scene, renderer) {
     uniforms.uSunColor.value.copy(keyAt(t, 2)); uniforms.uSun.value.copy(sd); uniforms.uNight.value = night;
     uniforms.uMoon.value.set(-sd.x, -sd.y * 0.8 + 0.1, sd.z * 0.6).normalize();
     scene.fog.color.copy(keyAt(t, 3)); uniforms.uFog.value.copy(scene.fog.color); hemi.color.copy(keyAt(t, 1)); hemi.groundColor.copy(keyAt(t, 4));
-    hemi.intensity = lerp(0.95, 0.42, night);
-    sun.color.copy(keyAt(t, 2)); sun.intensity = lerp(2.4, 0, night) * clamp(elev * 3 + 0.4, 0.2, 1);
+    hemi.intensity = lerp(1.25, 0.5, night);
+    sun.color.copy(keyAt(t, 2)); sun.intensity = lerp(2.0, 0, night) * clamp(elev * 3 + 0.4, 0.2, 1);
     moon.intensity = 0.7 * night;
     sun.visible = elev > -0.2; sun.castShadow = elev > 0.02;
     // 太阳和阴影相机跟着焦点走

@@ -5,7 +5,8 @@ import * as T from 'three';
 import { WORLD, RIVER, PLACES, roadDist } from './layout.js';
 import { heightAt, groundKind, slopeAt } from './terrain.js';
 import { hash2, mulberry32, fbm, clamp } from '../util/rng.js';
-import { grassCard, reedCard } from './textures.js';
+import { grassCard, reedCard, flowerCard } from './textures.js';
+import { toon } from '../toon.js';
 
 export const WIND = { value: 0 };
 const _e = new T.Euler(), _q = new T.Quaternion(), _p = new T.Vector3(), _s = new T.Vector3();
@@ -157,6 +158,7 @@ export function plantWorld(scene, assets, opts = {}) {
     const y = heightAt(x, z);
     const nearMaples = Math.hypot(x - PLACES.maples.x, z - PLACES.maples.z) < PLACES.maples.r;
     const nearPines = Math.hypot(x - PLACES.pines.x, z - PLACES.pines.z) < PLACES.pines.r || y > 60;
+    const nearVillage = Math.hypot(x - PLACES.village.x, z - PLACES.village.z) < 190;
     let keep = forest > -0.3 || y > 14 || nearMaples || nearPines;
     if (y > 95 && rnd() < 0.7) keep = false;                       // 山顶稀
     if (!keep || !tryPlace(x, z, 2.2)) continue;
@@ -164,6 +166,7 @@ export function plantWorld(scene, assets, opts = {}) {
     let name;
     if (nearMaples && r < 0.75) name = 'MapleTree_' + (1 + Math.floor(rnd() * 5));
     else if (nearPines && r < 0.7) name = 'PineTree_' + [1, 2, 4][Math.floor(rnd() * 3)];
+    else if (nearVillage && r < 0.5) name = 'Cherry_' + (1 + Math.floor(rnd() * 5));
     else if (r < 0.14) name = 'BirchTree_' + (1 + Math.floor(rnd() * 2));
     else if (r < 0.24) name = 'MapleTree_' + (1 + Math.floor(rnd() * 5));
     else name = 'NormalTree_' + (1 + Math.floor(rnd() * 5));
@@ -232,9 +235,9 @@ export function plantWorld(scene, assets, opts = {}) {
   const tint = opts.tint || null;
   let triangles = 0;
   for (const [name, items] of Object.entries(groups)) {
-    const part = parts[name];
+    const part = parts[name.replace('Cherry_', 'MapleTree_')];
     for (const { geometry, matName } of part.meshes) {
-      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 30);
+      instance(scene, geometry, windMat(materialFor(name.startsWith('Cherry_') && matName === 'MapleTree_Leaves' ? 'Cherry_Leaves' : matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 30);
       triangles += (geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3) * items.length;
     }
   }
@@ -244,7 +247,7 @@ export function plantWorld(scene, assets, opts = {}) {
   const byCulm = new Map();
   for (const c of culms) { (byCulm.get(c.part) || byCulm.set(c.part, []).get(c.part)).push({ m: c.m, phase: c.phase }); }
   for (const [part, items] of byCulm) for (const { geometry, matName } of part.meshes) instance(scene, geometry, windMat(materialFor(matName), 'culm'), items, true, 300);
-  const cardMat = (key, kind) => windMat(new T.MeshStandardMaterial({ map: cards[key], alphaTest: 0.45, side: T.DoubleSide, roughness: 1, emissive: 0x5c7a3a, emissiveMap: cards[key], emissiveIntensity: 0.45 }), kind);
+  const cardMat = (key, kind) => windMat(toon({ map: cards[key], alphaTest: 0.45, side: T.DoubleSide, emissive: 0x5c7a3a, emissiveMap: cards[key], emissiveIntensity: 0.35 }), kind);
   if (fronds.length) instance(scene, crossStrip(0.55, 6), cardMat('willow', 'frond'), fronds, false, 260);
   if (leaves.length) instance(scene, crossCard(1.2, 1.0), cardMat('bamboo', 'card'), leaves, false, 260);
   if (pads.length) instance(scene, pinePad(), cardMat('pine', 'card'), pads, false, 300);
@@ -258,7 +261,7 @@ export function plantWorld(scene, assets, opts = {}) {
     const jx = x + (hash2(x * 7, z, 3) - 0.5) * 0.3, jz = z + (hash2(x, z * 7, 4) - 0.5) * 0.3;
     reeds.push({ m: M(jx, heightAt(jx, jz) + 0.05, jz, 1.0 + hash2(x, z, 5) * 0.4, hash2(z, x, 6) * 6.28), phase: hash2(x, z, 8) * 6.28 });
   }
-  if (reeds.length) instance(scene, crossCard(0.6, 0.9).translate(0, 0.45, 0), windMat(new T.MeshStandardMaterial({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1, color: 0xcfe0a0 }), 'reed'), reeds, false, 260);
+  if (reeds.length) instance(scene, crossCard(0.6, 0.9).translate(0, 0.45, 0), windMat(toon({ map: reedCard(), alphaTest: 0.4, side: T.DoubleSide, color: 0xd8e8a8 }), 'reed'), reeds, false, 260);
 
   // 远树：烘好的卡片，一棵两三角形
   let impostorMesh = null;
@@ -281,8 +284,8 @@ export function bakeImpostors(renderer, assets, names) {
   const oldTM = renderer.toneMapping, oldTarget = renderer.getRenderTarget(), oldClear = new T.Color(); renderer.getClearColor(oldClear); const oldAlpha = renderer.getClearAlpha();
   renderer.toneMapping = T.NoToneMapping; renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();
   names.forEach((name, i) => {
-    const part = parts[name]; const group = new T.Group();
-    for (const { geometry, matName } of part.meshes) group.add(new T.Mesh(geometry, materialFor(matName)));
+    const part = parts[name.replace('Cherry_', 'MapleTree_')]; const group = new T.Group();
+    for (const { geometry, matName } of part.meshes) group.add(new T.Mesh(geometry, materialFor(name.startsWith('Cherry_') && matName === 'MapleTree_Leaves' ? 'Cherry_Leaves' : matName)));
     scene.add(group);
     const h = part.height, w = Math.max(part.radius * 2, h * 0.5);
     cam.left = -w / 2; cam.right = w / 2; cam.top = h; cam.bottom = 0; cam.position.set(0, h * 0.5, 30); cam.lookAt(0, h * 0.5, 0); cam.updateProjectionMatrix();
@@ -344,18 +347,30 @@ export function createGrass(scene, opts = {}) {
     const q = new T.PlaneGeometry(1, 1, 1, 2).translate(0, 0.5, 0);
     return mergeGeos([q, q.clone().rotateY(Math.PI / 3), q.clone().rotateY(-Math.PI / 3)]);
   })();
-  const mat = windMat(new T.MeshStandardMaterial({ map: grassCard(), alphaTest: 0.4, side: T.DoubleSide, roughness: 1, color: 0xb9c9a0 }), 'grass');
+  const mat = windMat(toon({ map: grassCard(), alphaTest: 0.4, side: T.DoubleSide, color: 0xd6e6b0, emissive: 0x3a5a20, emissiveMap: grassCard(), emissiveIntensity: 0.25 }), 'grass');
   const inst = new T.InstancedMesh(geo, mat, MAX);
   const phase = new Float32Array(MAX), sway = new Float32Array(MAX), col = new Float32Array(MAX);
   geo.setAttribute('aPhase', new T.InstancedBufferAttribute(phase, 1)); geo.setAttribute('aSway', new T.InstancedBufferAttribute(sway, 1)); geo.setAttribute('aCol', new T.InstancedBufferAttribute(col, 1));
   inst.frustumCulled = false; inst.receiveShadow = true; inst.castShadow = false; inst.count = 0; inst.name = 'grass';
   scene.add(inst);
+  // 花：每格几朵，四列图集按实例挑颜色
+  const FMAX = (RANGE * 2 + 1) ** 2 * 4;
+  const flowers = new T.InstancedMesh(crossCard(0.32, 0.32).translate(0, 0.14, 0), windMat(toon({ map: flowerCard(), alphaTest: 0.4, side: T.DoubleSide, emissive: 0x806050, emissiveMap: flowerCard(), emissiveIntensity: 0.5 }), 'card'), FMAX);
+  const fphase = new Float32Array(FMAX), fcol = new Float32Array(FMAX);
+  flowers.geometry.setAttribute('aPhase', new T.InstancedBufferAttribute(fphase, 1)); flowers.geometry.setAttribute('aSway', new T.InstancedBufferAttribute(new Float32Array(FMAX), 1)); flowers.geometry.setAttribute('aCol', new T.InstancedBufferAttribute(fcol, 1));
+  flowers.frustumCulled = false; flowers.count = 0; flowers.name = 'flowers'; scene.add(flowers);
   let cx = 1e9, cz = 1e9;
   const mat4 = new T.Matrix4();
   function rebuild(px, pz) {
-    let n = 0;
+    let n = 0, fn = 0;
     for (let j = -RANGE; j <= RANGE; j++) for (let i = -RANGE; i <= RANGE; i++) {
       const gx = cx + i, gz = cz + j;
+      for (let k = 0; k < 4; k++) {
+        const x = (gx + hash2(gx * 3 + k, gz * 9, 21)) * CELL, z = (gz + hash2(gx * 9, gz * 3 + k, 22)) * CELL;
+        if (groundKind(x, z) !== 'grass' || hash2(gx + k, gz, 23) > 0.5 || fn >= FMAX) continue;
+        mat4.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q.setFromEuler(_e.set(0, hash2(gx, gz + k, 24) * 6.28, 0)), _s.set(1, 1, 1));
+        flowers.setMatrixAt(fn, mat4); fphase[fn] = hash2(gx, k, 25) * 6.28; fcol[fn] = Math.floor(hash2(k, gx * gz, 26) * 4); fn++;
+      }
       for (let k = 0; k < PER; k++) {
         const x = (gx + hash2(gx * 7 + k, gz, 1)) * CELL, z = (gz + hash2(gx, gz * 5 + k, 2)) * CELL;
         const kind = groundKind(x, z);
@@ -369,6 +384,7 @@ export function createGrass(scene, opts = {}) {
       }
     }
     inst.count = n; inst.instanceMatrix.needsUpdate = true; geo.attributes.aPhase.needsUpdate = true;
+    flowers.count = fn; flowers.instanceMatrix.needsUpdate = true; flowers.geometry.attributes.aPhase.needsUpdate = true; flowers.geometry.attributes.aCol.needsUpdate = true;
   }
   return {
     mesh: inst,

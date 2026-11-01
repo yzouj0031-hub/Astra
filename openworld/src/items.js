@@ -4,6 +4,7 @@ import * as T from 'three';
 import { heightAt } from './world/terrain.js';
 import { PLACES } from './world/layout.js';
 import { mulberry32 } from './util/rng.js';
+import { toon } from './toon.js';
 
 export const ITEMS = {
   herb: { name: '七叶草', desc: '竹坞里的药草，茶博士收，五文一株。', sell: 5 },
@@ -17,10 +18,10 @@ export function createItems(scene, world) {
   const rnd = mulberry32(4242);
   const inv = {};
   const pickups = [];
-  const herbGeo = new T.ConeGeometry(0.18, 0.5, 5), herbMat = new T.MeshStandardMaterial({ color: 0x4e9a3c, roughness: 1 });
-  const leafGeo = new T.PlaneGeometry(0.5, 0.5), leafMat = new T.MeshStandardMaterial({ color: 0x7ac25a, side: T.DoubleSide, roughness: 1 });
-  const bagGeo = new T.SphereGeometry(0.22, 8, 6), bagMat = new T.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 1 });
-  const shroomGeo = new T.CylinderGeometry(0.22, 0.08, 0.24, 8), shroomMat = new T.MeshStandardMaterial({ color: 0xc9a06a, roughness: 1 });
+  const herbGeo = new T.ConeGeometry(0.18, 0.5, 5), herbMat = toon({ color: 0x4e9a3c });
+  const leafGeo = new T.PlaneGeometry(0.5, 0.5), leafMat = toon({ color: 0x7ac25a, side: T.DoubleSide });
+  const bagGeo = new T.SphereGeometry(0.22, 8, 6), bagMat = toon({ color: 0x8a5a2b });
+  const shroomGeo = new T.CylinderGeometry(0.22, 0.08, 0.24, 8), shroomMat = toon({ color: 0xc9a06a });
   const ringGeo = new T.RingGeometry(0.45, 0.6, 24).rotateX(-Math.PI / 2), ringMat = new T.MeshBasicMaterial({ color: 0xf4d35e, transparent: true, opacity: 0.8, depthWrite: false });
 
   function make(kind, x, z) {

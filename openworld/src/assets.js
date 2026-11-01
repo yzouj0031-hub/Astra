@@ -2,6 +2,7 @@
    来源与加工见 assets/LICENSES.md。加载失败一律抛错并显示在加载页上，不做静默回退。 */
 import * as T from 'three';
 import { GLTFLoader } from '../vendor/addons/GLTFLoader.js';
+import { toon } from './toon.js';
 
 const BASE = new URL('../assets/', import.meta.url).href;
 const loader = new GLTFLoader();
@@ -75,13 +76,20 @@ export async function loadAll(progress = () => {}) {
       parts[name] = flatten(node);
     }
   }
+  // 樱：枫叶贴图按明暗重新上色成粉白
+  manifest.materials.Cherry_Leaves = { map: manifest.materials.MapleTree_Leaves.map, alpha: true };
+  function cherry(src) {
+    const img = src.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height); const px = d.data;
+    for (let i = 0; i < px.length; i += 4) { const l = (px[i] * 0.4 + px[i + 1] * 0.5 + px[i + 2] * 0.1) / 255; const k = 0.55 + l * 0.6; px[i] = Math.min(255, 255 * k); px[i + 1] = Math.min(255, 196 * k); px[i + 2] = Math.min(255, 214 * k); }
+    ctx.putImageData(d, 0, 0); const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; t.flipY = false; t.wrapS = t.wrapT = T.ClampToEdgeWrapping; t.anisotropy = 4; return t;
+  }
   const matCache = {};
   function materialFor(name) {
     if (matCache[name]) return matCache[name];
     const plan = manifest.materials[name] || {};
-    const m = new T.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
-    if (plan.map) m.map = texes[plan.map];
-    if (plan.normalMap) m.normalMap = texes[plan.normalMap];
+    const m = toon({});
+    if (plan.map) m.map = name === 'Cherry_Leaves' ? cherry(texes[plan.map]) : texes[plan.map];
     if (plan.alpha) { m.alphaTest = 0.5; m.transparent = false; m.side = T.DoubleSide; }
     m.name = name;
     matCache[name] = m;

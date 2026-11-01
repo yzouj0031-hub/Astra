@@ -1,6 +1,8 @@
 /* 玩家：相对相机的移动、跑、跳、游泳、轻击/重击/翻滚，血与体力。 */
 import * as T from 'three';
 import { makeFigure, stepBody } from './characters.js';
+import { dressFigure } from './stylized.js';
+import { toon } from './toon.js';
 import { heightAt } from './world/terrain.js';
 import { clamp, lerp } from './util/rng.js';
 
@@ -9,11 +11,12 @@ const WALK = 2.2, JOG = 4.6, SPRINT = 7.8, SWIM = 2.4;
 export function createPlayer(scene, assets, colliders) {
   const fig = makeFigure(assets.player.scene, assets.player.animations, 1.8);
   fig.root.name = 'player'; scene.add(fig.root);
+  dressFigure(fig, 'player');
   // 一把刀：挂在右手骨骼上（道具可以用几何体）
   const sword = new T.Group();
-  const blade = new T.Mesh(new T.BoxGeometry(0.035, 0.78, 0.012), new T.MeshStandardMaterial({ color: 0xcfd6dc, metalness: 0.85, roughness: 0.3 })); blade.position.y = 0.5; sword.add(blade);
-  const guard = new T.Mesh(new T.BoxGeometry(0.14, 0.03, 0.04), new T.MeshStandardMaterial({ color: 0x8a6a2a, metalness: 0.6, roughness: 0.5 })); guard.position.y = 0.1; sword.add(guard);
-  const grip = new T.Mesh(new T.CylinderGeometry(0.017, 0.02, 0.2, 8), new T.MeshStandardMaterial({ color: 0x3a2a1a })); sword.add(grip);
+  const blade = new T.Mesh(new T.BoxGeometry(0.035, 0.78, 0.012), toon({ color: 0xdfe6ec })); blade.position.y = 0.5; sword.add(blade);
+  const guard = new T.Mesh(new T.BoxGeometry(0.14, 0.03, 0.04), toon({ color: 0xc9a24c })); guard.position.y = 0.1; sword.add(guard);
+  const grip = new T.Mesh(new T.CylinderGeometry(0.017, 0.02, 0.2, 8), toon({ color: 0x3a2a1a })); sword.add(grip);
   if (fig.hand) { fig.hand.add(sword); sword.scale.setScalar(1 / fig.model.scale.x); sword.rotation.set(Math.PI / 2, 0, 0); sword.position.set(0, 0.06, 0.02); }
   sword.visible = false;
 

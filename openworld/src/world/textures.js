@@ -115,10 +115,22 @@ export function grassCard() {
     const k = hash2(i, 1, 51), x0 = 18 + k * (w - 36), top = 6 + hash2(i, 2, 52) * 40;
     const lean = (hash2(i, 3, 53) - 0.5) * 50, wd = 3.5 + hash2(i, 4, 54) * 3;
     const grd = ctx.createLinearGradient(0, h, 0, top);
-    grd.addColorStop(0, '#39581f'); grd.addColorStop(0.55, '#6b9a34'); grd.addColorStop(1, '#b9d36a');
+    grd.addColorStop(0, '#4a7a2a'); grd.addColorStop(0.55, '#7fb53e'); grd.addColorStop(1, '#cfe27a');
     ctx.fillStyle = grd;
     ctx.beginPath(); ctx.moveTo(x0 - wd, h); ctx.quadraticCurveTo(x0 + lean * 0.3, h * 0.55, x0 + lean, top); ctx.quadraticCurveTo(x0 + lean * 0.3 + wd * 0.6, h * 0.55, x0 + wd, h); ctx.closePath(); ctx.fill();
   }
+  const t = tex(c, { repeat: false }); t.flipY = true; return t;
+}
+
+/** 花：四列图集，粉 / 白 / 黄 / 淡紫，各一朵五瓣小花带一根茎。 */
+export function flowerCard() {
+  const w = 256, h = 64, c = canvas(w, h), ctx = c.getContext('2d');
+  ['#f6a7c1', '#fbf4e8', '#f4d35e', '#c9b8e8'].forEach((col, i) => {
+    const cx = i * 64 + 32, cy = 22;
+    ctx.strokeStyle = '#5c8a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx, 62); ctx.quadraticCurveTo(cx + 4, 40, cx, cy + 6); ctx.stroke();
+    ctx.fillStyle = col; for (let k = 0; k < 5; k++) { const a = k / 5 * 6.28; ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * 9, cy + Math.sin(a) * 9, 7, 5, a, 0, 6.28); ctx.fill(); }
+    ctx.fillStyle = '#f0c040'; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 6.28); ctx.fill();
+  });
   const t = tex(c, { repeat: false }); t.flipY = true; return t;
 }
 
