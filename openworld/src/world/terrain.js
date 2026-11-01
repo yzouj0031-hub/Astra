@@ -54,7 +54,7 @@ function vertexColor(x, z, y, out) {
   const rd = roadDist(x, z), rv = RIVER.dist(x, z) - RIVER.halfWidth;
   const varia = fbm(x / 45, z / 45, 3, s + 3), patch = fbm(x / 9, z / 9, 2, s + 4);
   // 草：带黄绿到青绿的斑块
-  out.setHSL(0.23 + varia * 0.03 + patch * 0.015, 0.52 + varia * 0.1, 0.36 + varia * 0.05 + patch * 0.04);
+  out.setHSL(0.215 + varia * 0.03 + patch * 0.015, 0.5 + varia * 0.1, 0.42 + varia * 0.05 + patch * 0.04);
   // 水田：更亮更黄，带一行行的田埂
   const p = PLACES.paddies, dp = Math.hypot(x - p.x, z - p.z);
   if (dp < p.r + 20) {

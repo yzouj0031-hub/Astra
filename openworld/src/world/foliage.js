@@ -15,7 +15,8 @@ export function M(px, py, pz, s = 1, ry = 0, lean = 0) {
   return new T.Matrix4().compose(_p, _q, _s);
 }
 
-export const LOD = { value: 160 };   // 树在这个距离以内画真模型，以外画烘好的卡片
+export const LOD = { value: 160 };
+export const GRASS_FAR = { value: 46 };   // 草毯显示半径（米），由 createGrass 按格子范围设   // 树在这个距离以内画真模型，以外画烘好的卡片
 const mats = new Map();
 function windMat(base, kind, tint) {
   const key = base.uuid + kind + (tint || '');
@@ -23,14 +24,14 @@ function windMat(base, kind, tint) {
   const m = base.clone();
   if (tint) m.color = new T.Color(tint);
   m.onBeforeCompile = sh => {
-    sh.uniforms.uWind = WIND; sh.uniforms.uLod = LOD;
-    sh.vertexShader = 'uniform float uWind;\nuniform float uLod;\nattribute float aPhase;\nattribute float aSway;\nattribute float aCol;\n' + sh.vertexShader;
+    sh.uniforms.uWind = WIND; sh.uniforms.uLod = LOD; sh.uniforms.uGrassFar = GRASS_FAR;
+    sh.vertexShader = 'uniform float uWind;\nuniform float uLod;\nuniform float uGrassFar;\nattribute float aPhase;\nattribute float aSway;\nattribute float aCol;\n' + sh.vertexShader;
     if (kind === 'leaf') sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>',
       '\tif (distance(instanceMatrix[3].xyz, cameraPosition) > uLod) transformed = vec3(0.0);\n#include <project_vertex>');
     if (kind === 'card') sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n\tvMapUv.x=(vMapUv.x+aCol)*0.25;');
     const local = kind === 'frond' ? 'max(0.0,-transformed.y)*0.075' : kind === 'leaf' ? 'max(0.0,transformed.y-1.4)*0.016'
       : kind === 'culm' ? 'max(0.0,transformed.y-0.3)*0.055' : kind === 'grass' ? 'max(0.0,transformed.y)*0.22' : kind === 'reed' ? 'max(0.0,transformed.y)*0.12' : '0.0';
-    if (kind === 'grass') sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed.y*=1.0-smoothstep(uLod*0.22,uLod*0.29,distance(instanceMatrix[3].xyz,cameraPosition));');
+    if (kind === 'grass') sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed.y*=1.0-smoothstep(uGrassFar*0.55,uGrassFar*0.92,distance(instanceMatrix[3].xyz,cameraPosition));');
     sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>',
       `#include <begin_vertex>\n\tfloat amp=${local}+aSway;\n\tfloat sw=uWind+aPhase;\n\ttransformed.x+=sin(sw*1.30+transformed.y*0.32)*amp;\n\ttransformed.z+=cos(sw*1.07+transformed.y*0.26)*amp*0.7;`);
   };
@@ -388,6 +389,7 @@ function buildImpostors(scene, atlas, list) {
 export function createGrass(scene, opts = {}) {
   const CELL = 8, RANGE = opts.range || 6, PER = opts.perCell || 44, MAX = (RANGE * 2 + 1) ** 2 * PER;
   const MPER = opts.matPerCell || 150, MMAX = (RANGE * 2 + 1) ** 2 * MPER;   // 草毯：矮、密、贴地
+  GRASS_FAR.value = RANGE * CELL;
   const geo = (() => {
     const q = new T.PlaneGeometry(1, 1, 1, 2).translate(0, 0.5, 0);
     return mergeGeos([q, q.clone().rotateY(Math.PI / 3), q.clone().rotateY(-Math.PI / 3)]);
@@ -421,7 +423,7 @@ export function createGrass(scene, opts = {}) {
     for (let j = -RANGE; j <= RANGE; j++) for (let i = -RANGE; i <= RANGE; i++) {
       const gx = cx + i, gz = cz + j;
       // 草毯：矮而密，离玩家越远越稀（远处靠地面顶点色撑）
-      const far = Math.max(Math.abs(i), Math.abs(j)) / RANGE, keep = 1 - far * far * 0.75;
+      const far = Math.hypot(i, j) / RANGE, keep = 1 - far * far * 0.45;
       for (let k = 0; k < MPER; k++) {
         if (hash2(gx * 13 + k, gz * 7, 31) > keep || mn >= MMAX) continue;
         const x = (gx + hash2(gx * 5 + k, gz * 3, 32)) * CELL, z = (gz + hash2(gx * 3, gz * 5 + k, 33)) * CELL;
