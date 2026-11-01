@@ -1,7 +1,7 @@
 /* 建筑与道具：房子、茶舍、山神祠、石桥、埠头、井、烽台、牌坊、寨子、篱笆、路牌、灯笼。
    方盒子本来就合理的东西（房、桥、船坞）可以用几何体拼；人、树绝不在这里拼。 */
 import * as T from 'three';
-import { WORLD, RIVER, PLACES } from './layout.js';
+import { WORLD, RIVER, PLACES, roadDist } from './layout.js';
 import { heightAt } from './terrain.js';
 import { mulberry32 } from '../util/rng.js';
 import * as TX from './textures.js';
@@ -244,6 +244,23 @@ export function campfire() {
   const light = new T.PointLight(0xff8a3a, 40, 18, 1.6); light.position.y = 1.0; g.add(light);
   g.userData.fire = { light, flame }; g.userData.collider = { r: 0.9 }; return g;
 }
+/** 陶罐：放样的瓮，口小肚大，青灰釉。 */
+export function jar(h = 0.7) {
+  const pts = []; for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(new T.Vector2((0.12 + Math.sin(t * Math.PI) * 0.22 - t * t * 0.06) * h / 0.7, t * h)); }
+  const m = new T.Mesh(new T.LatheGeometry(pts, 14), toon({ color: 0x5a6a62 })); m.castShadow = true; m.userData.collider = { r: 0.3 * h / 0.7 }; return m;
+}
+/** 柴堆：一排横放的圆木。 */
+export function woodpile() {
+  const g = new T.Group(), m = mats();
+  for (let r = 0; r < 3; r++) for (let i = 0; i < 5 - r; i++) { const l = new T.Mesh(new T.CylinderGeometry(0.09, 0.09, 1.0, 7), m.wood); l.rotation.z = Math.PI / 2; l.position.set(0, 0.09 + r * 0.16, -0.36 + i * 0.18 + r * 0.09); l.castShadow = true; g.add(l); }
+  g.userData.collider = { hw: 0.55, hd: 0.5 }; return g;
+}
+/** 圆灌木：两三个压扁的球叠在一起，纯色。 */
+export function shrub(s = 1) {
+  const g = new T.Group(), m = toon({ color: 0x4f9a3c });
+  for (const [x, y, z, r] of [[0, 0.35, 0, 0.5], [0.3, 0.28, 0.15, 0.36], [-0.28, 0.3, -0.1, 0.38]]) { const b = new T.Mesh(new T.SphereGeometry(r * s, 10, 8), m); b.position.set(x * s, y * s, z * s); b.scale.y = 0.8; b.castShadow = true; g.add(b); }
+  g.userData.collider = { r: 0.5 * s }; return g;
+}
 export function crate(size = 0.9) { const c = box(size, size, size, mats().woodLight, 0, size / 2, 0); c.userData.collider = { r: size * 0.7 }; return c; }
 export function palisade(points) {
   const m = mats(), g = new T.Group();
@@ -284,6 +301,14 @@ export function buildWorld(scene) {
     placeAt(hs, x, z, Math.atan2(v.x - x, v.z - z) + (ry - 0.3) * 0.3);
   });
   placeAt(well(), -118, 32, 0.3);
+  // 房前屋后的摆设：陶罐、柴堆、灌木
+  houseSpots.forEach(([x, z], i) => {
+    const a = Math.atan2(v.x - x, v.z - z), fx = x + Math.sin(a) * 4.6, fz = z + Math.cos(a) * 4.6, sx = Math.cos(a), sz = -Math.sin(a);
+    if (i % 3 !== 2) { placeAt(jar(0.6 + rnd() * 0.3), fx + sx * 2.6, fz + sz * 2.6); placeAt(jar(0.5 + rnd() * 0.3), fx + sx * 3.2, fz + sz * 3.1); }
+    if (i % 2 === 0) placeAt(woodpile(), x - sx * 4.8, z - sz * 4.8, a + Math.PI / 2);
+    placeAt(shrub(0.8 + rnd() * 0.6), fx - sx * 3.4, fz - sz * 3.2);
+  });
+  for (let i = 0; i < 26; i++) { const a = rnd() * 6.28, r = 20 + rnd() * 75, x = v.x + Math.cos(a) * r, z = v.z + Math.sin(a) * r; if (roadDist(x, z) > 4) placeAt(shrub(0.7 + rnd() * 0.8), x, z); }
   placeAt(gate('渡头村'), -60, 46, Math.PI / 2 + 0.05);
   placeAt(gate('渡头村'), -205, 128, Math.PI / 2 - 0.6);
   // 篱笆围出几片菜畦

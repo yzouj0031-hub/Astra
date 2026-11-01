@@ -18,9 +18,9 @@ const KEYS = [
   [0,  [C(0x0c1428), C(0x202a44), C(0x6a7aa8), C(0x1a2234), C(0x161a20)]],
   [4.5,[C(0x1a2440), C(0x4a4a62), C(0x9a7a8a), C(0x3a3448), C(0x202428)]],
   [6,  [C(0x6f9ac8), C(0xf0c09a), C(0xffd0a0), C(0xd9c0a8), C(0x5a5540)]],
-  [9,  [C(0x5f97d8), C(0xcfe0ec), C(0xfff2dc), C(0xd3dfe6), C(0x5b6a48)]],
-  [13, [C(0x4f8fe0), C(0xd6e5ee), C(0xffffff), C(0xd4e0e8), C(0x6a7a52)]],
-  [16.5,[C(0x5590d6), C(0xd9e4ea), C(0xfff4e0), C(0xd6dfe4), C(0x667450)]],
+  [9,  [C(0x6fa0d8), C(0xe6e8d8), C(0xffe9c4), C(0xe0e2d2), C(0x6a7a48)]],
+  [13, [C(0x5f98e0), C(0xe4e9dc), C(0xfff0d4), C(0xdfe4d6), C(0x74844e)]],
+  [16.5,[C(0x6598d4), C(0xe8dfc8), C(0xffdcae), C(0xe2d8c4), C(0x6e7448)]],
   [18, [C(0x5a86c0), C(0xf0c49a), C(0xffd6a0), C(0xdcc8b0), C(0x5e5a44)]],
   [19, [C(0x3a4a80), C(0xe09a78), C(0xffb080), C(0x8a6a70), C(0x3e3838)]],
   [20.2,[C(0x141e3c), C(0x3a3c58), C(0x8a8ab0), C(0x262c40), C(0x1c2028)]],
@@ -84,7 +84,7 @@ export function createSky(scene, renderer) {
     uniforms.uSunColor.value.copy(keyAt(t, 2)); uniforms.uSun.value.copy(sd); uniforms.uNight.value = night;
     uniforms.uMoon.value.set(-sd.x, -sd.y * 0.8 + 0.1, sd.z * 0.6).normalize();
     scene.fog.color.copy(keyAt(t, 3)); uniforms.uFog.value.copy(scene.fog.color); hemi.color.copy(keyAt(t, 1)); hemi.groundColor.copy(keyAt(t, 4));
-    hemi.intensity = lerp(1.25, 0.5, night);
+    hemi.intensity = lerp(1.1, 0.5, night);
     sun.color.copy(keyAt(t, 2)); sun.intensity = lerp(2.0, 0, night) * clamp(elev * 3 + 0.4, 0.2, 1);
     moon.intensity = 0.7 * night;
     sun.visible = elev > -0.2; sun.castShadow = elev > 0.02;

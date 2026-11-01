@@ -82,16 +82,16 @@ export function cullFoliage(px, pz) {
 }
 
 function mergeGeos(list) {
-  const pos = [], nor = [], uv = [], idx = []; let base = 0;
+  const pos = [], nor = [], uv = [], idx = [], colr = []; let base = 0;
   for (const g of list) {
-    const p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv;
-    for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); uv.push(t.getX(i), t.getY(i)); }
+    const p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv, c = g.attributes.color;
+    for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); uv.push(t.getX(i), t.getY(i)); if (c) colr.push(c.getX(i), c.getY(i), c.getZ(i)); }
     for (let i = 0; i < g.index.count; i++) idx.push(g.index.getX(i) + base);
     base += p.count;
   }
   const out = new T.BufferGeometry();
   out.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); out.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
-  out.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); out.setIndex(idx); return out;
+  out.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); if (colr.length === pos.length) out.setAttribute('color', new T.Float32BufferAttribute(colr, 3)); out.setIndex(idx); return out;
 }
 function crossStrip(width, segs) { const h = new T.PlaneGeometry(width, 1, 1, segs).translate(0, -0.5, 0); return mergeGeos([h, h.clone().applyMatrix4(M(0, 0, 0, 1, Math.PI / 2))]); }
 function crossCard(w, h) { const g = new T.PlaneGeometry(w, h, 1, 1); return mergeGeos([g, g.clone().applyMatrix4(M(0, 0, 0, 1, Math.PI / 2))]); }
@@ -117,6 +117,44 @@ function bandPoints(geo, count, lo, hi) {
   if (cand.length <= count) return cand;
   const out = [], step = cand.length / count; for (let i = 0; i < count; i++) out.push(cand[Math.floor(i * step)]); return out;
 }
+
+/* ---------------- 卡通树冠：把叶片顶点聚成几团球 ----------------
+   叶片贴图远看是碎的；参考图的树冠是一棵一色的圆团。把每种树的叶片几何按 k-means 聚成 5~7 团，
+   每团一个压扁的球，颜色按树种给，带一点上亮下暗的顶点色。树干仍用原来的树皮网格。 */
+const CROWN_COLORS = { NormalTree: [0x4f9a3c, 0x6fb64a], BirchTree: [0x7bb94e, 0x9ed163], MapleTree: [0xd3542f, 0xf0803f], PineTree: [0x2f6b45, 0x3f8a58], Cherry: [0xf2a3bf, 0xfbd0dd], Bush: [0x4f9a3c, 0x7bc25a] };
+const crownCache = new Map();
+function crownGeometry(part, kind) {
+  const key = part.meshes[0].geometry.uuid + kind;
+  if (crownCache.has(key)) return crownCache.get(key);
+  const leafMesh = part.meshes.find(m => /Leaves/.test(m.matName)) || part.meshes[part.meshes.length - 1];
+  const pos = leafMesh.geometry.attributes.position, n = pos.count;
+  const k = kind === 'Bush' ? 3 : kind === 'PineTree' ? 6 : 6;
+  // k-means，初始中心按高度分层取
+  const pts = []; for (let i = 0; i < n; i += 2) pts.push([pos.getX(i), pos.getY(i), pos.getZ(i)]);
+  pts.sort((a, b) => a[1] - b[1]);
+  let centers = []; for (let c = 0; c < k; c++) centers.push(pts[Math.floor((c + 0.5) / k * pts.length)].slice());
+  let assign = new Int32Array(pts.length);
+  for (let it = 0; it < 8; it++) {
+    for (let i = 0; i < pts.length; i++) { let best = 0, bd = 1e9; for (let c = 0; c < k; c++) { const d = (pts[i][0] - centers[c][0]) ** 2 + (pts[i][1] - centers[c][1]) ** 2 + (pts[i][2] - centers[c][2]) ** 2; if (d < bd) { bd = d; best = c; } } assign[i] = best; }
+    const sum = centers.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < pts.length; i++) { const s = sum[assign[i]]; s[0] += pts[i][0]; s[1] += pts[i][1]; s[2] += pts[i][2]; s[3]++; }
+    centers = sum.map((s, c) => s[3] ? [s[0] / s[3], s[1] / s[3], s[2] / s[3]] : centers[c]);
+  }
+  const geos = [], [dark, light] = CROWN_COLORS[kind] || CROWN_COLORS.NormalTree, cd = new T.Color(dark), cl = new T.Color(light), tmp = new T.Color();
+  centers.forEach((c, ci) => {
+    let r = 0, cnt = 0; for (let i = 0; i < pts.length; i++) if (assign[i] === ci) { r += Math.hypot(pts[i][0] - c[0], pts[i][1] - c[1], pts[i][2] - c[2]); cnt++; }
+    if (!cnt) return; r = (r / cnt) * 1.45 + 0.15;
+    const g = new T.SphereGeometry(r, 10, 8); g.scale(1, kind === 'PineTree' ? 0.7 : 0.85, 1); g.translate(c[0], c[1], c[2]);
+    // 顶点色：越高越亮，每团略有差异
+    const col = new Float32Array(g.attributes.position.count * 3), p = g.attributes.position, vary = ((ci * 0.37) % 1) * 0.25;
+    for (let i = 0; i < p.count; i++) { const t = clamp((p.getY(i) - c[1] + r) / (2 * r), 0, 1); tmp.copy(cd).lerp(cl, t * 0.75 + vary); col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b; }
+    g.setAttribute('color', new T.BufferAttribute(col, 3)); geos.push(g);
+  });
+  const merged = mergeGeos(geos); merged.computeBoundingBox(); merged.computeBoundingSphere();
+  crownCache.set(key, merged); return merged;
+}
+let crownMat = null;
+function crownMaterial() { return crownMat || (crownMat = windMat(toon({ vertexColors: true }), 'leaf')); }
 
 /* ---------------- 撒布规则 ---------------- */
 function clearOf(x, z, radius) {
@@ -236,10 +274,15 @@ export function plantWorld(scene, assets, opts = {}) {
   let triangles = 0;
   for (const [name, items] of Object.entries(groups)) {
     const part = parts[name.replace('Cherry_', 'MapleTree_')];
+    const kind = name.replace(/_\d+$/, '');
     for (const { geometry, matName } of part.meshes) {
-      instance(scene, geometry, windMat(materialFor(name.startsWith('Cherry_') && matName === 'MapleTree_Leaves' ? 'Cherry_Leaves' : matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 30);
+      if (/Leaves/.test(matName)) continue;   // 叶片换成团块
+      instance(scene, geometry, windMat(materialFor(matName), 'leaf', tint), items, true, name === 'Bush' ? 150 : LOD.value + 30);
       triangles += (geometry.index ? geometry.index.count / 3 : geometry.attributes.position.count / 3) * items.length;
     }
+    const crown = crownGeometry(part, kind);
+    instance(scene, crown, crownMaterial(), items, true, name === 'Bush' ? 150 : LOD.value + 30);
+    triangles += crown.index.count / 3 * items.length;
   }
   const byPart = new Map();
   for (const w of willow) { (byPart.get(w.part) || byPart.set(w.part, []).get(w.part)).push({ m: w.m }); }
@@ -285,7 +328,8 @@ export function bakeImpostors(renderer, assets, names) {
   renderer.toneMapping = T.NoToneMapping; renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear();
   names.forEach((name, i) => {
     const part = parts[name.replace('Cherry_', 'MapleTree_')]; const group = new T.Group();
-    for (const { geometry, matName } of part.meshes) group.add(new T.Mesh(geometry, materialFor(name.startsWith('Cherry_') && matName === 'MapleTree_Leaves' ? 'Cherry_Leaves' : matName)));
+    for (const { geometry, matName } of part.meshes) if (!/Leaves/.test(matName)) group.add(new T.Mesh(geometry, materialFor(matName)));
+    group.add(new T.Mesh(crownGeometry(part, name.replace(/_\d+$/, '')), toon({ vertexColors: true })));
     scene.add(group);
     const h = part.height, w = Math.max(part.radius * 2, h * 0.5);
     cam.left = -w / 2; cam.right = w / 2; cam.top = h; cam.bottom = 0; cam.position.set(0, h * 0.5, 30); cam.lookAt(0, h * 0.5, 0); cam.updateProjectionMatrix();
@@ -343,6 +387,7 @@ function buildImpostors(scene, atlas, list) {
 /* ---------------- 草：玩家周围的格子 ---------------- */
 export function createGrass(scene, opts = {}) {
   const CELL = 8, RANGE = opts.range || 6, PER = opts.perCell || 44, MAX = (RANGE * 2 + 1) ** 2 * PER;
+  const MPER = opts.matPerCell || 150, MMAX = (RANGE * 2 + 1) ** 2 * MPER;   // 草毯：矮、密、贴地
   const geo = (() => {
     const q = new T.PlaneGeometry(1, 1, 1, 2).translate(0, 0.5, 0);
     return mergeGeos([q, q.clone().rotateY(Math.PI / 3), q.clone().rotateY(-Math.PI / 3)]);
@@ -353,6 +398,16 @@ export function createGrass(scene, opts = {}) {
   geo.setAttribute('aPhase', new T.InstancedBufferAttribute(phase, 1)); geo.setAttribute('aSway', new T.InstancedBufferAttribute(sway, 1)); geo.setAttribute('aCol', new T.InstancedBufferAttribute(col, 1));
   inst.frustumCulled = false; inst.receiveShadow = true; inst.castShadow = false; inst.count = 0; inst.name = 'grass';
   scene.add(inst);
+  // 草毯：三片交叉的矮卡片，顶点色上亮下暗，按实例在两种绿之间挑
+  const matGeo = (() => { const q = new T.PlaneGeometry(1, 1, 1, 1).translate(0, 0.5, 0); return mergeGeos([q, q.clone().rotateY(Math.PI / 3), q.clone().rotateY(-Math.PI / 3)]); })();
+  const matMat = windMat(toon({ map: grassCard(), alphaTest: 0.4, side: T.DoubleSide, color: 0xc8dc9a, emissive: 0x2f5a1c, emissiveMap: grassCard(), emissiveIntensity: 0.3 }), 'grass');
+  matMat.onBeforeCompile = (orig => sh => { orig(sh); sh.vertexShader = sh.vertexShader.replace('#include <color_vertex>', '#include <color_vertex>\n\tvColor.rgb *= mix(vec3(0.78,0.9,0.62), vec3(1.08,1.04,0.86), aCol);'); sh.fragmentShader = sh.fragmentShader; })(matMat.onBeforeCompile);
+  matMat.vertexColors = true; matMat.customProgramCacheKey = () => 'wind-grassmat';
+  const mat2 = new T.InstancedMesh(matGeo, matMat, MMAX);
+  const mphase = new Float32Array(MMAX), mcol = new Float32Array(MMAX);
+  matGeo.setAttribute('aPhase', new T.InstancedBufferAttribute(mphase, 1)); matGeo.setAttribute('aSway', new T.InstancedBufferAttribute(new Float32Array(MMAX), 1)); matGeo.setAttribute('aCol', new T.InstancedBufferAttribute(mcol, 1));
+  matGeo.setAttribute('color', new T.Float32BufferAttribute(new Float32Array(matGeo.attributes.position.count * 3).fill(1), 3));
+  mat2.frustumCulled = false; mat2.receiveShadow = true; mat2.count = 0; mat2.name = 'grassmat'; scene.add(mat2);
   // 花：每格几朵，四列图集按实例挑颜色
   const FMAX = (RANGE * 2 + 1) ** 2 * 4;
   const flowers = new T.InstancedMesh(crossCard(0.32, 0.32).translate(0, 0.14, 0), windMat(toon({ map: flowerCard(), alphaTest: 0.4, side: T.DoubleSide, emissive: 0x806050, emissiveMap: flowerCard(), emissiveIntensity: 0.5 }), 'card'), FMAX);
@@ -362,9 +417,19 @@ export function createGrass(scene, opts = {}) {
   let cx = 1e9, cz = 1e9;
   const mat4 = new T.Matrix4();
   function rebuild(px, pz) {
-    let n = 0, fn = 0;
+    let n = 0, fn = 0, mn = 0;
     for (let j = -RANGE; j <= RANGE; j++) for (let i = -RANGE; i <= RANGE; i++) {
       const gx = cx + i, gz = cz + j;
+      // 草毯：矮而密，离玩家越远越稀（远处靠地面顶点色撑）
+      const far = Math.max(Math.abs(i), Math.abs(j)) / RANGE, keep = 1 - far * far * 0.75;
+      for (let k = 0; k < MPER; k++) {
+        if (hash2(gx * 13 + k, gz * 7, 31) > keep || mn >= MMAX) continue;
+        const x = (gx + hash2(gx * 5 + k, gz * 3, 32)) * CELL, z = (gz + hash2(gx * 3, gz * 5 + k, 33)) * CELL;
+        const kind = groundKind(x, z); if (kind !== 'grass' && kind !== 'bank') continue;
+        const s = 0.28 + hash2(k, gx - gz, 34) * 0.22;
+        mat4.compose(_p.set(x, heightAt(x, z) - 0.02, z), _q.setFromEuler(_e.set(0, hash2(gx - k, gz, 35) * 6.28, 0)), _s.set(s * 1.6, s, s * 1.6));
+        mat2.setMatrixAt(mn, mat4); mphase[mn] = hash2(gx, gz - k, 36) * 6.28; mcol[mn] = 0.5 + 0.5 * fbm(x / 14, z / 14, 2, 88); mn++;
+      }
       for (let k = 0; k < 4; k++) {
         const x = (gx + hash2(gx * 3 + k, gz * 9, 21)) * CELL, z = (gz + hash2(gx * 9, gz * 3 + k, 22)) * CELL;
         if (groundKind(x, z) !== 'grass' || hash2(gx + k, gz, 23) > 0.5 || fn >= FMAX) continue;
@@ -376,14 +441,15 @@ export function createGrass(scene, opts = {}) {
         const kind = groundKind(x, z);
         if (kind !== 'grass' && kind !== 'bank') continue;
         if (n >= MAX) continue;
-        const density = 0.55 + 0.45 * fbm(x / 30, z / 30, 2, 77);
+        const density = 0.12 + 0.18 * fbm(x / 30, z / 30, 2, 77);   // 高草只零星几簇
         if (hash2(gx * 3, gz * 11 + k, 5) > density) continue;
-        const s = 0.42 + hash2(k, gx + gz, 6) * 0.5, y = heightAt(x, z) - 0.03;
+        const s = 0.5 + hash2(k, gx + gz, 6) * 0.45, y = heightAt(x, z) - 0.03;
         mat4.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(0, hash2(gx + k, gz, 7) * 6.28, 0)), _s.set(s * 1.3, s, s * 1.3));
         inst.setMatrixAt(n, mat4); phase[n] = hash2(gx, gz + k, 8) * 6.28; n++;
       }
     }
     inst.count = n; inst.instanceMatrix.needsUpdate = true; geo.attributes.aPhase.needsUpdate = true;
+    mat2.count = mn; mat2.instanceMatrix.needsUpdate = true; matGeo.attributes.aPhase.needsUpdate = true; matGeo.attributes.aCol.needsUpdate = true;
     flowers.count = fn; flowers.instanceMatrix.needsUpdate = true; flowers.geometry.attributes.aPhase.needsUpdate = true; flowers.geometry.attributes.aCol.needsUpdate = true;
   }
   return {
